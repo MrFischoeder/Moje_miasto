@@ -1,6 +1,7 @@
 // Symulacja gry: stały krok, byty, gracze, polecenia. Bez three.js i DOM,
 // więc ten sam kod działa w przeglądarce i na serwerze Node.js.
 import type { World } from '../world/world';
+import type { TransitSystem } from '../transit/system';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
 import { NO_INPUT, PLAYER_COLORS, SEATS, type Command, type Entity, type EntityKind, type InputCmd, type Mode, type PlayerState, type SaveState } from './types';
@@ -21,6 +22,9 @@ export class Simulation {
   readonly players = new Map<number, PlayerState>();
   private readonly inputs = new Map<number, InputCmd>();
   private nextId = 1;
+
+  /** komunikacja miejska (rozkłady); null = brak danych */
+  transit: TransitSystem | null = null;
 
   constructor(readonly world: World) {}
 
@@ -45,7 +49,7 @@ export class Simulation {
     if (at) { Object.assign(w, at); const g = this.world.support(w.x, w.z, w.y); w.reg = g && g.r ? g.r.id : -1; }
     const used = new Set([...this.players.values()].map(q => q.color));
     const color = PLAYER_COLORS.find(c => !used.has(c)) ?? PLAYER_COLORS[this.players.size % PLAYER_COLORS.length];
-    const p: PlayerState = { id: w.id, name, walker: w.id, vehicle: null, passenger: false, color, viewSeq: 1, viewYaw: w.yaw, viewPitch: w.pitch };
+    const p: PlayerState = { id: w.id, name, walker: w.id, vehicle: null, passenger: false, ride: null, color, viewSeq: 1, viewYaw: w.yaw, viewPitch: w.pitch };
     w.owner = p.id;
     this.players.set(p.id, p);
     return p;
@@ -63,15 +67,21 @@ export class Simulation {
   /** Byt, za którym podąża gracz (pieszy albo pojazd, także jako pasażer). */
   controlled(p: PlayerState): Entity { return this.entity(p.vehicle ?? p.walker); }
   /** Byt, którym gracz steruje (null dla pasażera). */
-  driven(p: PlayerState): Entity | null { return p.passenger ? null : this.controlled(p); }
+  driven(p: PlayerState): Entity | null { return p.passenger || p.ride ? null : this.controlled(p); }
 
   // ---------- wejście ----------
   setInput(pid: number, cmd: InputCmd): void { this.inputs.set(pid, cmd); }
 
-  command(pid: number, c: Command): void {
+  /** Polecenie gracza; zwraca komunikat dla gracza (np. „drzwi zamknięte”) albo undefined. */
+  command(pid: number, c: Command): string | undefined {
     const p = this.players.get(pid); if (!p) return;
+    if (p.ride) {
+      if (c.type === 'goStation') { this.leaveRide(p, null); }
+      else if (c.type === 'enter' || c.type === 'alight' || c.type === 'mode') return this.alight(p);
+      else return;
+    }
     if (c.type === 'mode') this.setMode(p, c.mode);
-    else if (c.type === 'enter') this.enterNearest(p);
+    else if (c.type === 'enter') { if (!this.board(p)) this.enterNearest(p); }
     else if (c.type === 'goStation') {
       const s = this.world.stations[c.station]; if (!s) return;
       this.exitVehicle(p, false);
@@ -96,10 +106,37 @@ export class Simulation {
 
   /** Koniec kroku świata: pieszy siedzący w pojeździe jedzie razem z nim (zainteresowanie, zapis). */
   endStep(): void {
+    if (this.transit) for (const p of this.players.values()) if (p.ride) {
+      const a = this.transit.trip(p.ride), w = this.entity(p.walker);
+      if (!a) { this.leaveRide(p, null); continue; } // kurs się skończył: wysiada na pętli
+      if (a.st.terminal && a.st.stop === a.p.stops.length - 1) { this.leaveRide(p, this.transit.alightPose(a)); continue; }
+      const q = this.transit.pose(a.p, a.st.s); w.x = q.x; w.y = q.y; w.z = q.z; w.yaw = q.yaw;
+    }
     for (const p of this.players.values()) if (p.vehicle != null) {
       const v = this.entity(p.vehicle), wk = this.entity(p.walker); wk.x = v.x; wk.y = v.y; wk.z = v.z;
     }
     this.tick++;
+  }
+
+  // ---------- komunikacja miejska ----------
+  /** Wsiada do pojazdu komunikacji stojącego na przystanku obok. */
+  board(p: PlayerState): boolean {
+    if (!this.transit || p.vehicle != null || p.ride) return false;
+    const w = this.entity(p.walker), a = this.transit.boardable(w.x, w.y, w.z); if (!a) return false;
+    p.ride = a.key; w.hide = true; w.reg = -1; return true;
+  }
+  /** Wysiada, jeśli pojazd stoi na przystanku. */
+  alight(p: PlayerState): string | undefined {
+    if (!p.ride || !this.transit) return;
+    const a = this.transit.trip(p.ride);
+    if (a && a.st.stop < 0) return 'Drzwi zamknięte: wysiądziesz na najbliższym przystanku.';
+    this.leaveRide(p, a ? this.transit.alightPose(a) : null);
+  }
+  private leaveRide(p: PlayerState, at: { x: number; y: number; z: number; yaw: number } | null): void {
+    const w = this.entity(p.walker); p.ride = null; w.hide = false;
+    if (at) { w.x = at.x; w.y = at.y; w.z = at.z; w.yaw = at.yaw; }
+    const g = this.world.support(w.x, w.z, w.y); if (g) { w.y = g.h; w.reg = g.r ? g.r.id : -1; } else w.reg = -1;
+    w.pitch = 0; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0;
   }
 
   // ---------- pojazdy ----------
@@ -201,7 +238,7 @@ export class Simulation {
       if (c.kind === 'walker') { const g = this.world.support(c.x, c.z, c.y); c.reg = g && g.r ? g.r.id : -1; }
       this.entities.set(c.id, c);
     }
-    for (const p of s.players) this.players.set(p.id, { ...p, passenger: p.passenger ?? false, color: p.color ?? PLAYER_COLORS[0], viewSeq: p.viewSeq + 1 });
+    for (const p of s.players) this.players.set(p.id, { ...p, ride: null, passenger: p.passenger ?? false, color: p.color ?? PLAYER_COLORS[0], viewSeq: p.viewSeq + 1 });
     for (const e of this.entities.values()) { e.pass ??= []; e.hide ??= false; }
   }
 }

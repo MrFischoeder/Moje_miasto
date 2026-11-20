@@ -11,6 +11,10 @@ import type { Terrain } from '@miasto/shared/world/terrain';
 import { createScene, GridDrape, type SceneCtx } from '../render/scene';
 import { CityView } from '../world/cityView';
 import { loadTerrain } from '../world/terrainLoader';
+import { loadTransit } from '../world/transitLoader';
+import { TransitView } from '../world/transitView';
+import { TransitSystem } from '@miasto/shared/transit/system';
+import type { TransitData } from '@miasto/shared/transit/timetable';
 import { EMBEDDED_TILES } from '../world/embedded';
 import { decodeTile, HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
@@ -48,6 +52,9 @@ export class Game {
   readonly rig: CameraRig;
   session: NetSession | null = null;
   view: CityView | null = null;
+  /** komunikacja miejska wg rozkładów (liczona lokalnie z zegara sesji) */
+  transit: TransitSystem | null = null;
+  private transitView: TransitView | null = null;
   /** świat zbudowany z wczytanego pliku OSM */
   fromFile = false;
   /** gra sieciowa (null = jednoosobowa) */
@@ -100,14 +107,14 @@ export class Game {
     this.ui.setBusy(true);
     return new Promise((res, rej) => setTimeout(async () => {
       try {
-        const terrain = await loadTerrain(key); if (gen !== this.loadGen) return res();
-        await this.setup(key, raw, terrain, online); res();
+        const [terrain, transit] = await Promise.all([loadTerrain(key), loadTransit(key)]); if (gen !== this.loadGen) return res();
+        await this.setup(key, raw, terrain, online, transit); res();
       } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); rej(e); }
       finally { this.ui.setBusy(false); }
     }, 30));
   }
 
-  private async setup(key: CityKey, raw: RawOsm | null, terrain: Terrain | null, online: OnlineInfo | null): Promise<void> {
+  private async setup(key: CityKey, raw: RawOsm | null, terrain: Terrain | null, online: OnlineInfo | null, transit: TransitData | null): Promise<void> {
     this.teardown();
     let world: World, source: TileSource, fileTiles: TileData[] | null = null;
     const emb = !raw && location.protocol === 'file:' ? EMBEDDED_TILES[key] : undefined;
@@ -134,7 +141,7 @@ export class Game {
     } else {
       const w = new LocalServer(), init: LocalInit = {
         city: key, name: this.playerName, terrain: terrain ? terrain.encode() : null,
-        tiles: fileTiles, tilesBase: raw || location.protocol === 'file:' ? null : tilesBase(key), osmPoints: raw ? raw.taggedNodes() : null,
+        tiles: fileTiles, tilesBase: raw || location.protocol === 'file:' ? null : tilesBase(key), osmPoints: raw ? raw.taggedNodes() : null, transit,
       };
       tr = new WorkerTransport(w);
       const m: WorkerIn = { t: 'init', init }; w.postMessage(m);
@@ -147,6 +154,11 @@ export class Game {
     this.fromFile = !!raw; this.online = online;
     const view = this.view = new CityView(world, source, this.xray);
     this.world3d.add(view.group);
+    if (transit) {
+      this.transit = new TransitSystem(transit, world, s.clock);
+      const lc: Record<string, string> = {}; for (const l of world.city.lines) lc[l.n] = l.c;
+      this.transitView = new TransitView(this.transit, lc); this.world3d.add(this.transitView.group);
+    }
     view.streamer.init().then(n => { if (this.view === view && n) this.ui.slowFrame(this); });
     await Promise.race([s.ready, new Promise((_, rej) => setTimeout(() => rej(new Error('Serwer gry nie odpowiada')), 15000))]);
     await new Promise<void>(res => { const chk = () => s.player() ? res() : setTimeout(chk, 20); chk(); });
@@ -155,8 +167,23 @@ export class Game {
     this.ui.onCityLoaded(this);
   }
 
+  /** Pojazdy komunikacji w pobliżu (minimapa). */
+  transitDots(): { x: number; z: number; color: string }[] {
+    const out: { x: number; z: number; color: string }[] = []; const v = this.transitView, t = this.transit; if (!v || !t) return out;
+    const col: Record<string, string> = { bus: '#ff5a6e', tram: '#ffd23f', metro: '#5aa0ff', rail: '#4ce08a', ferry: '#66e0ff', cable: '#ff8a3d' };
+    for (const a of v.visible) { const q = t.pose(a.p, a.st.s); out.push({ x: q.x, z: q.z, color: col[a.p.kind] }); }
+    return out;
+  }
+  /** Godzina gry, np. „08:12 · śr”. */
+  clockText(): string {
+    if (!this.transit && !this.session) return '';
+    const tz = this.transit?.tz ?? 'Europe/Warsaw', ms = this.session!.clock.now();
+    return new Intl.DateTimeFormat('pl-PL', { timeZone: tz, hour: '2-digit', minute: '2-digit', weekday: 'short' }).format(new Date(ms));
+  }
+
   private teardown(): void {
     this.session?.close(); this.session = null;
+    if (this.transitView) { this.world3d.remove(this.transitView.group); this.transitView.dispose(); this.transitView = null; } this.transit = null;
     if (this.view) { this.world3d.remove(this.view.group); this.view.dispose(); this.view = null; }
     this.labels.clear();
     for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
@@ -174,7 +201,7 @@ export class Game {
       case 'modeWalk': s?.sendCommand({ type: 'mode', mode: 'walk' }); break;
       case 'modeCar': s?.sendCommand({ type: 'mode', mode: 'car' }); break;
       case 'modeHeli': s?.sendCommand({ type: 'mode', mode: 'heli' }); break;
-      case 'interact': if (this.lastMode === 'walk') s?.sendCommand({ type: 'enter' }); break;
+      case 'interact': if (this.lastMode === 'walk' || this.riding) s?.sendCommand({ type: 'enter' }); break;
       case 'camera': this.rig.toggleFP(); this.ui.onModeChanged(this.lastMode, this.rig.fp); break;
       case 'xray': this.toggleXray(); break;
       case 'menu': this.ui.onMenu(); break;
@@ -211,6 +238,14 @@ export class Game {
     return s.entity(p.vehicle ?? p.walker) ?? null;
   }
   get isPassenger(): boolean { return !!this.session?.player()?.passenger; }
+  /** kurs komunikacji, którym jedzie gracz */
+  get riding(): string | null { return this.session?.player()?.ride ?? null; }
+  /** Pozycja pojazdu komunikacji, którym jedzie gracz (liczona lokalnie z rozkładu). */
+  ridePose(): { x: number; y: number; z: number; yaw: number; desc: string } | null {
+    const k = this.riding; if (!k || !this.transit) return null;
+    const a = this.transit.trip(k); if (!a) return null;
+    const q = this.transit.pose(a.p, a.st.s); return { ...q, desc: this.transit.describe(a) };
+  }
 
   // ---------- pętla ----------
   private frame(now: number): void {
@@ -225,8 +260,9 @@ export class Game {
     const m = this.sessionMode();
     if (m !== this.lastMode) { this.lastMode = m; this.rig.reset(); this.ui.onModeChanged(m, this.rig.fp); }
     const me = this.controlled(); if (!me) return;
-    const pv = s.previous(me.id) ?? me, P = this.pose;
-    P.x = lerp(pv.x, me.x, alpha); P.y = lerp(pv.y, me.y, alpha); P.z = lerp(pv.z, me.z, alpha); P.yaw = lerpAngle(pv.yaw, me.yaw, alpha);
+    const pv = s.previous(me.id) ?? me, P = this.pose, ride = this.ridePose();
+    if (ride) { P.x = ride.x; P.y = ride.y + 1.0; P.z = ride.z; P.yaw = ride.yaw; }
+    else { P.x = lerp(pv.x, me.x, alpha); P.y = lerp(pv.y, me.y, alpha); P.z = lerp(pv.z, me.z, alpha); P.yaw = lerpAngle(pv.yaw, me.yaw, alpha); }
     this.renderEntities(alpha, dt);
     const mode = this.lastMode, w = s.world, cam = this.rig, gr = w.ground(P.x, P.z), alt = P.y - gr, under = mode === 'walk' && P.y < gr - 1;
     if (mode === 'walk') {
@@ -239,6 +275,7 @@ export class Game {
     }
     const radius = mode === 'heli' ? Math.min(3000, 900 + alt * 10) : mode === 'car' ? 1200 : under ? 600 : 900;
     this.view!.update(P.x, P.z, radius);
+    this.transitView?.update(P.x, P.z, Math.min(radius, 1500), this.riding);
     const { grid, fog } = this.ctx;
     const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
     grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);

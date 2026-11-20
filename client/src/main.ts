@@ -23,7 +23,8 @@ function info(g: Game): void {
   const w = g.world!, v = g.view!, st = v.streamer.stats, s = g.session;
   const b = v.streamer.hasTiles ? ` · budynki: ${v.buildingCount}` + (g.fromFile ? '' : ` · kafelki: ${st.visible}/${st.indexed}`) : ' · bez budynków';
   const on = g.online && s ? ` · sieć: ${s.players.size} graczy` : '';
-  $('info').textContent = `${w.stations.length} stacji · ${w.metro.tunnels.length} tuneli` + b + (w.osmStations ? ` · stacje z OSM: ${w.osmStations}` : '') + on;
+  const tr = g.transit ? ` · komunikacja: ${g.transitDots().length} w pobliżu` : '';
+  $('info').textContent = `${w.stations.length} stacji · ${w.metro.tunnels.length} tuneli` + b + (w.osmStations ? ` · stacje z OSM: ${w.osmStations}` : '') + tr + on;
 }
 
 // ---------- czat ----------
@@ -63,12 +64,16 @@ const ui: GameUI = {
       .map(([n, i]) => `<option value="${i}">${n} (${[...w.stations[i].lines.keys()].map(l => city.lines[l].n).join(', ')})</option>`).join('');
     stSel.value = String(nearestIndex(g));
   },
-  slowFrame(g) { const e = g.controlled(); if (e && g.world) { $('loc').textContent = locText(g.world, g.mode, e); info(g); } },
+  slowFrame(g) {
+    const e = g.controlled(); if (!e || !g.world) return;
+    const ride = g.ridePose(), clock = g.clockText();
+    $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)); info(g);
+  },
   frame(g) {
     const w = g.world, P = g.pose, gr = w ? w.ground(P.x, P.z) : 0;
     const s = g.session, me = s?.player(), others = [];
     if (s && me) for (const p of s.players.values()) if (p.id !== me.id) { const e = s.entity(p.vehicle ?? p.walker); if (e) others.push({ x: e.x, z: e.z, color: p.color }); }
-    renderMinimap(mini, w, { ...P, yaw: g.mode === 'walk' ? g.viewYaw : P.yaw, mode: g.mode, xray: g.xray, under: P.y < gr - 1, height: P.y - gr, others });
+    renderMinimap(mini, w, { ...P, yaw: g.mode === 'walk' ? g.viewYaw : P.yaw, mode: g.mode, xray: g.xray, under: P.y < gr - 1, height: P.y - gr, others, transit: g.transitDots() });
   },
 };
 
@@ -147,6 +152,13 @@ async function create(city: CityKey): Promise<void> {
   } catch (e) { $('status').textContent = 'Błąd: ' + (e as Error).message; }
 }
 $('refreshBtn').onclick = refreshSessions;
+// zegar gry (gra jednoosobowa)
+const timeSel = $<HTMLSelectElement>('timeSel'), speedSel = $<HTMLSelectElement>('speedSel');
+const applyTime = () => {
+  if (game.online) { $('status').textContent = 'W grze sieciowej czas ustala serwer.'; return; }
+  game.session?.setTime(timeSel.value === 'now' ? null : +timeSel.value, +speedSel.value);
+};
+timeSel.onchange = applyTime; speedSel.onchange = applyTime;
 $('newW').onclick = () => create('warszawa'); $('newL').onclick = () => create('londyn');
 
 game.loadCity('warszawa' as CityKey, null); closeMenu();

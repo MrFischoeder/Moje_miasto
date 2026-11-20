@@ -6,6 +6,7 @@ import { SIM_DT } from '@miasto/shared/sim/loop';
 import { tileKey, type TileData } from '@miasto/shared/tiles/types';
 import type { CityKey } from '@miasto/shared/data/cities';
 import type { WorkerIn } from './transport';
+import type { TransitData } from '@miasto/shared/transit/timetable';
 
 export interface LocalInit {
   city: CityKey; name: string;
@@ -13,6 +14,8 @@ export interface LocalInit {
   terrain: ArrayBuffer | null;
   /** kafelki z pliku OSM albo adres katalogu kafelków */
   tiles: TileData[] | null; tilesBase: string | null; osmPoints: OsmPoint[] | null;
+  /** rozkłady jazdy (już wczytane przez grę) */
+  transit: TransitData | null;
 }
 
 let room: Room | null = null, pid: number | null = null;
@@ -38,6 +41,7 @@ async function init(o: LocalInit): Promise<void> {
       return JSON.parse(new TextDecoder().decode(await gunzip(await r.arrayBuffer()))) as TileData;
     },
   }, { local: true, maxPlayers: 1 }, () => performance.now());
+  if (o.transit) room.setTransit(o.transit);
   pid = room.join({ send, close: () => close() }, o.name);
   let last = performance.now(), acc = 0;
   setInterval(() => {

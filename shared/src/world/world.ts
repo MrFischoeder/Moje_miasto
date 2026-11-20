@@ -64,14 +64,16 @@ export class World implements Surface {
     const k = tileKey(t.x, t.y); if (this.tiles.has(k)) return; this.tiles.set(k, t);
     for (const b of t.b) if (b.mh < 2) { const o = toXZ(b.o); this.buildings.add(o, this.baseOf(o) + b.h, b.i?.map(toXZ), k); }
     for (const a of t.a) if (a.k === 'water') this.water.add(toXZ(a.o), 0, a.i?.map(toXZ), k);
-    for (const r of t.r) if (r.br) {
-      const p = toXZ(r.p), hw = r.w / 2 + (r.sw ? 2.5 : .6); let arc = 0;
-      for (let i = 0; i < p.length - 1; i++) {
-        const [x0, z0] = p[i], [x1, z1] = p[i + 1], L = Math.hypot(x1 - x0, z1 - z0) || 1, nx = -(z1 - z0) / L * hw, nz = (x1 - x0) / L * hw;
-        const ex = (x1 - x0) / L * .5, ez = (z1 - z0) / L * .5, y = deckY(r.bw, arc + L / 2, this.ground); arc += L;
+    const deck = (pts: XZ[], hw: number, bw: number[] | undefined) => {
+      let arc = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], L = Math.hypot(x1 - x0, z1 - z0) || 1, nx = -(z1 - z0) / L * hw, nz = (x1 - x0) / L * hw;
+        const ex = (x1 - x0) / L * .5, ez = (z1 - z0) / L * .5, y = deckY(bw, arc + L / 2, this.ground); arc += L;
         this.decks.add([[x0 - ex + nx, z0 - ez + nz], [x1 + ex + nx, z1 + ez + nz], [x1 + ex - nx, z1 + ez - nz], [x0 - ex - nx, z0 - ez - nz]], y, undefined, k);
       }
-    }
+    };
+    for (const r of t.r) if (r.br) deck(toXZ(r.p), r.w / 2 + (r.sw ? 2.5 : .6), r.bw);
+    for (const l of t.l) if (l.br) deck(toXZ(l.p), 2.4, l.bw);
   }
   removeTile(k: string): void {
     if (!this.tiles.delete(k)) return;

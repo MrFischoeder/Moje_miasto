@@ -105,10 +105,11 @@ export function decodeSnapshot(b: ArrayBuffer, prev: Map<number, QState>): Snaps
 }
 
 // ---------- komunikaty JSON ----------
-export interface PlayerInfo extends Pick<PlayerState, 'id' | 'name' | 'color' | 'walker' | 'vehicle' | 'passenger' | 'viewSeq' | 'viewYaw' | 'viewPitch'> {}
+export interface PlayerInfo extends Pick<PlayerState, 'id' | 'name' | 'color' | 'walker' | 'vehicle' | 'passenger' | 'ride' | 'viewSeq' | 'viewYaw' | 'viewPitch'> {}
 
 export type ServerMsg =
-  | { t: 'welcome'; v: number; you: number; city: string; session: string; tick: number; hz: number }
+  | { t: 'welcome'; v: number; you: number; city: string; session: string; tick: number; hz: number; time: number; scale: number }
+  | { t: 'time'; time: number; scale: number }
   | { t: 'players'; list: PlayerInfo[] }
   | { t: 'chat'; from: string; color: string; text: string; sys?: boolean }
   | { t: 'saved'; data: SaveState }
@@ -118,6 +119,8 @@ export type ClientMsg =
   | { t: 'cmd'; c: Command }
   | { t: 'chat'; text: string }
   | { t: 'save' }
-  | { t: 'load'; data: SaveState };
+  | { t: 'load'; data: SaveState }
+  /** gra jednoosobowa: ustawienie zegara (godzina lokalna w sekundach od północy, skala) */
+  | { t: 'setTime'; sec: number | null; scale: number };
 
-export const playerInfo = (p: PlayerState): PlayerInfo => ({ id: p.id, name: p.name, color: p.color, walker: p.walker, vehicle: p.vehicle, passenger: p.passenger, viewSeq: p.viewSeq, viewYaw: p.viewYaw, viewPitch: p.viewPitch });
+export const playerInfo = (p: PlayerState): PlayerInfo => ({ id: p.id, name: p.name, color: p.color, walker: p.walker, vehicle: p.vehicle, passenger: p.passenger, ride: p.ride, viewSeq: p.viewSeq, viewYaw: p.viewYaw, viewPitch: p.viewPitch });

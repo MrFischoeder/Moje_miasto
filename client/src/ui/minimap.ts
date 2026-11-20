@@ -5,7 +5,7 @@ import type { Mode } from '@miasto/shared/sim/types';
 import type { World } from '@miasto/shared/world/world';
 import type { TileData } from '@miasto/shared/tiles/types';
 
-export interface MiniView { x: number; y: number; z: number; yaw: number; mode: Mode; xray: boolean; under: boolean; height: number; others?: { x: number; z: number; color: string }[] }
+export interface MiniView { x: number; y: number; z: number; yaw: number; mode: Mode; xray: boolean; under: boolean; height: number; others?: { x: number; z: number; color: string }[]; transit?: { x: number; z: number; color: string }[] }
 
 export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: MiniView): void {
   const mctx = mini.getContext('2d')!, W = mini.width; mctx.clearRect(0, 0, W, W); if (!world) return;
@@ -45,6 +45,7 @@ export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: M
     mctx.beginPath(); c.forEach((q, k) => k ? mctx.lineTo(q[0], q[1]) : mctx.moveTo(q[0], q[1])); mctx.closePath(); mctx.fill();
   }
   mctx.globalAlpha = 1;
+  for (const o of C.transit || []) { mctx.fillStyle = o.color; mctx.fillRect(o.x - 3 * lw, o.z - 3 * lw, 6 * lw, 6 * lw); }
   for (const o of C.others || []) { mctx.fillStyle = o.color; mctx.beginPath(); mctx.arc(o.x, o.z, 5 * lw, 0, 7); mctx.fill(); }
   mctx.restore();
   mctx.fillStyle = MODE === 'car' ? '#ffcc33' : MODE === 'heli' ? '#66e0ff' : '#fff';

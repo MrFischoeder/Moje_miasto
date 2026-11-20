@@ -7,7 +7,7 @@ import { CITIES, CITY_KEYS, type CityKey } from '@miasto/shared/data/cities';
 import { Room } from '@miasto/shared/server/room';
 import { SIM_DT } from '@miasto/shared/sim/loop';
 import { World } from '@miasto/shared/world/world';
-import { loadTerrain, ROOT, tileLoader } from './files';
+import { loadTerrain, loadTransit, ROOT, tileLoader } from './files';
 
 export interface ServerOptions { port: number; maxPlayers: number; maxSessions: number; dataFile: string | null; staticDir: string | null; log: (s: string) => void }
 interface Session { room: Room; city: CityKey; created: number }
@@ -32,6 +32,8 @@ export class GameServer {
   createSession(city: CityKey): Session {
     const id = `${city}-${this.nextSession++}`, world = new World(city, { terrain: loadTerrain(city) });
     const room = new Room(id, world, tileLoader(city), { maxPlayers: this.opt.maxPlayers }, () => performance.now());
+    const tr = loadTransit(city);
+    if (tr) { const t = room.setTransit(tr); this.opt.log(`rozkłady ${CITIES[city].name}: ${t.tt.patterns.length} wzorców, metro w tunelach ${t.metro.ok}`); }
     room.onLeave = (p, pos) => { this.saved[`${city}:${p.name}`] = pos; this.persist(); };
     const s = { room, city, created: Date.now() }; this.sessions.set(id, s);
     this.opt.log(`sesja ${id} (${CITIES[city].name})`);

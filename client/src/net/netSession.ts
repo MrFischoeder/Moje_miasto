@@ -10,6 +10,7 @@ import {
   type ClientMsg, type PlayerInfo, type QState, type ServerMsg,
 } from '@miasto/shared/net/protocol';
 import type { Transport } from './transport';
+import { GameClock } from '@miasto/shared/transit/clock';
 
 type Pose = Pick<Entity, 'x' | 'y' | 'z' | 'yaw'>;
 interface Sample { t: number; e: Entity }
@@ -26,6 +27,8 @@ export class NetSession {
   city = '';
   sessionId = '';
   readonly players = new Map<number, PlayerInfo>();
+  /** zegar gry zsynchronizowany z serwerem */
+  readonly clock = new GameClock();
   /** stan do renderowania (przewidziany albo interpolowany) */
   private view = new Map<number, Entity>();
   private prevPred: Pose | null = null;
@@ -64,6 +67,8 @@ export class NetSession {
   save(): Promise<SaveState> { return new Promise(res => { this.savedWait = res; this.json({ t: 'save' }); }); }
   load(s: SaveState): void { this.json({ t: 'load', data: s }); }
   close(): void { this.tr.close(); }
+  /** gra jednoosobowa: godzina (sekundy od północy) i tempo czasu */
+  setTime(sec: number | null, scale: number): void { this.json({ t: 'setTime', sec, scale }); }
 
   // ---------- odbiór ----------
   private receive(d: ArrayBuffer | string): void {
@@ -71,10 +76,12 @@ export class NetSession {
       this.net.bytesIn += d.length;
       let m: ServerMsg; try { m = JSON.parse(d); } catch { return; }
       if (m.t === 'welcome') {
+        this.clock.set(m.time, m.scale);
         this.playerId = m.you; this.city = m.city; this.sessionId = m.session; this.serverTick = m.tick; this.recvAt = performance.now();
         this.pred = null; this.history = []; this.view.clear(); this.qprev.clear(); this.samples.clear(); this.readyRes();
       } else if (m.t === 'players') { this.players.clear(); for (const p of m.list) this.players.set(p.id, p); this.onPlayers(); }
       else if (m.t === 'chat') this.onChat({ ...m, at: performance.now() });
+      else if (m.t === 'time') this.clock.set(m.time, m.scale);
       else if (m.t === 'saved') { this.savedWait?.(m.data); this.savedWait = null; }
       else if (m.t === 'error') this.onError(m.text);
       return;
@@ -113,7 +120,7 @@ export class NetSession {
 
   /** Byt, którym gracz steruje (null, gdy pasażer albo przed dołączeniem). */
   private drivenId(): number | null {
-    const p = this.players.get(this.playerId); if (!p || p.passenger) return null;
+    const p = this.players.get(this.playerId); if (!p || p.passenger || p.ride) return null;
     return p.vehicle ?? p.walker;
   }
 

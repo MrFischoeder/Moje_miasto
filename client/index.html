@@ -46,6 +46,22 @@
       <button class="ghost" id="newL">Nowa gra: Londyn</button>
     </div>
     <p class="small">Przyciski Warszawa i Londyn u góry uruchamiają grę jednoosobową (bez serwera).</p>
+    <h2>Czas gry</h2>
+    <div class="row">
+      <select id="timeSel" aria-label="Godzina">
+        <option value="now">Teraz (czas lokalny miasta)</option>
+        <option value="21600">6:00 (pierwsze kursy)</option>
+        <option value="27000">7:30 (szczyt poranny)</option>
+        <option value="46800">13:00</option>
+        <option value="61200">17:00 (szczyt popołudniowy)</option>
+        <option value="84600">23:30</option>
+        <option value="7200">2:00 (nocne)</option>
+      </select>
+      <select id="speedSel" aria-label="Tempo czasu">
+        <option value="1">Tempo ×1</option><option value="10">×10</option><option value="60">×60</option><option value="300">×300</option>
+      </select>
+    </div>
+    <p class="small">Komunikacja kursuje według prawdziwych rozkładów (ZTM Warszawa, Koleje Mazowieckie, WKD, PKP; TfL i autobusy Londynu). E przy stojącym pojeździe = wsiadasz, E albo 1 na przystanku = wysiadasz.</p>
     <h2>Teleport na peron</h2>
     <div class="row">
       <select id="stSel" aria-label="Stacja"></select>

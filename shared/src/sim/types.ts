@@ -38,6 +38,8 @@ export interface PlayerState {
   vehicle: number | null;
   /** siedzi jako pasażer (nie steruje) */
   passenger: boolean;
+  /** jedzie komunikacją miejską: klucz kursu (wzorzec:kurs:dzień) */
+  ride: string | null;
   /** kolor gracza (#rrggbb) */
   color: string;
   /**
@@ -70,6 +72,7 @@ export const NO_INPUT: InputCmd = { f: 0, s: 0, run: false, brake: false, lift: 
 export type Command =
   | { type: 'mode'; mode: Mode }
   | { type: 'enter' }
+  | { type: 'alight' }
   | { type: 'goStation'; station: number; street: boolean };
 
 export const PLAYER_COLORS = ['#7dffb0', '#ffcc33', '#66e0ff', '#ff6b9a', '#b18cff', '#ff8a3d', '#3dffea', '#e8ff5a'];

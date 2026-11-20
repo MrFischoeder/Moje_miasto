@@ -2,6 +2,9 @@
 // zainteresowaniem (każdy dostaje byty wokół siebie), migawki z samymi zmianami, czat, kafelki.
 // Bez Node i DOM: ten sam kod działa w serwerze (WebSocket) i w Workerze (gra jednoosobowa).
 import { Simulation } from '../sim/sim';
+import { GameClock } from '../transit/clock';
+import { TransitSystem } from '../transit/system';
+import type { TransitData } from '../transit/timetable';
 import { SIM_HZ } from '../sim/loop';
 import type { Command, PlayerState, SaveState } from '../sim/types';
 import type { World } from '../world/world';
@@ -44,6 +47,9 @@ const clean = (s: string, n: number) => s.replace(/[\u0000-\u001f\u007f]/g, '').
 
 export class Room {
   readonly sim: Simulation;
+  /** zegar gry (czas lokalny miasta liczony z niego) */
+  readonly clock = new GameClock();
+  transit: TransitSystem | null = null;
   readonly clients = new Map<number, Client>();
   readonly opt: Required<RoomOptions>;
   private playersSig = '';
@@ -59,6 +65,13 @@ export class Room {
     this.opt = { maxPlayers: 64, snapEvery: 2, interest: 1000, local: false, ...opt };
   }
 
+  /** Rozkłady jazdy (komunikacja miejska liczona z zegara). */
+  setTransit(data: TransitData): TransitSystem { this.transit = new TransitSystem(data, this.world, this.clock); this.sim.transit = this.transit; return this.transit; }
+
+  private welcome(c: Conn, pid: number): void {
+    this.sendJson(c, { t: 'welcome', v: PROTOCOL_VERSION, you: pid, city: this.world.key, session: this.id, tick: this.sim.tick, hz: SIM_HZ, time: this.clock.now(), scale: this.clock.scale });
+  }
+
   get full(): boolean { return this.clients.size >= this.opt.maxPlayers; }
 
   // ---------- połączenia ----------
@@ -69,7 +82,7 @@ export class Room {
     while (taken.has(nick)) nick = `${clean(name, 17) || 'Gracz'}#${k++}`;
     const p = this.sim.addPlayer(nick, at);
     this.clients.set(p.id, { conn, player: p, inputs: [], ack: 0, credit: 1, sent: new Map(), bytes: 0, chat: [] });
-    this.sendJson(conn, { t: 'welcome', v: PROTOCOL_VERSION, you: p.id, city: this.world.key, session: this.id, tick: this.sim.tick, hz: SIM_HZ });
+    this.welcome(conn, p.id);
     if (!this.opt.local) this.broadcast({ t: 'chat', from: '', color: p.color, text: `${nick} dołącza do gry`, sys: true });
     this.playersSig = '';
     return p.id;
@@ -96,12 +109,22 @@ export class Room {
     else if (m.t === 'chat' && typeof m.text === 'string') this.chat(c, m.text);
     else if (m.t === 'save' && this.opt.local) this.sendJson(c.conn, { t: 'saved', data: this.sim.serialize() });
     else if (m.t === 'load' && this.opt.local) this.loadState(c, m.data);
+    else if (m.t === 'setTime' && this.opt.local) this.setTime(m.sec, m.scale);
   }
 
   private command(c: Client, cmd: Command): void {
-    if (cmd.type === 'mode' && ['walk', 'car', 'heli'].includes(cmd.mode)) this.sim.command(c.player.id, cmd);
-    else if (cmd.type === 'enter') this.sim.command(c.player.id, cmd);
-    else if (cmd.type === 'goStation' && Number.isInteger(cmd.station)) this.sim.command(c.player.id, { type: 'goStation', station: cmd.station, street: !!cmd.street });
+    let msg: string | undefined;
+    if (cmd.type === 'mode' && ['walk', 'car', 'heli'].includes(cmd.mode)) msg = this.sim.command(c.player.id, cmd);
+    else if (cmd.type === 'enter' || cmd.type === 'alight') msg = this.sim.command(c.player.id, { type: cmd.type });
+    else if (cmd.type === 'goStation' && Number.isInteger(cmd.station)) msg = this.sim.command(c.player.id, { type: 'goStation', station: cmd.station, street: !!cmd.street });
+    if (msg) this.sendJson(c.conn, { t: 'chat', from: '', color: '#ffcc33', text: msg, sys: true });
+  }
+
+  /** Zegar gry: godzina lokalna (sekundy od północy, dziś) i skala czasu. */
+  setTime(sec: number | null, scale: number): void {
+    const sc = Math.max(0, Math.min(3600, scale || 1)); let now = this.clock.now();
+    if (sec != null && this.transit) { const lt = this.transit.local(now); now += (sec - lt.sec) * 1000; }
+    this.clock.set(now, sc); this.broadcast({ t: 'time', time: this.clock.now(), scale: sc });
   }
 
   private chat(c: Client, text: string): void {
@@ -117,7 +140,7 @@ export class Room {
       // gracz lokalny przejmuje pierwszego gracza z zapisu
       const p = [...this.sim.players.values()][0]; if (!p) return;
       this.clients.delete(c.player.id); c.player = p; c.inputs = []; c.sent.clear(); this.clients.set(p.id, c);
-      this.sendJson(c.conn, { t: 'welcome', v: PROTOCOL_VERSION, you: p.id, city: this.world.key, session: this.id, tick: this.sim.tick, hz: SIM_HZ });
+      this.welcome(c.conn, p.id);
       this.playersSig = '';
     } catch (e) { this.sendJson(c.conn, { t: 'error', text: (e as Error).message }); }
   }
@@ -134,6 +157,7 @@ export class Room {
     this.sim.endStep();
     if (this.sim.tick % 15 === 0) this.streamTiles();
     this.sendPlayers();
+    if (this.sim.tick % (SIM_HZ * 10) === 0) this.broadcast({ t: 'time', time: this.clock.now(), scale: this.clock.scale });
     if (this.sim.tick % this.opt.snapEvery === 0) this.sendSnapshots();
     const dt = this.now() - t0, T = this.timing;
     T.sum += dt; T.n++; T.max = Math.max(T.max, dt);
