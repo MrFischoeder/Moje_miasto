@@ -1,9 +1,9 @@
 # tools/
 
-Przetwarzanie danych miasta, niezależne od silnika gry. Wynik to pliki JSON / binarne w metrach
-w projekcji miasta (`shared/src/data/projection.ts`).
+Przetwarzanie danych miasta, niezależne od silnika gry (wynik: JSON / binarne pliki w metrach w projekcji miasta).
+Opis poleceń: README w katalogu głównym, sekcja „Dane miasta”.
 
-Plan (etap 2): `fetch-osm.mjs` pobierający z Overpass API budynki, ulice, stacje i wejścia metra
-i zapisujący je w kafelkach `public/tiles/<miasto>/<x>_<y>.json`.
-
-Dane metra (`data/cities.json`) buduje na razie `data/prep.py` (uruchamiany z katalogu `data/`).
+- `fetch-osm.ts` – Overpass API -> kafelki `client/public/tiles/<miasto>/`
+- `build-tiles.ts` – lokalny plik OSM (Overpass JSON / GeoJSON) -> kafelki
+- `update-stations.ts` – prawdziwe pozycje stacji metra i wejść w `data/cities.json` (uruchamiać po `data/prep.py`)
+- `fetch-dem.ts` – Copernicus DEM -> `client/public/terrain/<miasto>.bin.gz`

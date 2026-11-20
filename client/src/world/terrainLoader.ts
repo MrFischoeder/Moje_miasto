@@ -1,5 +1,6 @@
 // Wczytywanie modelu terenu (public/terrain/<miasto>.bin.gz). Brak pliku = świat płaski.
 import { Terrain } from '@miasto/shared/world/terrain';
+import { EMBEDDED_TERRAIN } from './embedded';
 
 const cache = new Map<string, Promise<Terrain | null>>();
 
@@ -14,7 +15,8 @@ async function fetchTerrain(url: string): Promise<Terrain | null> {
 }
 
 export function loadTerrain(city: string): Promise<Terrain | null> {
-  if (location.protocol === 'file:') return Promise.resolve(null);
-  let p = cache.get(city); if (!p) cache.set(city, p = fetchTerrain(`${import.meta.env.BASE_URL}terrain/${city}.bin.gz`));
+  const emb = EMBEDDED_TERRAIN[city];
+  if (!emb && location.protocol === 'file:') return Promise.resolve(null);
+  let p = cache.get(city); if (!p) cache.set(city, p = fetchTerrain(emb || `${import.meta.env.BASE_URL}terrain/${city}.bin.gz`));
   return p;
 }

@@ -22,6 +22,26 @@ npm run typecheck
 npm run sim:headless -- warszawa 8 10   # symulacja w Node.js bez przeglądarki
 ```
 
+## Dane miasta (etap 2)
+
+```bash
+npm run fetch-osm -- --city warszawa                 # kafelki OSM 2 km wokół środka (Overpass API)
+npm run fetch-osm -- --city warszawa --radius 4000   # większy obszar
+npm run fetch-osm -- --city warszawa --area metro    # cały obszar metra (długo, setki zapytań)
+npm run update-stations -- --city warszawa           # prawdziwe pozycje stacji i wejść w data/cities.json
+npm run fetch-dem -- --city warszawa                 # model terenu (Copernicus DEM, AWS Open Data)
+npm run build-tiles -- --in mapa.json                # kafelki z własnego pliku (Overpass JSON / GeoJSON)
+```
+
+- Kafelki 500 × 500 m trafiają do `client/public/tiles/<miasto>/<x>_<y>.json.gz` (+ `index.json`), w metrach
+  w projekcji miasta. Format: `shared/src/tiles/types.ts`. Surowe odpowiedzi Overpass są w `.cache/osm/` (poza gitem).
+- `fetch-osm` pyta Overpass w paczkach 1 × 1 km, z pauzą (`--pause 3` s), ponawianiem z rosnącą pauzą i przechodzeniem
+  na kolejny serwer. Własny serwer: `--server URL` albo zmienna `OVERPASS_URL`.
+- Teren: `client/public/terrain/<miasto>.bin.gz` (siatka 30 m). Bez pliku świat jest płaski.
+- Gra doładowuje kafelki wokół gracza (dalej dla helikoptera) i zwalnia dalekie; kolizje i minimapa działają na załadowanych.
+- Dane: © współtwórcy OpenStreetMap (ODbL). Teren: Copernicus WorldDEM-30 © DLR e.V. 2010–2014 i © Airbus Defence
+  and Space GmbH 2014–2018, udostępniony w ramach programu Copernicus przez UE i ESA.
+
 ## Struktura
 
 ```
@@ -38,7 +58,8 @@ client/   przeglądarka (Vite + three.js 0.186)
   src/ui/           HUD, minimapa
   src/game/         pętla gry, sesja (LocalSession; później Worker i WebSocket)
 server/   Node.js: na razie symulacja bez przeglądarki (headless.ts)
-tools/    przetwarzanie danych miasta (etap 2)
+tools/    przetwarzanie danych miasta: fetch-osm, build-tiles, update-stations, fetch-dem
+  shared/src/tiles/  format i budowa kafelków (wspólne dla skryptów i gry)
 data/     dane metra i skrypt prep.py ze źródłami
 legacy/   pierwotny prototyp (jeden plik HTML) jako punkt odniesienia
 tests/    test dymny Playwright i plik OSM testowy
