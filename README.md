@@ -52,6 +52,20 @@ npm run fetch-dem -- --city warszawa                 # model terenu (Copernicus 
 npm run build-tiles -- --in mapa.json                # kafelki z własnego pliku (Overpass JSON / GeoJSON)
 ```
 
+**Bez dostępu do Overpass (wycinek PBF, tak zbudowano kafle w repo):**
+
+```bash
+pip install osmium
+curl -O https://download.bbbike.org/osm/bbbike/Warsaw/Warsaw.osm.pbf          # albo London, albo Geofabrik
+python3 tools/pbf-extract.py --city warszawa --pbf Warsaw.osm.pbf              # paczki 1 km w .cache/osm/warszawa
+npm run fetch-osm -- --city warszawa --offline --area metro                      # kafle z paczek, bez sieci
+npm run update-stations -- --city warszawa --from .cache/osm/warszawa/stations.json
+```
+
+W repo: Warszawa – cały obszar metra (+1 km, 1230 kafli, 33 MB), Londyn – centrum w promieniu 6 km (576 kafli, 20 MB);
+dane z wycinków BBBike z 14.11.2026. Pozycje stacji i wejść z OSM: Warszawa 38/41 (bez trzech stacji „w budowie”),
+Londyn 266/268 (bez Amersham i Chesham, poza wycinkiem).
+
 - Kafelki 500 × 500 m trafiają do `client/public/tiles/<miasto>/<x>_<y>.json.gz` (+ `index.json`), w metrach
   w projekcji miasta. Format: `shared/src/tiles/types.ts`. Surowe odpowiedzi Overpass są w `.cache/osm/` (poza gitem).
 - `fetch-osm` pyta Overpass w paczkach 1 × 1 km, z pauzą (`--pause 3` s), ponawianiem z rosnącą pauzą i przechodzeniem

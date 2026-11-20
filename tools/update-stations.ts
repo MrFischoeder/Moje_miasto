@@ -1,6 +1,7 @@
 // Aktualizuje data/cities.json prawdziwymi pozycjami stacji metra i wejść z OSM (Overpass API).
 // Uruchamiaj po data/prep.py (prep.py buduje plik od nowa z danych źródłowych).
 //   npm run update-stations -- --city warszawa   (albo --city londyn)
+//   npm run update-stations -- --city warszawa --from .cache/osm/warszawa/stations.json   (z tools/pbf-extract.py, bez sieci)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CityData } from '@miasto/shared/data/cities';
@@ -23,21 +24,26 @@ const q = `[out:json][timeout:180][bbox:${s},${w},${n},${e}];
   node["railway"="subway_entrance"];
 );
 out center tags;`;
-console.log(`${city.name}: pobieram stacje i wejścia z OSM…`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const j = await overpass(q, servers) as { elements: any[] };
+let j: { elements: any[] };
+if (a.from) { j = JSON.parse(readFileSync(a.from, 'utf8')); console.log(`${city.name}: stacje i wejścia z pliku ${a.from}`); }
+else { console.log(`${city.name}: pobieram stacje i wejścia z OSM…`); j = await overpass(q, servers) as typeof j; }
 const pos = (e: { lat?: number; lon?: number; center?: { lat: number; lon: number } }) => e.center ? [e.center.lat, e.center.lon] : [e.lat!, e.lon!];
 
-// stacje: dopasowanie po nazwie (bez polskich znaków i słów „metro”, „station”), do 1500 m od starej pozycji
-const idx = new Map(city.st.map((st, i) => [normName(st[0]), i]));
-const found = new Map<number, [number, number]>(); const unmatched: string[] = [];
-for (const el of j.elements) {
-  const t = el.tags || {}; if (t.railway === 'subway_entrance' || !t.name) continue;
-  const i = idx.get(normName(t.name)); if (i == null) { unmatched.push(t.name); continue; }
-  const [la, lo] = pos(el), p = proj(la, lo), d = Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]);
-  if (d > 1500) { unmatched.push(`${t.name} (${Math.round(d)} m od starej pozycji)`); continue; }
-  const prev = found.get(i); if (!prev || d < Math.hypot(proj(...prev)[0] - pts[i][0], proj(...prev)[1] - pts[i][1])) found.set(i, [la, lo]);
-}
+// stacje: dopasowanie po nazwie (bez polskich znaków i słów „metro”, „station”); każda stacja z danych bierze
+// najbliższą stację OSM o tej nazwie (do 1500 m). Aliasy: literówki i nazwy z danych z 2016 r.
+const ALIAS: Record<string, string> = {
+  "Shepherd's Bush (H)": "Shepherd's Bush Market", "Shepherd's Bush (C)": "Shepherd's Bush", 'Picadilly Circus': 'Piccadilly Circus',
+  'Harrow & Wealdston': 'Harrow & Wealdstone', 'Heathrow Terminals 1, 2 & 3': 'Heathrow Terminals 2 & 3', 'Edgware Road (B)': 'Edgware Road', 'Edgware Road (C)': 'Edgware Road',
+};
+const osmSt = j.elements.filter(el => el.tags && el.tags.railway !== 'subway_entrance' && el.tags.name).map(el => { const [la, lo] = pos(el); return { n: normName(el.tags.name), name: el.tags.name as string, la, lo, p: proj(la, lo) }; });
+const found = new Map<number, [number, number]>(), usedOsm = new Set<string>();
+city.st.forEach((st, i) => {
+  const key = normName(ALIAS[st[0]] ?? st[0]); let best: typeof osmSt[0] | null = null, bd = 1500;
+  for (const o of osmSt) if (o.n === key) { const d = Math.hypot(o.p[0] - pts[i][0], o.p[1] - pts[i][1]); if (d < bd) { bd = d; best = o; } }
+  if (best) { found.set(i, [best.la, best.lo]); usedOsm.add(best.n); }
+});
+const unmatched = osmSt.filter(o => !usedOsm.has(o.n)).map(o => o.name);
 const moved: [string, number][] = [];
 for (const [i, [la, lo]] of found) {
   const p = proj(la, lo); moved.push([city.st[i][0], Math.round(Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]))]);

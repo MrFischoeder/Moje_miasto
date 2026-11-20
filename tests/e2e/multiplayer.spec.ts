@@ -7,6 +7,8 @@ const SERVER = 'http://localhost:8788';
 const g = <T>(page: Page, f: (g: any) => T) => page.evaluate(`(${f.toString()})(window.__game)`) as Promise<T>;
 
 async function joinAs(page: Page, nick: string, session: string): Promise<void> {
+  // test sieci, nie miasta: bez kafli (renderowanie programowe w testach jest wolne)
+  await page.route(/\/tiles\/(warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'warszawa', size: 500, tiles: [], generated: '', source: 'test' }) }));
   await page.goto('/');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await page.locator('#menuBtn').click();
@@ -33,12 +35,12 @@ test('dwóch graczy: widoczność, czat, pasażer', async ({ browser }) => {
   await pa.keyboard.press('KeyT'); await pa.locator('#chatIn').fill('cześć Bob'); await pa.locator('#chatIn').press('Enter');
   await expect(pb.locator('#chatLog')).toContainText('Ala: cześć Bob');
 
-  // Ala wychodzi na ulicę i bierze auto; Bob staje obok i wsiada jako pasażer (E)
+  // Ala wychodzi na ulicę i bierze helikopter; Bob staje obok i wsiada jako pasażer (E)
   await g(pa, x => x.goStation(12, true));
   await g(pb, x => x.goStation(12, true));
   await expect.poll(() => g(pa, x => x.controlled()?.reg ?? 0)).toBe(-1);
-  await pa.evaluate(() => (window as unknown as G).__game.action('modeCar'));
-  await expect(pa.locator('#loc')).toContainText('Samochód');
+  await pa.evaluate(() => (window as unknown as G).__game.action('modeHeli'));
+  await expect(pa.locator('#loc')).toContainText('Helikopter');
   // Bob widzi postać Ali? (Ala w aucie: postać ukryta, widać auto)
   const carId = await g(pa, x => x.session.player().vehicle);
   await expect.poll(() => pb.evaluate(id => [...(window as unknown as G).__game.session.entities()].some((e: { id: number }) => e.id === id), carId), { timeout: 10_000 }).toBe(true);
@@ -52,11 +54,11 @@ test('dwóch graczy: widoczność, czat, pasażer', async ({ browser }) => {
   await pb.evaluate(() => (window as unknown as G).__game.action('interact'));
   await expect.poll(() => g(pb, x => x.isPassenger)).toBe(true);
   expect(await g(pb, x => x.session.player().vehicle)).toBe(carId);
-  // Ala jedzie; Bob jedzie razem z nią
+  // Ala wznosi się; Bob leci razem z nią
   const before = await g(pb, x => ({ ...x.pose }));
-  await pa.bringToFront(); await pa.keyboard.down('KeyW'); await pa.waitForTimeout(2500); await pa.keyboard.up('KeyW'); await pb.bringToFront();
+  await pa.bringToFront(); await pa.keyboard.down('Space'); await pa.waitForTimeout(2500); await pa.keyboard.up('Space'); await pb.bringToFront(); await pb.waitForTimeout(500);
   const after = await g(pb, x => ({ ...x.pose }));
-  expect(Math.hypot(after.x - before.x, after.z - before.z)).toBeGreaterThan(5);
+  expect(after.y - before.y).toBeGreaterThan(5);
   // Bob wysiada
   await pb.evaluate(() => (window as unknown as G).__game.action('modeWalk'));
   await expect.poll(() => g(pb, x => x.isPassenger)).toBe(false);

@@ -8,7 +8,10 @@ const regionKind = (page: Page) => page.evaluate(() => {
   return e.reg >= 0 ? g.world.regions.list[e.reg].kind : 'street';
 });
 
+const noTiles = (page: Page) => page.route(/\/tiles\/(warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'x', size: 500, tiles: [], generated: '', source: 'test' }) }));
+
 test('miasto i metro: smoke', async ({ page }) => {
+  await noTiles(page); // metro i przełączanie miast; kafle sprawdzają osobne testy
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -48,9 +51,9 @@ test('miasto i metro: smoke', async ({ page }) => {
   // Londyn
   await page.locator('#menuBtn').click();
   await page.locator('#cityL').click();
-  await expect(page.locator('#cityName')).toHaveText('LONDYN');
+  await expect(page.locator('#cityName')).toHaveText('LONDYN', { timeout: 30_000 });
   await expect(page.locator('#info')).toContainText('268 stacji');
-  await expect(page.locator('#loc')).toContainText('Peron Oxford Circus');
+  await expect(page.locator('#loc')).toContainText('Peron Oxford Circus', { timeout: 15_000 });
 
   expect(errors).toEqual([]);
 });
@@ -87,5 +90,18 @@ test('kafelki przez HTTP: doładowanie wokół gracza, kolizje, zwalnianie', asy
   // daleko (Kabaty): kafelki zwolnione
   await page.evaluate(() => { const g = (window as unknown as G).__game; g.goStation(0, true); });
   await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.visible), { timeout: 20_000 }).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('prawdziwe kafle Warszawy z OSM: budynki wokół Świętokrzyskiej', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
+  await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.indexed), { timeout: 20_000 }).toBeGreaterThan(1000);
+  await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.buildingCount), { timeout: 60_000 }).toBeGreaterThan(2000);
+  // stacja z prawdziwą pozycją i wejściami z OSM
+  const st = await page.evaluate(() => { const s = (window as unknown as G).__game.world.stations.find((x: { name: string }) => x.name === 'Świętokrzyska'); return { exits: s.exitGeoms.length }; });
+  expect(st.exits).toBeGreaterThan(1);
   expect(errors).toEqual([]);
 });

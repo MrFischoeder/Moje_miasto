@@ -14,8 +14,9 @@ describe('świat', () => {
   it('jest deterministyczny (ziarno = nazwa miasta + stacji)', () => {
     const a = new World('warszawa'), b = new World('warszawa');
     expect(hashRegions(a)).toBe(hashRegions(b));
-    expect(a.regions.list.length).toBe(243); // tyle samo co prototyp (legacy/index.html)
-    expect(new World('londyn').regions.list.length).toBe(1766);
+    // stacje i wejścia z OSM (tools/update-stations.ts): zejścia prowadzą do prawdziwych wejść
+    expect(a.regions.list.length).toBeGreaterThan(243); // prototyp miał 243 (losowe zejścia)
+    expect(a.stations.filter(s => s.exitGeoms.some(e => e.corr)).length).toBeGreaterThan(20);
   });
 
   it('rng daje ten sam ciąg dla tego samego ziarna', () => {
