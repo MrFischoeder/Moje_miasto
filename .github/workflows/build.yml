@@ -18,7 +18,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build:single
+      # krok niekrytyczny: przy wyczerpanym limicie miejsca na artefakty build i tak przechodzi
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: moje-miasto
           path: dist-single/moje-miasto.html
+          retention-days: 7
