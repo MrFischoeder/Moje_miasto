@@ -11,7 +11,8 @@ import type { Terrain } from '@miasto/shared/world/terrain';
 import { createScene, GridDrape, type SceneCtx } from '../render/scene';
 import { CityView } from '../world/cityView';
 import { loadTerrain } from '../world/terrainLoader';
-import { HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
+import { EMBEDDED_TILES } from '../world/embedded';
+import { decodeTile, HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
 import { disposeModel, makeAvatar, makeCar, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
@@ -109,7 +110,15 @@ export class Game {
   private async setup(key: CityKey, raw: RawOsm | null, terrain: Terrain | null, online: OnlineInfo | null): Promise<void> {
     this.teardown();
     let world: World, source: TileSource, fileTiles: TileData[] | null = null;
-    if (raw) {
+    const emb = !raw && location.protocol === 'file:' ? EMBEDDED_TILES[key] : undefined;
+    if (emb) {
+      // wersja jednoplikowa: wbudowane kafle centrum
+      const tiles = new Map<string, TileData>();
+      for (const [k, url] of Object.entries(emb)) tiles.set(k, await decodeTile(url));
+      fileTiles = [...tiles.values()];
+      world = new World(key, { tiles: fileTiles, terrain });
+      source = new MemoryTileSource(tiles, key);
+    } else if (raw) {
       // plik OSM: te same kafelki co z tools/fetch-osm, budowane w pamięci
       const tiles = buildTiles(raw, key, CITIES[key].o); fileTiles = [...tiles.values()];
       world = new World(key, { tiles: fileTiles, osmPoints: raw.taggedNodes(), terrain });

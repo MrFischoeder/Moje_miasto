@@ -39,3 +39,6 @@ export class NoTiles implements TileSource {
   async index(): Promise<null> { return null; }
   async load(): Promise<null> { return null; }
 }
+
+/** Kafel z adresu (także data URL wbudowanej wersji). */
+export async function decodeTile(url: string): Promise<TileData> { return await readJson(await fetch(url)) as TileData; }

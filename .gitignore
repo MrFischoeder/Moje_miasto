@@ -7,3 +7,4 @@ playwright-report/
 dist-single/
 .cache/
 server/data/
+client/embedded/
