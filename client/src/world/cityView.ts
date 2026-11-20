@@ -1,37 +1,45 @@
-// Widok miasta: wszystko, co rysujemy dla danego świata (powierzchnia, podziemia, grunt).
+// Widok miasta: podziemia (zawsze całe), grunt i kafelki doładowywane wokół gracza.
 import * as THREE from 'three';
-import type { Feature } from '@miasto/shared/osm/features';
+import { TILE_SIZE } from '@miasto/shared/tiles/types';
 import type { World } from '@miasto/shared/world/world';
 import { buildMetroObjects } from './metro';
-import { buildGround, buildSurface } from './surface';
+import { GroundGrid } from './ground';
+import { Signs } from './signs';
+import type { TileSource } from './tiles/source';
+import { TileStreamer } from './tiles/streamer';
 
 export class CityView {
   readonly group = new THREE.Group();
-  readonly buildingCount: number;
-  private groundMat: THREE.MeshBasicMaterial;
-  private buildMat: THREE.MeshLambertMaterial | null = null;
-  private edgeMat: THREE.LineBasicMaterial | null = null;
+  readonly ground: GroundGrid;
+  readonly streamer: TileStreamer;
+  readonly signs = new Signs();
 
-  constructor(readonly world: World, feats: Feature[] | null, xray: boolean) {
-    let nb = 0;
-    if (feats) {
-      const s = buildSurface(feats, world.proj); nb = s.count; this.buildMat = s.buildMat; this.edgeMat = s.edgeMat;
-      for (const o of s.objects) this.group.add(o);
-    }
+  constructor(readonly world: World, source: TileSource, xray: boolean) {
     for (const o of buildMetroObjects(world.metro, world.city)) this.group.add(o);
-    const g = buildGround(world, world.metro.holes, xray); this.groundMat = g.mat; this.group.add(g.mesh);
-    this.buildingCount = nb;
+    // grunt: wokół stacji (+800 m), poszerzany o kafelki
+    let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
+    for (const s of world.stations) { a = Math.min(a, s.x); b = Math.max(b, s.x); c = Math.min(c, s.z); d = Math.max(d, s.z); }
+    for (const t of world.tiles.values()) { a = Math.min(a, t.x * TILE_SIZE); b = Math.max(b, (t.x + 1) * TILE_SIZE); c = Math.min(c, t.y * TILE_SIZE); d = Math.max(d, (t.y + 1) * TILE_SIZE); }
+    const f = (v: number) => Math.floor(v / TILE_SIZE);
+    this.ground = new GroundGrid(f(a - 800), f(c - 800), f(b + 800), f(d + 800), world.metro.holes, xray);
+    this.group.add(this.ground.mesh);
+    this.streamer = new TileStreamer(world, source, this.ground);
+    this.streamer.onChange = () => this.signs.rebuild(this.streamer.loadedTiles());
+    this.group.add(this.streamer.group, this.signs.group);
     this.setXray(xray);
   }
 
-  setXray(xray: boolean): void {
-    const gm = this.groundMat;
-    gm.opacity = xray ? .12 : 1; gm.transparent = xray; gm.needsUpdate = true; gm.depthWrite = !xray;
-    if (this.buildMat) this.buildMat.opacity = xray ? .25 : 1;
-    if (this.edgeMat) this.edgeMat.opacity = xray ? .35 : 1;
-  }
+  /** Co klatkę: kafelki wokół gracza, grunt. */
+  update(x: number, z: number, radius: number): void { this.streamer.update(x, z, radius); this.ground.update(); }
+  /** Rzadziej: podpisy w pobliżu. */
+  slowUpdate(x: number, z: number): void { this.signs.update(x, z); }
+
+  get buildingCount(): number { return this.streamer.buildingCount; }
+
+  setXray(xray: boolean): void { this.ground.setXray(xray); this.streamer.setXray(xray); }
 
   dispose(): void {
+    this.signs.clear(); this.streamer.dispose(); this.ground.dispose();
     this.group.traverse(o => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();

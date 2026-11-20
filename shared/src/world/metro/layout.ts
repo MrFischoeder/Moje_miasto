@@ -3,10 +3,9 @@
 // Ziarno losowości = nazwa miasta + nazwa stacji, więc stacja zawsze wygląda tak samo.
 // Kolejność wywołań R() i tworzenia regionów jest taka jak w prototypie (legacy/index.html).
 import type { CityData } from '../../data/cities';
-import { makeProj, normName } from '../../data/projection';
-import type { Feature } from '../../osm/features';
+import { makeProj } from '../../data/projection';
 import { rng, type Rng } from '../../util/rng';
-import type { BuildingIndex, XZ } from '../collision';
+import type { XZ } from '../collision';
 import type { Region, RegionIndex } from '../regions';
 
 export type Span = [number, number];
@@ -58,7 +57,7 @@ export interface MetroLayout {
 type HallDraft = Omit<Hall, 'reg' | 'pillarStep'> & { R: Rng; reg?: Region; pillarStep?: number };
 
 export function buildMetroLayout(city: CityData, stOverride: Map<number, XZ> | null, entrances: Map<number, XZ[]>,
-  buildings: BuildingIndex, regions: RegionIndex): MetroLayout {
+  buildings: { hit(x: number, z: number): boolean }, regions: RegionIndex): MetroLayout {
   const proj = makeProj(city.o);
   const stations: Station[] = city.st.map(([name, lat, lon], i) => {
     const ov = stOverride && stOverride.get(i); const [x, z] = ov || proj(lat, lon);
@@ -165,26 +164,4 @@ export function buildMetroLayout(city: CityData, stOverride: Map<number, XZ> | n
     }
   }
   return { stations, tunnels, ramps, holes };
-}
-
-/**
- * Stacje i wejścia z pliku OSM: stacja przesuwa się na prawdziwe miejsce (do 900 m),
- * wejścia w promieniu 260 m od stacji stają się prawdziwymi zejściami.
- */
-export function matchOsmStations(feats: Feature[] | null, city: CityData): { ov: Map<number, XZ>; ent: Map<number, XZ[]> } {
-  const ov = new Map<number, XZ>(), ent = new Map<number, XZ[]>(); if (!feats) return { ov, ent };
-  const proj = makeProj(city.o), pts = feats.filter(f => f.k === 'p'), idx = new Map(city.st.map((s, i) => [normName(s[0]), i]));
-  for (const f of pts) {
-    const t = f.tags, isSt = (t.railway === 'station' && t.station === 'subway') || (t.public_transport === 'station' && t.subway === 'yes');
-    if (isSt && t.name) {
-      const i = idx.get(normName(t.name));
-      if (i != null) { const p = proj(f.pts[0][1], f.pts[0][0]), q = proj(city.st[i][1], city.st[i][2]); if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 900) ov.set(i, p); }
-    }
-  }
-  for (const f of pts) if (f.tags.railway === 'subway_entrance') {
-    const p = proj(f.pts[0][1], f.pts[0][0]); let best = -1, bd = 260;
-    city.st.forEach((s, i) => { const q = ov.get(i) || proj(s[1], s[2]); const d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d < bd) { bd = d; best = i; } });
-    if (best >= 0) { let l = ent.get(best); if (!l) ent.set(best, l = []); l.push(p); }
-  }
-  return { ov, ent };
 }

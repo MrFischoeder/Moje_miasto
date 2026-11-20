@@ -88,16 +88,16 @@ export class Simulation {
   /** Zatrzymuje pojazd i zostawia go zaparkowanego. */
   private park(v: Entity): void {
     v.driver = null; v.speed = 0; v.vx = v.vy = v.vz = 0; v.lift = 0;
-    if (v.kind === 'heli') { v.y = this.world.buildings.top(v.x, v.z); v.air = false; v.tilt = v.roll = 0; }
+    if (v.kind === 'heli') { v.y = this.world.roofTop(v.x, v.z); v.air = false; v.tilt = v.roll = 0; }
   }
 
   /** Wysiada obok pojazdu (z lewej strony, a gdy tam budynek, w najbliższym wolnym miejscu). */
   private exitVehicle(p: PlayerState, place = true): void {
     if (p.vehicle == null) return;
-    const v = this.entity(p.vehicle), w = this.entity(p.walker), B = this.world.buildings;
+    const v = this.entity(p.vehicle), w = this.entity(p.walker), W = this.world;
     if (place) {
       const rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw); let q: [number, number] = [v.x - rx * 2.6, v.z - rz * 2.6];
-      if (B.hit(q[0], q[1])) q = B.freeSpot(v.x, v.z, v.yaw, true);
+      if (W.blocked(q[0], q[1])) q = W.freeSpot(v.x, v.z, v.yaw, true);
       Object.assign(w, { x: q[0], z: q[1], y: 0, reg: -1, yaw: v.yaw, pitch: 0 });
       p.viewSeq++;
     }
@@ -121,7 +121,7 @@ export class Simulation {
   setMode(p: PlayerState, m: Mode): void {
     const from = this.modeOf(p);
     if (m === from && m !== 'walk') m = 'walk'; if (m === from) return;
-    const W = this.world, B = W.buildings;
+    const W = this.world;
     if (m === 'walk') { this.exitVehicle(p); return; }
     if (from === 'walk') {
       const w = this.entity(p.walker); let x = w.x, z = w.z, yaw = w.yaw; const under = w.y < -1;
@@ -129,16 +129,16 @@ export class Simulation {
         const s = W.nearestStation(w.x, w.z), t = s.tops[0];
         if (t) { x = t[0] + t[2][0] * 5; z = t[1] + t[2][1] * 5; yaw = Math.atan2(-t[2][0], -t[2][1]); } else { x = s.x; z = s.z; }
       }
-      if (m === 'car') [x, z] = B.freeSpot(x, z, yaw);
+      if (m === 'car') [x, z] = W.freeSpot(x, z, yaw);
       const v = this.personal(p, m);
-      Object.assign(v, { x, z, yaw, y: m === 'heli' ? B.top(x, z) + (under ? 40 : 0) : 0, speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0, air: false });
+      Object.assign(v, { x, z, yaw, y: m === 'heli' ? W.roofTop(x, z) + (under ? 40 : 0) : 0, speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0, air: false });
       this.enter(p, v);
       return;
     }
     // przesiadka między pojazdami
     const old = this.entity(p.vehicle!), v = this.personal(p, m);
     if (m === 'car') {
-      const [x, z] = B.freeSpot(old.x, old.z, old.yaw);
+      const [x, z] = W.freeSpot(old.x, old.z, old.yaw);
       Object.assign(v, { x, z, y: 0, yaw: old.yaw, speed: 0, roll: 0, tilt: 0 });
     } else {
       Object.assign(v, { x: old.x, y: old.y, z: old.z, yaw: old.yaw, vx: -Math.sin(old.yaw) * old.speed, vz: -Math.cos(old.yaw) * old.speed, vy: 0, roll: old.roll, tilt: 0 });
@@ -163,7 +163,7 @@ export class Simulation {
     for (const e of s.entities) {
       const c = { ...e };
       // region liczony od nowa: świat mógł powstać z innego pliku OSM
-      if (c.kind === 'walker') { const g = this.world.regions.support(c.x, c.z, c.y, this.world.buildings); c.reg = g && g.r ? g.r.id : -1; }
+      if (c.kind === 'walker') { const g = this.world.support(c.x, c.z, c.y); c.reg = g && g.r ? g.r.id : -1; }
       this.entities.set(c.id, c);
     }
     for (const p of s.players) this.players.set(p.id, { ...p, viewSeq: p.viewSeq + 1 });

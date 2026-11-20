@@ -8,7 +8,7 @@ export function walkStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
   if (!f && !s) return;
   const m = Math.min(1, Math.hypot(f, s)) / Math.hypot(f, s), sy = Math.sin(e.yaw), cy = Math.cos(e.yaw);
   const dx = (-sy * f + cy * s) * m * sp * dt, dz = (-cy * f - sy * s) * m * sp * dt;
-  const sup = (x: number, z: number) => w.regions.support(x, z, e.y, w.buildings);
+  const sup = (x: number, z: number) => w.support(x, z, e.y);
   let g = sup(e.x + dx, e.z + dz);
   if (g) { e.x += dx; e.z += dz; }
   else if ((g = sup(e.x + dx, e.z))) e.x += dx;
@@ -25,8 +25,8 @@ export function carStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
   if (Math.abs(e.speed) < .08 && !f) e.speed = 0;
   const as = Math.abs(e.speed), turn = s * 1.6 / (1 + as / 18) * Math.min(1, as / 3) * Math.sign(e.speed), ny = e.yaw - turn * dt;
   const nx = e.x - Math.sin(ny) * e.speed * dt, nz = e.z - Math.cos(ny) * e.speed * dt;
-  if (!w.buildings.carHit(nx, nz, ny)) { e.x = nx; e.z = nz; e.yaw = ny; }
-  else { if (!w.buildings.carHit(e.x, e.z, ny)) e.yaw = ny; e.speed *= -.3; }
+  if (!w.carHit(nx, nz, ny)) { e.x = nx; e.z = nz; e.yaw = ny; }
+  else { if (!w.carHit(e.x, e.z, ny)) e.yaw = ny; e.speed *= -.3; }
   e.roll += (turn * as * .004 - e.roll) * Math.min(1, 5 * dt);
 }
 
@@ -37,9 +37,8 @@ export function heliStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
   const up = cmd.lift; e.lift = up;
   e.vy += (up * (run ? 25 : 14) - e.vy) * Math.min(1, 2.5 * dt);
   let nx = e.x + e.vx * dt, nz = e.z + e.vz * dt, ny = Math.min(1500, e.y + e.vy * dt);
-  const B = w.buildings;
-  if (B.top(nx, nz) > ny + .3) { e.vx = e.vz = 0; nx = e.x; nz = e.z; }
-  const floor = B.top(nx, nz); if (ny < floor) { ny = floor; if (e.vy < 0) e.vy = 0; }
+  if (w.roofTop(nx, nz) > ny + .3) { e.vx = e.vz = 0; nx = e.x; nz = e.z; }
+  const floor = w.roofTop(nx, nz); if (ny < floor) { ny = floor; if (e.vy < 0) e.vy = 0; }
   e.x = nx; e.z = nz; e.y = ny;
   const fs = e.vx * fx + e.vz * fz, air = ny > floor + .2; e.air = air;
   e.tilt += ((air ? -fs / max * .3 : 0) - e.tilt) * Math.min(1, 3 * dt);

@@ -65,3 +65,27 @@ test('wczytanie pliku OSM: budynki i stacja z OSM', async ({ page }) => {
   await expect(page.locator('#loc')).toContainText('Ulica');
   expect(errors).toEqual([]);
 });
+
+test('kafelki przez HTTP: doładowanie wokół gracza, kolizje, zwalnianie', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.route('**/tiles/warszawa/**', async route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!;
+    try { await route.fulfill({ path: `tests/fixtures/tiles/warszawa/${name}` }); } catch { await route.fulfill({ status: 404, body: '' }); }
+  });
+  await page.goto('/');
+  await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
+  // gracz na Świętokrzyskiej (start): kafelki w promieniu 600 m pod ziemią / 900 m na ulicy
+  await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.visible), { timeout: 20_000 }).toBeGreaterThan(3);
+  await expect(page.locator('#info')).toContainText('kafelki:');
+  const r = await page.evaluate(() => {
+    const g = (window as unknown as G).__game, w = g.world, o = w.proj(52.2355, 21.0082);
+    return { wall: w.blocked(o[0] - 134, o[1] - 225), yard: w.blocked(o[0] - 75, o[1] - 225), water: w.blocked(o[0] + 375, o[1] + 100), bridge: w.blocked(o[0] + 375, o[1]) };
+  });
+  expect(r).toEqual({ wall: true, yard: false, water: true, bridge: false });
+  // daleko (Kabaty): kafelki zwolnione
+  await page.evaluate(() => { const g = (window as unknown as G).__game; g.goStation(0, true); });
+  await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.visible), { timeout: 20_000 }).toBe(0);
+  expect(errors).toEqual([]);
+});

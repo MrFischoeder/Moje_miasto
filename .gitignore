@@ -5,3 +5,4 @@ playwright-report/
 *.log
 .vite/
 dist-single/
+.cache/

@@ -16,6 +16,10 @@ export interface CityData {
   lines: MetroLine[];
   st: StationRow[];
   ed: EdgeRow[];
+  /** wejścia do metra z OSM: [indeks stacji, lat, lon] (tools/update-stations.ts) */
+  ent?: [number, number, number][];
+  /** stacje z prawdziwą pozycją z OSM */
+  osm?: number[];
 }
 
 export type CityKey = 'warszawa' | 'londyn';

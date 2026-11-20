@@ -1,11 +1,13 @@
 // Gra po stronie klienta: ładowanie miasta, pętla (stały krok symulacji + renderowanie), widok bytów.
 import * as THREE from 'three';
 import { CITIES, type CityKey } from '@miasto/shared/data/cities';
-import type { Feature } from '@miasto/shared/osm/features';
+import type { RawOsm } from '@miasto/shared/osm/raw';
+import { buildTiles } from '@miasto/shared/tiles/build';
 import type { Entity, Mode, SaveState } from '@miasto/shared/sim/types';
 import { World } from '@miasto/shared/world/world';
 import { createScene, type SceneCtx } from '../render/scene';
 import { CityView } from '../world/cityView';
+import { HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
 import { disposeModel, makeCar, makeHeli, type VehicleModel } from '../player/models';
@@ -33,7 +35,8 @@ export class Game {
   readonly rig: CameraRig;
   session: GameSession | null = null;
   view: CityView | null = null;
-  feats: Feature[] | null = null;
+  /** świat zbudowany z wczytanego pliku OSM */
+  fromFile = false;
   xray = false;
   readonly labels = new StationLabels();
   private world3d = new THREE.Group();
@@ -60,23 +63,34 @@ export class Game {
   get mode(): Mode { return this.lastMode; }
 
   /** Ładuje miasto (z obiektami OSM albo bez). */
-  loadCity(key: CityKey, feats: Feature[] | null): void {
+  loadCity(key: CityKey, raw: RawOsm | null): void {
     this.ui.setBusy(true);
     setTimeout(() => {
-      try { this.doLoad(key, feats); } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); }
+      try { this.doLoad(key, raw); } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); }
       this.ui.setBusy(false);
     }, 30);
   }
 
-  private doLoad(key: CityKey, feats: Feature[] | null): void {
+  private doLoad(key: CityKey, raw: RawOsm | null): void {
     this.view?.dispose(); this.labels.clear();
     for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
     if (this.view) this.world3d.remove(this.view.group);
-    const world = new World(key, feats);
-    this.feats = feats;
+    let world: World, source: TileSource;
+    if (raw) {
+      // plik OSM: te same kafelki co z tools/fetch-osm, budowane w pamięci
+      const tiles = buildTiles(raw, key, CITIES[key].o);
+      world = new World(key, { tiles: tiles.values(), osmPoints: raw.taggedNodes() });
+      source = new MemoryTileSource(tiles, key);
+    } else {
+      world = new World(key);
+      // plik otwarty z dysku (wersja jednoplikowa) nie może pobierać kafelków
+      source = location.protocol === 'file:' ? new NoTiles() : new HttpTileSource(`${import.meta.env.BASE_URL}tiles/${key}/`);
+    }
+    this.fromFile = !!raw;
     this.session = new LocalSession(world);
-    this.view = new CityView(world, feats, this.xray);
-    this.world3d.add(this.view.group);
+    const view = this.view = new CityView(world, source, this.xray);
+    this.world3d.add(view.group);
+    view.streamer.init().then(n => { if (this.view === view && n) this.ui.slowFrame(this); });
     this.viewSeq = -1; this.syncView();
     this.lastMode = 'walk'; this.rig.reset(); this.ui.onModeChanged('walk', this.rig.fp);
     this.ui.onCityLoaded(this);
@@ -165,10 +179,14 @@ export class Game {
       const V = { x: P.x, y: P.y, z: P.z, yaw: P.yaw, roll: me.roll, kind: mode };
       if (mode === 'car') cam.chase(V, 9, 2.2, 1.2, dt, now, w.buildings); else cam.chase(V, 17, 5, 2.5, dt, now, w.buildings);
     }
+    {
+      const radius = mode === 'heli' ? Math.min(3000, 900 + P.y * 10) : mode === 'car' ? 1200 : P.y < -1 ? 600 : 900;
+      this.view!.update(P.x, P.z, radius);
+    }
     const under = mode === 'walk' && P.y < -1, { grid, fog } = this.ctx;
     { const gs = mode === 'heli' && P.y > 120 ? 5 : 1, step = 10 * gs; grid.scale.set(gs, 1, gs); grid.position.set(Math.round(P.x / step) * step, .04, Math.round(P.z / step) * step); }
     fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + P.y * 12) : mode === 'car' ? 900 : 650;
-    if (now - this.lastSlow > 500) { this.lastSlow = now; this.labels.update(w, P.x, P.z); this.ui.slowFrame(this); }
+    if (now - this.lastSlow > 500) { this.lastSlow = now; this.labels.update(w, P.x, P.z); this.view!.slowUpdate(P.x, P.z); this.ui.slowFrame(this); }
     this.ctx.renderer.render(this.ctx.scene, this.ctx.camera);
     this.ui.frame(this);
   }

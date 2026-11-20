@@ -3,6 +3,7 @@ import { CELL } from '@miasto/shared/world/grid';
 import type { BuildingPoly } from '@miasto/shared/world/collision';
 import type { Mode } from '@miasto/shared/sim/types';
 import type { World } from '@miasto/shared/world/world';
+import type { TileData } from '@miasto/shared/tiles/types';
 
 export interface MiniView { x: number; y: number; z: number; yaw: number; mode: Mode; xray: boolean }
 
@@ -20,10 +21,16 @@ export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: M
       const l = world.buildings.grid.get(i + ',' + j); if (!l) continue;
       for (const p of l) { if (seen.has(p)) continue; seen.add(p); mctx.beginPath(); p.poly.forEach((q, k) => k ? mctx.lineTo(q[0], q[1]) : mctx.moveTo(q[0], q[1])); mctx.closePath(); mctx.fill(); mctx.stroke(); }
     }
-    mctx.strokeStyle = 'rgba(207,233,255,.5)'; mctx.lineWidth = 2 * lw;
-    for (const r of world.roads) {
-      const p0 = r[0]; if (Math.abs(p0[0] - C.x) > R + 400 || Math.abs(p0[1] - C.z) > R + 400) continue;
-      mctx.beginPath(); r.forEach((q, k) => k ? mctx.lineTo(q[0], q[1]) : mctx.moveTo(q[0], q[1])); mctx.stroke();
+    const near = (t: TileData) => Math.abs((t.x + .5) * t.size - C.x) < R + t.size && Math.abs((t.y + .5) * t.size - C.z) < R + t.size;
+    const path = (f: number[], close = false) => { mctx.beginPath(); for (let i = 0; i < f.length; i += 2) i ? mctx.lineTo(f[i], f[i + 1]) : mctx.moveTo(f[i], f[i + 1]); if (close) mctx.closePath(); };
+    for (const t of world.tiles.values()) {
+      if (!near(t)) continue;
+      for (const a of t.a) { mctx.fillStyle = a.k === 'water' ? 'rgba(60,140,255,.45)' : a.k === 'park' || a.k === 'forest' ? 'rgba(60,200,100,.18)' : 'rgba(150,170,170,.12)'; path(a.o, true); mctx.fill(); }
+    }
+    mctx.strokeStyle = 'rgba(207,233,255,.5)'; mctx.lineCap = 'round';
+    for (const t of world.tiles.values()) {
+      if (!near(t)) continue;
+      for (const r of t.r) { mctx.lineWidth = Math.max(2 * lw, r.w); mctx.strokeStyle = r.ln ? 'rgba(207,233,255,.5)' : 'rgba(150,210,180,.3)'; path(r.p); mctx.stroke(); }
     }
   }
   mctx.globalAlpha = under ? 1 : .45;

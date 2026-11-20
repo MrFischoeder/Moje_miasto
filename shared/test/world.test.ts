@@ -25,7 +25,7 @@ describe('świat', () => {
 
   it('peron stacji startowej jest podłożem', () => {
     const w = new World('warszawa'), p = w.spawnPose();
-    const g = w.regions.support(p.x, p.z, p.y, w.buildings);
+    const g = w.support(p.x, p.z, p.y);
     expect(g?.r?.kind).toBe('hall');
   });
 });

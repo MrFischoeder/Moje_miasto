@@ -1,6 +1,7 @@
 // Regiony chodzenia pod ziemią: pasy (początek, kierunek, długość, półszerokość, wysokość y0 -> y1).
 import { cellKey } from './grid';
-import type { BuildingIndex } from './collision';
+/** Powierzchnia: czy punkt jest zablokowany (budynek, woda poza mostem). */
+export interface Surface { blocked(x: number, z: number): boolean }
 
 export type RegionKind = 'hall' | 'tunnel' | 'ramp' | 'corr' | 'stair' | 'room';
 export interface RegionInfo { s?: number; l?: number; A?: string; B?: string; room?: boolean }
@@ -32,14 +33,14 @@ export class RegionIndex {
    * pochyłe mają pierwszeństwo; powierzchnia (y = 0 poza budynkami) też jest podłożem.
    * null = ściana.
    */
-  support(x: number, z: number, y: number, buildings: BuildingIndex): Support | null {
+  support(x: number, z: number, y: number, surface: Surface): Support | null {
     let best: Support | null = null, bd = 0.95, slope = false;
     const l = this.grid.get(cellKey(x, z));
     if (l) for (const r of l) {
       const h = inReg(r, x, z); if (h == null) continue; const d = Math.abs(h - y); if (d > .95) continue;
       if ((r.slope && !slope) || ((r.slope === slope) && d < bd)) { best = { h, r }; bd = d; slope = r.slope; }
     }
-    if (!best && y > -1.2 && !buildings.hit(x, z)) best = { h: 0, r: null };
+    if (!best && y > -1.2 && !surface.blocked(x, z)) best = { h: 0, r: null };
     return best;
   }
 }
