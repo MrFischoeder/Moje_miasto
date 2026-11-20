@@ -1,0 +1,12 @@
+{
+  "name": "@miasto/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "headless": "tsx src/headless.ts"
+  },
+  "dependencies": {
+    "@miasto/shared": "*"
+  }
+}

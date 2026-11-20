@@ -1,0 +1,39 @@
+// Wektorowe modele pojazdów (wypełnienie + krawędzie).
+import * as THREE from 'three';
+
+function part(geo: THREE.BufferGeometry, x: number, y: number, z: number, fill: number, edge: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: fill, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), new THREE.LineBasicMaterial({ color: edge })));
+  g.position.set(x, y, z); return g;
+}
+
+export interface VehicleModel { root: THREE.Group; rotor?: THREE.Group; trotor?: THREE.Group }
+
+export function makeCar(): VehicleModel {
+  const car = new THREE.Group(), E = 0xffcc33, F = 0x1a1406;
+  car.add(part(new THREE.BoxGeometry(1.9, .7, 4.4), 0, .62, 0, F, E));
+  car.add(part(new THREE.BoxGeometry(1.6, .6, 2.1), 0, 1.27, .25, F, E));
+  for (const [x, z] of [[-.95, -1.4], [.95, -1.4], [-.95, 1.45], [.95, 1.45]]) { const w = new THREE.CylinderGeometry(.38, .38, .3, 10); w.rotateZ(Math.PI / 2); car.add(part(w, x, .38, z, 0x050505, 0xcfe9ff)); }
+  for (const x of [-.6, .6]) {
+    car.add(part(new THREE.BoxGeometry(.4, .15, .05), x, .75, -2.22, 0xffffcc, 0xffffff));
+    car.add(part(new THREE.BoxGeometry(.4, .15, .05), x, .75, 2.22, 0xff2a2a, 0xff6666));
+  }
+  return { root: car };
+}
+
+export function makeHeli(): VehicleModel {
+  const heli = new THREE.Group(), rotor = new THREE.Group(), trotor = new THREE.Group(), E = 0x66e0ff, F = 0x06141a, R = 0xcfe9ff;
+  const body = new THREE.SphereGeometry(1.5, 8, 6); body.scale(1, .95, 1.9); heli.add(part(body, 0, 1.9, 0, F, E));
+  heli.add(part(new THREE.BoxGeometry(.35, .35, 4.6), 0, 2.2, 4.4, F, E));
+  heli.add(part(new THREE.BoxGeometry(.12, 1.3, .8), 0, 2.8, 6.5, F, E));
+  for (const x of [-.9, .9]) { heli.add(part(new THREE.BoxGeometry(.12, .12, 3.6), x, .15, 0, F, E)); for (const z of [-.9, .9]) heli.add(part(new THREE.BoxGeometry(.08, .7, .08), x, .5, z, F, E)); }
+  rotor.add(part(new THREE.BoxGeometry(11, .05, .35), 0, 0, 0, F, R)); rotor.add(part(new THREE.BoxGeometry(.35, .05, 11), 0, 0, 0, F, R)); rotor.position.set(0, 3.35, 0); heli.add(rotor);
+  trotor.add(part(new THREE.BoxGeometry(.05, 1.8, .2), 0, 0, 0, F, R)); trotor.position.set(.25, 2.9, 6.6); heli.add(trotor);
+  heli.rotation.order = 'YXZ';
+  return { root: heli, rotor, trotor };
+}
+
+export function disposeModel(m: VehicleModel): void {
+  m.root.traverse(o => { const x = o as THREE.Mesh; if (x.geometry) x.geometry.dispose(); if (x.material) (x.material as THREE.Material).dispose(); });
+}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Miasto i metro FPP</title>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><b id="cityName">MIASTO</b><span id="loc">—</span><span id="info"></span></div>
+<canvas id="mini" width="320" height="320"></canvas>
+<div id="joy"><div id="knob"></div></div>
+<div class="btns">
+  <button class="on" id="walkBtn" aria-label="Pieszo">Pieszo</button>
+  <button class="ghost" id="carBtn">Auto</button>
+  <button class="ghost" id="heliBtn">Heli</button>
+  <button class="ghost" id="camBtn" aria-label="Zmień kamerę">Kamera</button>
+  <button class="ghost" id="xrayBtn">Prześwietl</button>
+  <button class="ghost" id="menuBtn">Menu</button>
+</div>
+<div id="heliCtl">
+  <button class="ghost" id="upB" aria-label="W górę">▲</button>
+  <button class="ghost" id="dnB" aria-label="W dół">▼</button>
+</div>
+<div id="busy">Buduję miasto…</div>
+
+<div id="menu">
+  <div class="card">
+    <h1>Miasto nad metrem</h1>
+    <p>Prawdziwy układ stacji i połączeń metra, z losowo rozbudowanymi peronami, tunelami i zejściami. Budynki na powierzchni wczytujesz z OpenStreetMap.</p>
+    <div class="row">
+      <button id="cityW">Warszawa</button>
+      <button class="ghost" id="cityL">Londyn</button>
+    </div>
+    <h2>Teleport na peron</h2>
+    <div class="row">
+      <select id="stSel" aria-label="Stacja"></select>
+      <button id="goBtn">Jedź</button>
+      <button class="ghost" id="upBtn">Wyjdź na górę</button>
+    </div>
+    <h2>Budynki okolicy</h2>
+    <div class="row"><label class="file">Wczytaj plik mapy (.osm / .json)<input type="file" id="fileIn" accept=".osm,.json,.geojson,.xml,application/json,text/xml"></label></div>
+    <div id="status"></div>
+    <h2>Stan gry</h2>
+    <div class="row">
+      <button class="ghost" id="saveBtn">Zapisz</button>
+      <button class="ghost" id="loadBtn">Wczytaj</button>
+    </div>
+    <p class="small">Pieszo: kliknij w świat, mysz rozgląda się, WASD to ruch, Shift to bieg. Auto (klawisz 2 albo G): W to gaz, S to hamulec i wsteczny, A i D skręcają, spacja to hamulec ręczny, Shift to dopalacz. Helikopter (3 albo F): W i S lecą do przodu i do tyłu, A i D obracają, E lub spacja wznoszą, Q lub Ctrl opuszczają, a na dachach można lądować. E przy zaparkowanym pojeździe pozwala do niego wsiąść. V zmienia kamerę z trzecioosobowej na kokpit, 1 to powrót do chodzenia, X prześwietla grunt, M otwiera menu, a Esc uwalnia kursor. Na telefonie joystick służy do jazdy, przeciąganie po prawej obraca kamerę, a w helikopterze strzałki ▲▼ zmieniają wysokość. Na telefonie lewy joystick służy do chodzenia, a przeciąganie po prawej do rozglądania się. Zejścia na perony to oświetlone pawilony na ulicy.</p>
+    <details>
+      <summary>Jak pobrać budynki Warszawy lub Londynu</summary>
+      <ol>
+        <li><b>Mały kawałek:</b> <a href="https://www.openstreetmap.org/export" target="_blank" rel="noopener">openstreetmap.org/export</a>, przybliż kilka ulic wokół stacji, „Eksportuj”, zapisz <code>map.osm</code>.</li>
+        <li><b>Cała dzielnica:</b> <a href="https://overpass-turbo.eu" target="_blank" rel="noopener">overpass-turbo.eu</a>, wklej zapytanie, „Uruchom”, potem „Eksport” → „surowe dane OSM” (JSON).</li>
+        <li>Wczytaj plik tutaj. Program sam rozpozna miasto, a jeśli w pliku są stacje i wejścia do metra, przesunie je na prawdziwe miejsca.</li>
+      </ol>
+      <pre id="q">[out:json][timeout:120];
+(
+  way["building"]({{bbox}});
+  way["building:part"]({{bbox}});
+  way["highway"]({{bbox}});
+  node["railway"="subway_entrance"]({{bbox}});
+  node["railway"="station"]["station"="subway"]({{bbox}});
+  node["public_transport"="station"]["subway"="yes"]({{bbox}});
+);
+out geom;</pre>
+      <button class="ghost" id="copyBtn">Kopiuj zapytanie</button>
+      <p class="small" id="note" style="margin-top:12px"></p>
+      <p class="small">Podziemia są generowane: każda stacja ma swoje ziarno losowości (nazwa), więc wygląda za każdym razem tak samo. Głębokość, typ peronu (wyspowy lub boczny), filary, korytarze techniczne, lokale i zejścia są losowane. Wszystkie odcinki biegną pod ziemią, także te, które w rzeczywistości są naziemne.</p>
+    </details>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

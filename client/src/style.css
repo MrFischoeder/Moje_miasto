@@ -1,0 +1,44 @@
+/*
+VOICE: retro-futurystyczny terminal nawigacyjny, spokojny i precyzyjny.
+IDEA: miasto i jego metro jako wektorowy wydruk z ekranu CRT, po którym da się chodzić.
+PICTURE: pełnoekranowy świat 3D, fosforowe krawędzie, tunele w kolorach linii.
+COLOUR and TYPE: czerń, fosforowa zieleń #7dffb0, kolory linii metra jako akcenty; Chakra Petch.
+LAYOUT: świat na cały ekran, menu na środku, minimapa w rogu, joystick na telefonie.
+*/
+:root{color-scheme:dark;--bg:#030806;--ink:#d8ffe9;--ph:#7dffb0;--dim:#2e6b4c;--panel:rgba(3,14,9,.94)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:16px/1.5 "Chakra Petch",system-ui,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;left:12px;top:12px;font-size:13px;color:var(--ph);text-shadow:0 0 6px rgba(125,255,176,.5);pointer-events:none;max-width:calc(100vw - 190px)}
+.hud b{font-size:15px;display:block}
+#loc{font-size:15px;color:#fff;display:block;margin-top:2px}
+#mini{position:fixed;right:12px;top:12px;width:160px;height:160px;border:1px solid var(--dim);border-radius:50%;background:rgba(0,0,0,.6)}
+.btns{position:fixed;right:12px;bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 180px)}
+button,.file,select{font:600 15px "Chakra Petch",sans-serif;color:var(--bg);background:var(--ph);border:0;border-radius:6px;min-height:44px;padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+button.ghost,.file{background:rgba(3,14,9,.85);color:var(--ph);border:1px solid var(--ph)}
+button.on{background:var(--ph);color:var(--bg)}
+select{background:#000;color:var(--ph);border:1px solid var(--dim);font-size:16px;flex:1 1 220px;padding:0 10px}
+button:focus-visible,select:focus-visible,.file:focus-within{outline:2px solid #fff;outline-offset:2px}
+#menu{position:fixed;inset:0;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.6)}
+#menu.hide{display:none}
+.card{width:min(600px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--panel);border:1px solid var(--dim);border-radius:10px;padding:22px;box-shadow:0 0 40px rgba(125,255,176,.12)}
+h1{font-size:clamp(28px,6vw,40px);line-height:1.05;margin:0 0 8px;color:var(--ph);text-wrap:balance}
+h2{font-size:17px;margin:18px 0 8px;color:var(--ph)}
+.card p{margin:0 0 12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.file input{display:none}
+details{margin-top:12px;border-top:1px solid var(--dim);padding-top:10px}
+summary{cursor:pointer;color:var(--ph);font-weight:600;min-height:32px}
+ol{padding-left:20px;margin:8px 0}li{margin-bottom:6px}
+pre{background:#000;border:1px solid var(--dim);border-radius:6px;padding:10px;font-size:13px;overflow-x:auto;color:var(--ph)}
+.small{font-size:13px;color:#9cc9b0}
+#status{min-height:22px;color:var(--ph);font-size:14px}
+a{color:var(--ph)}
+#joy{position:fixed;left:24px;bottom:24px;width:130px;height:130px;border-radius:50%;border:1px solid var(--dim);background:rgba(0,0,0,.35);display:none}
+#knob{position:absolute;left:40px;top:40px;width:50px;height:50px;border-radius:50%;background:rgba(125,255,176,.45);border:1px solid var(--ph)}
+.touch #joy{display:block}
+#heliCtl{position:fixed;right:12px;bottom:150px;display:none;flex-direction:column;gap:10px}#heliCtl button{width:64px;height:64px;font-size:24px}
+.touch.heli #heliCtl{display:flex}
+#camBtn{display:none}.heli #camBtn,.car #camBtn{display:inline-flex}
+#busy{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.7);color:var(--ph);font-size:20px}
+@media(max-width:600px){#heliCtl{bottom:200px}#mini{width:116px;height:116px}.hud{font-size:12px;max-width:calc(100vw - 140px)}#loc{font-size:13px}.btns{max-width:calc(100vw - 170px)}.btns button{padding:0 10px;font-size:14px}}

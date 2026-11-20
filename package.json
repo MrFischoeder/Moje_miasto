@@ -1,0 +1,27 @@
+{
+  "name": "moje-miasto",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "preview": "npm run preview -w client",
+    "typecheck": "tsc -p shared && tsc -p client && tsc -p server && tsc -p .",
+    "test": "vitest run",
+    "test:e2e": "playwright test --trace off",
+    "sim:headless": "npm run headless -w server",
+    "cities:extract": "node tools/extract-cities.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12",
+    "@types/node": "22.20.5"
+  }
+}
