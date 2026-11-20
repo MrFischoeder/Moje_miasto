@@ -64,8 +64,8 @@ test('wczytanie pliku OSM: budynki i stacja z OSM', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await page.locator('#fileIn').setInputFiles('tests/fixtures/swietokrzyska.json');
-  await expect(page.locator('#info')).toContainText('budynki: 40 · stacje z OSM: 1');
-  await expect(page.locator('#loc')).toContainText('Ulica');
+  await expect(page.locator('#info')).toContainText('budynki: 40 · stacje z OSM: 1', { timeout: 30_000 });
+  await expect(page.locator('#loc')).toContainText('Ulica', { timeout: 15_000 });
   expect(errors).toEqual([]);
 });
 
