@@ -35,8 +35,16 @@ Wszyscy gracze widzą te same pojazdy, bo liczą je z tego samego rozkładu i ze
 - Graf pasów z kafli OSM (`shared/src/traffic/graph.ts`), budowany przyrostowo przy doładowaniu kafli.
 - Auta z kierowcami NPC (model IDM): odstęp, hamowanie, zatrzymanie na czerwonym (prawdziwe sygnalizatory z OSM,
   cykl 60 s, dwie grupy kierunków), hamowanie przed graczami. Natężenie wg godziny (szczyty 7–9 i 15–18).
-- **Pojazdy jeżdżą tylko z kierowcą:** auto NPC zawsze ma kierowcę, do takich aut nie da się wsiąść;
-  zaparkowane auta graczy stoją, dopóki ktoś nie usiądzie za kierownicą.
+- **Pojazdy jeżdżą tylko z kierowcą:** auto NPC zawsze ma kierowcę; zaparkowane auta stoją, dopóki ktoś nie usiądzie za kierownicą.
+- **Przejęcie auta:** auto NPC hamuje przed graczem; E przy stojącym aucie (do 2 m/s) wyrzuca kierowcę, który ucieka
+  chodnikiem, a gracz siada za kierownicą. Auto przestaje należeć do ruchu ulicznego; inni gracze mogą się dosiąść (E).
+
+## Piesi NPC
+
+- Chodniki po obu stronach ulic (z tagów OSM `sidewalk`, a przy ulicach miejskich domyślnie), ścieżki, deptaki i schody
+  z kafli OSM (`shared/src/traffic/peds.ts`). Na węzłach wybierają dalszą drogę, także przejście na drugą stronę.
+- Wokół każdego gracza do 50 pieszych (zależnie od godziny), pojawiają się i znikają poza zasięgiem wzroku. Auta hamują przed nimi.
+- Dziś piesi chodzą losowo; po dodaniu mieszkańców (niżej) będą to konkretne osoby wykonujące swój plan dnia.
 
 ## Mieszkańcy z cyklem dnia (plan)
 

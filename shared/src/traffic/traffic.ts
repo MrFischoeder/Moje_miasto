@@ -61,7 +61,9 @@ export class Traffic {
     }
     // ruch (IDM)
     this.index();
-    const obs = this.host.obstacles(), q = { x: 0, z: 0, yaw: 0 };
+    // siatka przeszkód (gracze, ich pojazdy, piesi) – auta sprawdzają tylko komórki przed sobą
+    const grid = new Map<string, Entity[]>(), G = 20, q = { x: 0, z: 0, yaw: 0 };
+    for (const o of this.host.obstacles()) { const k = Math.floor(o.x / G) + ',' + Math.floor(o.z / G); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(o); }
     for (const c of this.cars.values()) {
       let gap = Infinity, vl = c.v;
       const ahead = this.leader(c); if (ahead) { gap = ahead.gap; vl = ahead.v; }
@@ -71,11 +73,14 @@ export class Traffic {
         const canStop = dStop > c.v * c.v / (2 * 4); // zdąży zahamować
         if ((L === 2 || (L === 1 && canStop)) && dStop > -1 && dStop < gap) { gap = Math.max(.1, dStop); vl = 0; }
       }
-      // gracze i ich pojazdy przed autem
+      // gracze, ich pojazdy i piesi przed autem
       const fx = -Math.sin(c.e.yaw), fz = -Math.cos(c.e.yaw);
-      for (const o of obs) {
-        const dx = o.x - c.e.x, dz = o.z - c.e.z, along = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
-        if (along > 0 && along < 40 && lat < 2.2 && Math.abs(o.y - c.e.y) < 3) { const g = along - (o.kind === 'walker' ? 2.5 : 4.6); if (g < gap) { gap = Math.max(.1, g); vl = 0; } }
+      if (grid.size) for (const d of [0, 20, 40]) {
+        const cx = Math.floor((c.e.x + fx * d) / G), cz = Math.floor((c.e.z + fz * d) / G);
+        for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) for (const o of grid.get(i + ',' + j) || []) {
+          const dx = o.x - c.e.x, dz = o.z - c.e.z, along = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+          if (along > 0 && along < 40 && lat < 2.2 && Math.abs(o.y - c.e.y) < 3) { const g = along - (o.kind === 'walker' ? 2.5 : 4.6); if (g < gap) { gap = Math.max(.1, g); vl = 0; } }
+        }
       }
       const s0 = 2.5, T = 1.3, a = 1.6, b = 2.8, dv = c.v - vl, sStar = s0 + Math.max(0, c.v * T + c.v * dv / (2 * Math.sqrt(a * b)));
       const acc = a * (1 - (c.v / c.v0) ** 4 - (gap === Infinity ? 0 : (sStar / Math.max(gap, .1)) ** 2));
@@ -134,4 +139,9 @@ export class Traffic {
   }
 
   private remove(c: Car): void { this.cars.delete(c.e.id); this.host.despawn(c.e.id); }
+
+  /** Auto przestaje należeć do ruchu ulicznego (przejęte przez gracza); byt zostaje. */
+  release(id: number): Entity | null {
+    const c = this.cars.get(id); if (!c) return null; this.cars.delete(id); c.e.npc = false; c.e.speed = c.v; return c.e;
+  }
 }

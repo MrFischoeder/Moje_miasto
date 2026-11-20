@@ -3,6 +3,7 @@
 import type { World } from '../world/world';
 import type { TransitSystem } from '../transit/system';
 import { Traffic } from '../traffic/traffic';
+import { Pedestrians } from '../traffic/peds';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
 import { NO_INPUT, PLAYER_COLORS, SEATS, type Command, type Entity, type EntityKind, type InputCmd, type Mode, type PlayerState, type SaveState } from './types';
@@ -29,13 +30,21 @@ export class Simulation {
   /** ruch uliczny wokół graczy (włączany przez serwer) */
   traffic: Traffic | null = null;
 
-  /** Włącza ruch uliczny (auta NPC). */
+  /** piesi NPC wokół graczy */
+  peds: Pedestrians | null = null;
+
+  /** Włącza ruch uliczny (auta NPC) i pieszych NPC. */
   enableTraffic(): Traffic {
+    this.peds = new Pedestrians({ world: this.world, spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw), despawn: id => { this.entities.delete(id); } });
     return this.traffic = new Traffic({
       world: this.world,
       spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw),
       despawn: id => { this.entities.delete(id); },
-      obstacles: () => { const out: Entity[] = []; for (const p of this.players.values()) { const e = this.controlled(p); if (!e.hide) out.push(e); } return out; },
+      obstacles: () => {
+        const out: Entity[] = []; for (const p of this.players.values()) { const e = this.controlled(p); if (!e.hide) out.push(e); }
+        if (this.peds) for (const p of this.peds.peds.values()) out.push(p.e);
+        return out;
+      },
     });
   }
   /** Krok ruchu ulicznego: t = czas zegara [s], hour = godzina lokalna. */
@@ -43,6 +52,16 @@ export class Simulation {
     if (!this.traffic) return;
     const pts: { x: number; z: number }[] = []; for (const p of this.players.values()) { const w = this.entity(p.walker); pts.push({ x: w.x, z: w.z }); }
     this.traffic.step(SIM_DT, t, hour, pts);
+    this.peds?.step(SIM_DT, hour, pts);
+  }
+
+  /** Przejęcie auta NPC: kierowca wyrzucony (ucieka chodnikiem), gracz siada za kierownicą. */
+  private hijack(p: PlayerState, v: Entity): boolean {
+    if (!this.traffic || Math.abs(v.speed) > 2) return false;
+    if (!this.traffic.release(v.id)) return false;
+    const rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw), side = this.world.key === 'londyn' ? 1 : -1; // drzwi kierowcy
+    this.peds?.flee(v.x + rx * 1.8 * side, v.z + rz * 1.8 * side);
+    v.speed = 0; this.enter(p, v); return true;
   }
 
   constructor(readonly world: World) {}
@@ -98,6 +117,10 @@ export class Simulation {
       if (c.type === 'goStation') { this.leaveRide(p, null); }
       else if (c.type === 'enter' || c.type === 'alight' || c.type === 'mode') return this.alight(p);
       else return;
+    }
+    if (c.type === 'teleport') {
+      this.exitVehicle(p, false); const w = this.entity(p.walker);
+      w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; return;
     }
     if (c.type === 'mode') this.setMode(p, c.mode);
     else if (c.type === 'enter') { if (!this.board(p)) this.enterNearest(p); }
@@ -206,10 +229,11 @@ export class Simulation {
     const w = this.entity(p.walker); if (this.world.underground(w.x, w.z, w.y)) return false;
     let best: Entity | null = null, bd = ENTER_RADIUS ** 2;
     for (const e of this.entities.values()) {
-      if (e.kind === 'walker' || e.npc || (e.driver != null && e.pass.length >= SEATS[e.kind])) continue;
+      if (e.kind === 'walker' || (e.npc && Math.abs(e.speed) > 2) || (e.driver != null && e.pass.length >= SEATS[e.kind])) continue;
       const d = (e.x - w.x) ** 2 + (e.z - w.z) ** 2 + ((e.y - w.y) / 2) ** 2; if (d < bd) { bd = d; best = e; }
     }
     if (!best) return false;
+    if (best.npc) return this.hijack(p, best);
     this.enter(p, best, best.driver != null); return true;
   }
 

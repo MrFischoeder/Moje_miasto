@@ -118,6 +118,7 @@ export class Room {
     let msg: string | undefined;
     if (cmd.type === 'mode' && ['walk', 'car', 'heli'].includes(cmd.mode)) msg = this.sim.command(c.player.id, cmd);
     else if (cmd.type === 'enter' || cmd.type === 'alight') msg = this.sim.command(c.player.id, { type: cmd.type });
+    else if (cmd.type === 'teleport' && this.opt.local && Number.isFinite(cmd.x) && Number.isFinite(cmd.z)) msg = this.sim.command(c.player.id, { type: 'teleport', x: cmd.x, z: cmd.z });
     else if (cmd.type === 'goStation' && Number.isInteger(cmd.station)) msg = this.sim.command(c.player.id, { type: 'goStation', station: cmd.station, street: !!cmd.street });
     if (msg) this.sendJson(c.conn, { t: 'chat', from: '', color: '#ffcc33', text: msg, sys: true });
   }

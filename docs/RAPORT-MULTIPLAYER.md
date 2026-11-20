@@ -1,22 +1,20 @@
 # Raport: test obciążenia serwera (boty)
 
-Wygenerowany: 2026-11-20 22:35 UTC, `npm run bots` (12 s na scenariusz, po 3 s rozgrzewki).
+Wygenerowany: 2026-11-20 22:52 UTC, `npm run bots` (10 s na scenariusz, po 3 s rozgrzewki).
 Maszyna: linux, Node v22.23.5. Serwer w osobnym procesie, boty przez prawdziwe WebSockety na tym samym komputerze.
-Świat: Warszawa z terenem, kaflami OSM, rozkładami komunikacji i ruchem ulicznym (auta NPC wokół każdego gracza, do 70 w szczycie).
+Świat: Warszawa z terenem, bez kafelków OSM (zablokowane pobieranie), więc kolizje z budynkami nie obciążają kroku.
 
 Boty: 1/3 jeździ autem, 1/3 lata helikopterem, 1/3 chodzi; wejście 30 Hz jak prawdziwy klient.
 „Rozproszeni” = każdy przy innej stacji; „skupieni” = wszyscy przy Świętokrzyskiej (najgorszy przypadek dla zarządzania zainteresowaniem).
 
 | scenariusz | graczy | krok śr. [ms] | krok maks. [ms] | budżet kroku 33 ms | w dół [KB/s/gracza] | w górę [KB/s/gracza] | migawki/s | byty |
 |---|---|---|---|---|---|---|---|---|
-| rozproszeni | 8 | 1.25 | 14.1 | 3.7% | 2.5 | 0.4 | 15.0 | 94 |
-| rozproszeni | 16 | 1.73 | 11.0 | 5.2% | 2.1 | 0.4 | 15.0 | 93 |
-| rozproszeni | 32 | 2.67 | 13.0 | 8.0% | 3.0 | 0.4 | 15.0 | 148 |
-| rozproszeni | 64 | 4.74 | 13.3 | 14.2% | 4.2 | 0.4 | 15.0 | 216 |
-| skupieni | 8 | 0.43 | 2.9 | 1.3% | 6.6 | 0.4 | 15.0 | 33 |
-| skupieni | 16 | 0.57 | 2.8 | 1.7% | 7.9 | 0.4 | 15.1 | 46 |
-| skupieni | 32 | 1.06 | 4.2 | 3.2% | 12.9 | 0.4 | 15.0 | 72 |
-| skupieni | 64 | 2.68 | 10.4 | 8.0% | 21.4 | 0.4 | 15.1 | 131 |
+| rozproszeni | 8 | 2.01 | 28.8 | 6.0% | 2.9 | 0.4 | 15.0 | 116 |
+| rozproszeni | 32 | 3.99 | 18.7 | 12.0% | 3.3 | 0.4 | 14.9 | 166 |
+| rozproszeni | 64 | 6.23 | 19.2 | 18.7% | 4.5 | 0.4 | 15.0 | 240 |
+| skupieni | 8 | 0.48 | 4.4 | 1.4% | 6.8 | 0.4 | 15.0 | 37 |
+| skupieni | 32 | 1.09 | 4.4 | 3.3% | 13.5 | 0.4 | 15.0 | 79 |
+| skupieni | 64 | 2.59 | 9.8 | 7.8% | 22.9 | 0.4 | 14.9 | 140 |
 
 ## Wnioski
 

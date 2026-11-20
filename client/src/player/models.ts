@@ -51,7 +51,7 @@ export function makeAvatar(color: string, name: string): AvatarModel {
   x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(0, 0, 256, 64); x.fillStyle = color; x.fillRect(0, 60, 256, 4);
   x.font = '600 34px "Chakra Petch", sans-serif'; x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(name.slice(0, 16), 128, 32);
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
-  label.scale.set(1.6, .4, 1); label.position.y = 2.35; label.renderOrder = 10; root.add(label);
+  label.scale.set(1.6, .4, 1); label.position.y = 2.35; label.renderOrder = 10; if (name) root.add(label);
   return { root, legs, arms, label };
 }
 

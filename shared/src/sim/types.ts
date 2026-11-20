@@ -75,6 +75,8 @@ export type Command =
   | { type: 'mode'; mode: Mode }
   | { type: 'enter' }
   | { type: 'alight' }
+  /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
+  | { type: 'teleport'; x: number; z: number }
   | { type: 'goStation'; station: number; street: boolean };
 
 export const PLAYER_COLORS = ['#7dffb0', '#ffcc33', '#66e0ff', '#ff6b9a', '#b18cff', '#ff8a3d', '#3dffea', '#e8ff5a'];
