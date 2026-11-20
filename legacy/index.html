@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Miasto i metro FPP</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: retro-futurystyczny terminal nawigacyjny, spokojny i precyzyjny.
+IDEA: miasto i jego metro jako wektorowy wydruk z ekranu CRT, po którym da się chodzić.
+PICTURE: pełnoekranowy świat 3D, fosforowe krawędzie, tunele w kolorach linii.
+COLOUR and TYPE: czerń, fosforowa zieleń #7dffb0, kolory linii metra jako akcenty; Chakra Petch.
+LAYOUT: świat na cały ekran, menu na środku, minimapa w rogu, joystick na telefonie.
+*/
+:root{color-scheme:dark;--bg:#030806;--ink:#d8ffe9;--ph:#7dffb0;--dim:#2e6b4c;--panel:rgba(3,14,9,.94)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:16px/1.5 "Chakra Petch",system-ui,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;left:12px;top:12px;font-size:13px;color:var(--ph);text-shadow:0 0 6px rgba(125,255,176,.5);pointer-events:none;max-width:calc(100vw - 190px)}
+.hud b{font-size:15px;display:block}
+#loc{font-size:15px;color:#fff;display:block;margin-top:2px}
+#mini{position:fixed;right:12px;top:12px;width:160px;height:160px;border:1px solid var(--dim);border-radius:50%;background:rgba(0,0,0,.6)}
+.btns{position:fixed;right:12px;bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 180px)}
+button,.file,select{font:600 15px "Chakra Petch",sans-serif;color:var(--bg);background:var(--ph);border:0;border-radius:6px;min-height:44px;padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+button.ghost,.file{background:rgba(3,14,9,.85);color:var(--ph);border:1px solid var(--ph)}
+button.on{background:var(--ph);color:var(--bg)}
+select{background:#000;color:var(--ph);border:1px solid var(--dim);font-size:16px;flex:1 1 220px;padding:0 10px}
+button:focus-visible,select:focus-visible,.file:focus-within{outline:2px solid #fff;outline-offset:2px}
+#menu{position:fixed;inset:0;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.6)}
+#menu.hide{display:none}
+.card{width:min(600px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--panel);border:1px solid var(--dim);border-radius:10px;padding:22px;box-shadow:0 0 40px rgba(125,255,176,.12)}
+h1{font-size:clamp(28px,6vw,40px);line-height:1.05;margin:0 0 8px;color:var(--ph);text-wrap:balance}
+h2{font-size:17px;margin:18px 0 8px;color:var(--ph)}
+.card p{margin:0 0 12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.file input{display:none}
+details{margin-top:12px;border-top:1px solid var(--dim);padding-top:10px}
+summary{cursor:pointer;color:var(--ph);font-weight:600;min-height:32px}
+ol{padding-left:20px;margin:8px 0}li{margin-bottom:6px}
+pre{background:#000;border:1px solid var(--dim);border-radius:6px;padding:10px;font-size:13px;overflow-x:auto;color:var(--ph)}
+.small{font-size:13px;color:#9cc9b0}
+#status{min-height:22px;color:var(--ph);font-size:14px}
+a{color:var(--ph)}
+#joy{position:fixed;left:24px;bottom:24px;width:130px;height:130px;border-radius:50%;border:1px solid var(--dim);background:rgba(0,0,0,.35);display:none}
+#knob{position:absolute;left:40px;top:40px;width:50px;height:50px;border-radius:50%;background:rgba(125,255,176,.45);border:1px solid var(--ph)}
+.touch #joy{display:block}
+#heliCtl{position:fixed;right:12px;bottom:150px;display:none;flex-direction:column;gap:10px}#heliCtl button{width:64px;height:64px;font-size:24px}
+.touch.heli #heliCtl{display:flex}
+#camBtn{display:none}.heli #camBtn,.car #camBtn{display:inline-flex}
+#busy{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.7);color:var(--ph);font-size:20px}
+@media(max-width:600px){#heliCtl{bottom:200px}#mini{width:116px;height:116px}.hud{font-size:12px;max-width:calc(100vw - 140px)}#loc{font-size:13px}.btns{max-width:calc(100vw - 170px)}.btns button{padding:0 10px;font-size:14px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><b id="cityName">MIASTO</b><span id="loc">—</span><span id="info"></span></div>
+<canvas id="mini" width="320" height="320"></canvas>
+<div id="joy"><div id="knob"></div></div>
+<div class="btns">
+  <button class="on" id="walkBtn" aria-label="Pieszo">Pieszo</button>
+  <button class="ghost" id="carBtn">Auto</button>
+  <button class="ghost" id="heliBtn">Heli</button>
+  <button class="ghost" id="camBtn" aria-label="Zmień kamerę">Kamera</button>
+  <button class="ghost" id="xrayBtn">Prześwietl</button>
+  <button class="ghost" id="menuBtn">Menu</button>
+</div>
+<div id="heliCtl">
+  <button class="ghost" id="upB" aria-label="W górę">▲</button>
+  <button class="ghost" id="dnB" aria-label="W dół">▼</button>
+</div>
+<div id="busy">Buduję miasto…</div>
+
+<div id="menu">
+  <div class="card">
+    <h1>Miasto nad metrem</h1>
+    <p>Prawdziwy układ stacji i połączeń metra, z losowo rozbudowanymi peronami, tunelami i zejściami. Budynki na powierzchni wczytujesz z OpenStreetMap.</p>
+    <div class="row">
+      <button id="cityW">Warszawa</button>
+      <button class="ghost" id="cityL">Londyn</button>
+    </div>
+    <h2>Teleport na peron</h2>
+    <div class="row">
+      <select id="stSel" aria-label="Stacja"></select>
+      <button id="goBtn">Jedź</button>
+      <button class="ghost" id="upBtn">Wyjdź na górę</button>
+    </div>
+    <h2>Budynki okolicy</h2>
+    <div class="row"><label class="file">Wczytaj plik mapy (.osm / .json)<input type="file" id="fileIn" accept=".osm,.json,.geojson,.xml,application/json,text/xml"></label></div>
+    <div id="status"></div>
+    <p class="small">Pieszo: kliknij w świat, mysz rozgląda się, WASD to ruch, Shift to bieg. Auto (klawisz 2 albo G): W to gaz, S to hamulec i wsteczny, A i D skręcają, spacja to hamulec ręczny, Shift to dopalacz. Helikopter (3 albo F): W i S lecą do przodu i do tyłu, A i D obracają, E lub spacja wznoszą, Q lub Ctrl opuszczają, a na dachach można lądować. V zmienia kamerę z trzecioosobowej na kokpit, 1 to powrót do chodzenia, X prześwietla grunt, M otwiera menu, a Esc uwalnia kursor. Na telefonie joystick służy do jazdy, przeciąganie po prawej obraca kamerę, a w helikopterze strzałki ▲▼ zmieniają wysokość. Na telefonie lewy joystick służy do chodzenia, a przeciąganie po prawej do rozglądania się. Zejścia na perony to oświetlone pawilony na ulicy.</p>
+    <details>
+      <summary>Jak pobrać budynki Warszawy lub Londynu</summary>
+      <ol>
+        <li><b>Mały kawałek:</b> <a href="https://www.openstreetmap.org/export" target="_blank" rel="noopener">openstreetmap.org/export</a>, przybliż kilka ulic wokół stacji, „Eksportuj”, zapisz <code>map.osm</code>.</li>
+        <li><b>Cała dzielnica:</b> <a href="https://overpass-turbo.eu" target="_blank" rel="noopener">overpass-turbo.eu</a>, wklej zapytanie, „Uruchom”, potem „Eksport” → „surowe dane OSM” (JSON).</li>
+        <li>Wczytaj plik tutaj. Program sam rozpozna miasto, a jeśli w pliku są stacje i wejścia do metra, przesunie je na prawdziwe miejsca.</li>
+      </ol>
+      <pre id="q">[out:json][timeout:120];
+(
+  way["building"]({{bbox}});
+  way["building:part"]({{bbox}});
+  way["highway"]({{bbox}});
+  node["railway"="subway_entrance"]({{bbox}});
+  node["railway"="station"]["station"="subway"]({{bbox}});
+  node["public_transport"="station"]["subway"="yes"]({{bbox}});
+);
+out geom;</pre>
+      <button class="ghost" id="copyBtn">Kopiuj zapytanie</button>
+      <p class="small" id="note" style="margin-top:12px"></p>
+      <p class="small">Podziemia są generowane: każda stacja ma swoje ziarno losowości (nazwa), więc wygląda za każdym razem tak samo. Głębokość, typ peronu (wyspowy lub boczny), filary, korytarze techniczne, lokale i zejścia są losowane. Wszystkie odcinki biegną pod ziemią, także te, które w rzeczywistości są naziemne.</p>
+    </details>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+{
+const CITIES = {"warszawa":{"name":"Warszawa","o":[52.2297,21.0122],"lines":[{"n":"M1","c":"#3b7ddd","d":[10,14]},{"n":"M2","c":"#e3262e","d":[13,22]}],"st":[["Kabaty",52.1314,21.0656],["Natolin",52.1402,21.0578],["Imielin",52.1497,21.0453],["Stokłosy",52.1559,21.0348],["Ursynów",52.162,21.0275],["Służew",52.1733,21.0253],["Wilanowska",52.181,21.0236],["Wierzbno",52.1898,21.017],["Racławicka",52.1993,21.0125],["Pole Mokotowskie",52.2087,21.0081],["Politechnika",52.219,21.0157],["Centrum",52.231,21.0108],["Świętokrzyska",52.2355,21.0082],["Ratusz Arsenał",52.2449,21.0013],["Dworzec Gdański",52.2576,20.9947],["Plac Wilsona",52.2689,20.9853],["Marymont",52.2716,20.9719],["Słodowiec",52.2764,20.9608],["Stare Bielany",52.2817,20.9496],["Wawrzyszew",52.2859,20.9395],["Młociny",52.2912,20.9301],["Karolin (w budowie)",52.2262,20.8817],["Chrzanów (w budowie)",52.2312,20.8862],["Lazurowa (w budowie)",52.2393,20.8988],["Bemowo",52.239,20.9118],["Ulrychów",52.2389,20.9297],["Księcia Janusza",52.2391,20.9443],["Młynów",52.2379,20.9582],["Płocka",52.2328,20.9666],["Rondo Daszyńskiego",52.2302,20.984],["Rondo ONZ",52.233,20.9978],["Nowy Świat-Uniwersytet",52.2368,21.0172],["Centrum Nauki Kopernik",52.2398,21.0303],["Stadion Narodowy",52.2467,21.0439],["Dworzec Wileński",52.2546,21.0348],["Szwedzka",52.2633,21.0446],["Targówek Mieszkaniowy",52.2715,21.049],["Trocka",52.2767,21.0549],["Zacisze",52.2848,21.0509],["Kondratowicza",52.2925,21.0416],["Bródno",52.2935,21.0282]],"ed":[[0,1,0],[1,2,0],[2,3,0],[3,4,0],[4,5,0],[5,6,0],[6,7,0],[7,8,0],[8,9,0],[9,10,0],[10,11,0],[11,12,0],[12,13,0],[13,14,0],[14,15,0],[15,16,0],[16,17,0],[17,18,0],[18,19,0],[19,20,0],[21,22,1],[22,23,1],[23,24,1],[24,25,1],[25,26,1],[26,27,1],[27,28,1],[28,29,1],[29,30,1],[30,12,1],[12,31,1],[31,32,1],[32,33,1],[33,34,1],[34,35,1],[35,36,1],[36,37,1],[37,38,1],[38,39,1],[39,40,1]],"spawn":"Świętokrzyska","note":"Kolejność stacji zgodna z rzeczywistością, położenia przybliżone (do ~150 m). Wczytany plik OSM ze stacjami poprawia je na dokładne."},"londyn":{"name":"Londyn","o":[51.5074,-0.1278],"lines":[{"n":"Bakerloo","c":"#AE6017","d":[18,30]},{"n":"Circle","c":"#FFE02B","d":[7,11]},{"n":"Hammersmith & City","c":"#F491A8","d":[7,11]},{"n":"Jubilee","c":"#949699","d":[18,30]},{"n":"Victoria","c":"#0A9CDA","d":[18,30]},{"n":"Central","c":"#F15B2E","d":[18,30]},{"n":"District","c":"#00A166","d":[7,11]},{"n":"Metropolitan","c":"#91005A","d":[7,11]},{"n":"Northern","c":"#c8c8c8","d":[18,30]},{"n":"Piccadilly","c":"#094FA3","d":[18,30]},{"n":"Waterloo & City","c":"#88D0C4","d":[18,30]}],"st":[["Acton Town",51.5028,-0.2801],["Aldgate",51.5143,-0.0755],["Aldgate East",51.5154,-0.0726],["Alperton",51.5407,-0.2997],["Amersham",51.6736,-0.607],["Angel",51.5322,-0.1058],["Archway",51.5653,-0.1353],["Arnos Grove",51.6164,-0.1331],["Arsenal",51.5586,-0.1059],["Baker Street",51.5226,-0.1571],["Balham",51.4431,-0.1525],["Bank",51.5133,-0.0886],["Barbican",51.5204,-0.0979],["Barking",51.5396,0.081],["Barkingside",51.5856,0.0887],["Barons Court",51.4905,-0.2139],["Bayswater",51.5121,-0.1879],["Becontree",51.5403,0.127],["Belsize Park",51.5504,-0.1642],["Bermondsey",51.4979,-0.0637],["Bethnal Green",51.527,-0.0549],["Blackfriars",51.512,-0.1031],["Blackhorse Road",51.5867,-0.0417],["Bond Street",51.5142,-0.1494],["Borough",51.5011,-0.0943],["Boston Manor",51.4956,-0.325],["Bounds Green",51.6071,-0.1243],["Bow Road",51.5269,-0.0247],["Brent Cross",51.5766,-0.2136],["Brixton",51.4627,-0.1145],["Bromley-By-Bow",51.5248,-0.0119],["Buckhurst Hill",51.6266,0.0471],["Burnt Oak",51.6028,-0.2641],["Caledonian Road",51.5481,-0.1188],["Camden Town",51.5392,-0.1426],["Canada Water",51.4982,-0.0502],["Canary Wharf",51.5051,-0.0209],["Canning Town",51.5147,0.0082],["Cannon Street",51.5113,-0.0904],["Canons Park",51.6078,-0.2947],["Chalfont & Latimer",51.6679,-0.561],["Chalk Farm",51.5441,-0.1538],["Chancery Lane",51.5185,-0.1111],["Charing Cross",51.508,-0.1247],["Chesham",51.7052,-0.611],["Chigwell",51.6177,0.0755],["Chiswick Park",51.4946,-0.2678],["Chorleywood",51.6543,-0.5183],["Clapham Common",51.4618,-0.1384],["Clapham North",51.4649,-0.1299],["Clapham South",51.4527,-0.148],["Cockfosters",51.6517,-0.1496],["Colindale",51.5955,-0.2502],["Colliers Wood",51.418,-0.1778],["Covent Garden",51.5129,-0.1243],["Croxley",51.647,-0.4412],["Dagenham East",51.5443,0.1655],["Dagenham Heathway",51.5417,0.1469],["Debden",51.6455,0.0838],["Dollis Hill",51.552,-0.2387],["Ealing Broadway",51.5152,-0.3017],["Ealing Common",51.5101,-0.2882],["Earl's Court",51.492,-0.1973],["East Acton",51.5168,-0.2474],["East Finchley",51.5874,-0.165],["East Ham",51.5394,0.0518],["East Putney",51.4586,-0.2112],["Eastcote",51.5765,-0.397],["Edgware",51.6137,-0.275],["Edgware Road (B)",51.5199,-0.1679],["Edgware Road (C)",51.5203,-0.17],["Elephant & Castle",51.4943,-0.1001],["Elm Park",51.5496,0.1977],["Embankment",51.5074,-0.1223],["Epping",51.6937,0.1139],["Euston",51.5282,-0.1337],["Euston Square",51.526,-0.1359],["Fairlop",51.596,0.0912],["Farringdon",51.5203,-0.1053],["Finchley Central",51.6012,-0.1932],["Finchley Road",51.5472,-0.1803],["Finsbury Park",51.5642,-0.1065],["Fulham Broadway",51.4804,-0.195],["Gants Hill",51.5765,0.0663],["Gloucester Road",51.4945,-0.1829],["Golders Green",51.5724,-0.1941],["Goldhawk Road",51.5018,-0.2267],["Goodge Street",51.5205,-0.1347],["Grange Hill",51.6132,0.0923],["Great Portland Street",51.5238,-0.1439],["Green Park",51.5067,-0.1428],["Greenford",51.5423,-0.3456],["Gunnersbury",51.4915,-0.2754],["Hainault",51.603,0.0933],["Hammersmith",51.4936,-0.2251],["Hampstead",51.5568,-0.178],["Hanger Lane",51.5302,-0.2933],["Harlesden",51.5362,-0.2575],["Harrow & Wealdston",51.5925,-0.3351],["Harrow-on-the-Hill",51.5793,-0.3366],["Hatton Cross",51.4669,-0.4227],["Heathrow Terminal 4",51.4598,-0.4476],["Heathrow Terminals 1, 2 & 3",51.4713,-0.4524],["Hendon Central",51.5829,-0.2259],["High Barnet",51.6503,-0.1943],["High Street Kensington",51.5009,-0.1925],["Highbury & Islington",51.546,-0.104],["Highgate",51.5777,-0.1458],["Hillingdon",51.5538,-0.4499],["Holborn",51.5174,-0.12],["Holland Park",51.5075,-0.206],["Holloway Road",51.5526,-0.1132],["Hornchurch",51.5539,0.2184],["Hounslow Central",51.4713,-0.3665],["Hounslow East",51.4733,-0.3564],["Hounslow West",51.4734,-0.3855],["Hyde Park Corner",51.5027,-0.1527],["Ickenham",51.5619,-0.4421],["Kennington",51.4884,-0.1053],["Kensal Green",51.5304,-0.225],["Kensington (Olympia)",51.4983,-0.2106],["Kentish Town",51.5507,-0.1402],["Kenton",51.5816,-0.3162],["Kew Gardens",51.477,-0.285],["Kilburn",51.5471,-0.2047],["Kilburn Park",51.5351,-0.1939],["King's Cross St. Pancras",51.5308,-0.1238],["Kingsbury",51.5846,-0.2786],["Knightsbridge",51.5015,-0.1607],["Ladbroke Grove",51.5172,-0.2107],["Lambeth North",51.4991,-0.1115],["Lancaster Gate",51.5119,-0.1756],["Latimer Road",51.5139,-0.2172],["Leicester Square",51.5113,-0.1281],["Leyton",51.5566,-0.0053],["Leytonstone",51.5683,0.0083],["Liverpool Street",51.5178,-0.0823],["London Bridge",51.5052,-0.0864],["Loughton",51.6412,0.0558],["Maida Vale",51.53,-0.1854],["Manor House",51.5712,-0.0958],["Mansion House",51.5122,-0.094],["Marble Arch",51.5136,-0.1586],["Marylebone",51.5225,-0.1631],["Mile End",51.5249,-0.0332],["Mill Hill East",51.6082,-0.2103],["Monument",51.5108,-0.0863],["Moor Park",51.6294,-0.432],["Moorgate",51.5186,-0.0886],["Morden",51.4022,-0.1948],["Mornington Crescent",51.5342,-0.1387],["Neasden",51.5542,-0.2503],["Newbury Park",51.5756,0.0899],["North Acton",51.5237,-0.2597],["North Ealing",51.5175,-0.2887],["North Greenwich",51.5005,0.0039],["North Harrow",51.5846,-0.3626],["North Wembley",51.5621,-0.3034],["Northfields",51.4995,-0.3142],["Northolt",51.5483,-0.3687],["Northwick Park",51.5784,-0.3184],["Northwood",51.6111,-0.424],["Northwood Hills",51.6004,-0.4092],["Notting Hill Gate",51.5094,-0.1967],["Oakwood",51.6476,-0.1318],["Old Street",51.5263,-0.0873],["Osterley",51.4813,-0.3522],["Oval",51.4819,-0.113],["Oxford Circus",51.515,-0.1415],["Paddington",51.5154,-0.1755],["Park Royal",51.527,-0.2841],["Parsons Green",51.4753,-0.2011],["Perivale",51.5366,-0.3232],["Picadilly Circus",51.5098,-0.1342],["Pimlico",51.4893,-0.1334],["Pinner",51.5926,-0.3805],["Plaistow",51.5313,0.0172],["Preston Road",51.572,-0.2954],["Putney Bridge",51.4682,-0.2089],["Queen's Park",51.5341,-0.2047],["Queensbury",51.5942,-0.2861],["Queensway",51.5107,-0.1877],["Ravenscourt Park",51.4942,-0.2359],["Rayners Lane",51.5753,-0.3714],["Redbridge",51.5763,0.0454],["Regent's Park",51.5234,-0.1466],["Richmond",51.4633,-0.3013],["Rickmansworth",51.6404,-0.4733],["Roding Valley",51.6171,0.0439],["Royal Oak",51.519,-0.188],["Ruislip",51.5715,-0.4213],["Ruislip Gardens",51.5606,-0.4103],["Ruislip Manor",51.5732,-0.4125],["Russell Square",51.523,-0.1244],["Seven Sisters",51.5822,-0.0749],["Shepherd's Bush (C)",51.5046,-0.2187],["Shepherd's Bush (H)",51.5058,-0.2265],["Sloane Square",51.4924,-0.1565],["Snaresbrook",51.5808,0.0216],["South Ealing",51.5011,-0.3072],["South Harrow",51.5646,-0.3521],["South Kensington",51.4941,-0.1738],["South Kenton",51.5701,-0.3081],["South Ruislip",51.5569,-0.3988],["South Wimbledon",51.4154,-0.1919],["South Woodford",51.5917,0.0275],["Southfields",51.4454,-0.2066],["Southgate",51.6322,-0.128],["Southwark",51.501,-0.1052],["St. James's Park",51.4994,-0.1335],["St. John's Wood",51.5347,-0.174],["St. Paul's",51.5146,-0.0973],["Stamford Brook",51.495,-0.2459],["Stanmore",51.6194,-0.3028],["Stepney Green",51.5221,-0.047],["Stockwell",51.4723,-0.123],["Stonebridge Park",51.5439,-0.2759],["Stratford",51.5416,-0.0042],["Sudbury Hill",51.5569,-0.3366],["Sudbury Town",51.5507,-0.3156],["Swiss Cottage",51.5432,-0.1738],["Temple",51.5111,-0.1141],["Theydon Bois",51.6717,0.1033],["Tooting Bec",51.4361,-0.1598],["Tooting Broadway",51.4275,-0.168],["Tottenham Court Road",51.5165,-0.131],["Tottenham Hale",51.5882,-0.0594],["Totteridge & Whetstone",51.6302,-0.1791],["Tower Hill",51.5098,-0.0766],["Tufnell Park",51.5567,-0.1374],["Turnham Green",51.4951,-0.2547],["Turnpike Lane",51.5904,-0.1028],["Upminster",51.559,0.251],["Upminster Bridge",51.5582,0.2343],["Upney",51.5385,0.1014],["Upton Park",51.5352,0.0343],["Uxbridge",51.5463,-0.4786],["Vauxhall",51.4861,-0.1253],["Victoria",51.4965,-0.1447],["Walthamstow Central",51.583,-0.0195],["Wanstead",51.5775,0.0288],["Warren Street",51.5247,-0.1384],["Warwick Avenue",51.5235,-0.1835],["Waterloo",51.5036,-0.1143],["Watford",51.6573,-0.4177],["Wembley Central",51.5519,-0.2963],["Wembley Park",51.5635,-0.2795],["West Acton",51.518,-0.2809],["West Brompton",51.4872,-0.1953],["West Finchley",51.6095,-0.1883],["West Ham",51.5287,0.0056],["West Hampstead",51.5469,-0.1906],["West Harrow",51.5795,-0.3533],["West Kensington",51.4907,-0.2065],["West Ruislip",51.5696,-0.4376],["Westbourne Park",51.521,-0.2011],["Westminster",51.501,-0.1254],["White City",51.512,-0.2239],["Whitechapel",51.5194,-0.0612],["Willesden Green",51.5492,-0.2215],["Willesden Junction",51.5326,-0.2478],["Wimbledon",51.4214,-0.2064],["Wimbledon Park",51.4343,-0.1992],["Wood Green",51.5975,-0.1097],["Woodford",51.607,0.0341],["Woodside Park",51.6179,-0.1856],["Nine Elms",51.48,-0.1288],["Battersea Power Station",51.4797,-0.1426]],"ed":[[9,143,0],[9,185,0],[43,73,0],[43,173,0],[69,143,0],[69,169,0],[71,130,0],[73,243,0],[97,216,0],[97,260,0],[98,122,0],[119,179,0],[119,260,0],[122,202,0],[125,139,0],[125,179,0],[130,243,0],[139,242,0],[157,202,0],[157,245,0],[168,173,0],[168,185,0],[169,242,0],[216,245,0],[11,136,5],[11,211,5],[14,77,5],[14,152,5],[20,136,5],[20,144,5],[23,142,5],[23,168,5],[31,138,5],[31,264,5],[42,109,5],[42,211,5],[45,88,5],[45,188,5],[58,138,5],[58,222,5],[60,247,5],[63,153,5],[63,257,5],[74,222,5],[77,93,5],[83,152,5],[83,184,5],[88,93,5],[91,159,5],[91,172,5],[96,153,5],[96,172,5],[109,225,5],[110,163,5],[110,195,5],[131,142,5],[131,181,5],[134,135,5],[134,217,5],[135,198,5],[135,240,5],[144,217,5],[159,203,5],[153,247,5],[163,181,5],[168,225,5],[184,240,5],[188,264,5],[191,203,5],[191,254,5],[195,257,5],[198,205,5],[205,264,5],[1,136,1],[1,228,1],[9,70,1],[9,89,1],[12,78,1],[12,148,1],[16,163,1],[16,169,1],[21,141,1],[21,221,1],[38,141,1],[38,146,1],[70,169,1],[73,221,1],[73,256,1],[76,89,1],[76,126,1],[78,126,1],[84,105,1],[84,201,1],[105,163,1],[136,148,1],[146,228,1],[197,201,1],[197,238,1],[209,238,1],[209,256,1],[2,228,6],[2,258,6],[13,65,6],[13,234,6],[15,94,6],[15,253,6],[16,163,6],[16,169,6],[17,57,6],[17,234,6],[21,141,6],[21,221,6],[27,30,6],[27,144,6],[30,250,6],[38,141,6],[38,146,6],[46,0,6],[46,230,6],[56,57,6],[56,72,6],[60,61,6],[61,0,6],[62,84,6],[62,105,6],[62,120,6],[62,248,6],[62,253,6],[65,235,6],[66,178,6],[66,206,6],[70,169,6],[72,112,6],[73,221,6],[73,256,6],[82,171,6],[82,248,6],[84,201,6],[92,123,6],[92,230,6],[94,182,6],[105,163,6],[112,233,6],[123,186,6],[144,214,6],[146,228,6],[171,178,6],[176,235,6],[176,250,6],[182,212,6],[197,201,6],[197,238,6],[206,262,6],[212,230,6],[214,258,6],[209,238,6],[209,256,6],[232,233,6],[261,262,6],[2,136,2],[2,258,2],[9,70,2],[9,89,2],[12,78,2],[12,148,2],[13,65,2],[27,30,2],[27,144,2],[30,250,2],[65,235,2],[70,169,2],[76,89,2],[76,126,2],[78,126,2],[86,94,2],[86,196,2],[129,132,2],[129,255,2],[132,196,2],[136,148,2],[144,214,2],[169,189,2],[176,235,2],[176,250,2],[189,255,2],[214,258,2],[9,23,3],[9,210,3],[19,35,3],[19,137,3],[23,90,3],[35,36,3],[36,155,3],[37,155,3],[37,250,3],[39,180,3],[39,213,3],[59,151,3],[59,259,3],[80,220,3],[80,251,3],[90,256,3],[124,251,3],[124,259,3],[127,180,3],[127,246,3],[137,208,3],[151,246,3],[208,243,3],[217,250,3],[210,220,3],[243,256,3],[1,136,7],[4,40,7],[9,80,7],[9,89,7],[12,78,7],[12,148,7],[40,44,7],[40,47,7],[47,187,7],[55,147,7],[55,244,7],[67,183,7],[67,192,7],[76,89,7],[76,126,7],[78,126,7],[80,246,7],[99,160,7],[99,156,7],[99,252,7],[108,117,7],[108,236,7],[117,190,7],[136,148,7],[147,161,7],[147,187,7],[160,177,7],[161,162,7],[162,175,7],[156,175,7],[177,246,7],[183,252,7],[190,192,7],[5,126,8],[5,165,8],[6,107,8],[6,229,8],[10,50,8],[10,223,8],[11,137,8],[11,148,8],[18,41,8],[18,95,8],[24,71,8],[24,137,8],[28,85,8],[28,103,8],[32,52,8],[32,68,8],[34,41,8],[34,75,8],[34,121,8],[34,150,8],[43,73,8],[43,133,8],[48,49,8],[48,50,8],[49,215,8],[52,103,8],[53,204,8],[53,224,8],[64,79,8],[64,107,8],[71,118,8],[73,243,8],[75,126,8],[75,150,8],[75,241,8],[79,145,8],[79,249,8],[85,95,8],[87,225,8],[87,241,8],[104,227,8],[118,167,8],[118,243,8],[121,229,8],[133,225,8],[148,165,8],[149,204,8],[167,215,8],[223,224,8],[227,265,8],[249,265,8],[0,61,9],[0,199,9],[0,230,9],[3,170,9],[3,219,9],[7,26,9],[7,207,9],[8,81,9],[8,111,9],[15,62,9],[15,94,9],[25,158,9],[25,166,9],[26,263,9],[33,111,9],[33,126,9],[51,164,9],[54,109,9],[54,133,9],[61,154,9],[62,84,9],[67,183,9],[67,192,9],[81,140,9],[84,201,9],[90,116,9],[90,173,9],[94,230,9],[100,102,9],[100,101,9],[100,115,9],[102,101,9],[108,117,9],[108,236,9],[109,193,9],[113,114,9],[113,115,9],[114,166,9],[116,128,9],[117,190,9],[126,193,9],[128,201,9],[133,173,9],[140,231,9],[158,199,9],[154,170,9],[164,207,9],[183,200,9],[190,192,9],[200,218,9],[218,219,9],[231,263,9],[22,226,4],[22,239,4],[29,215,4],[75,126,4],[75,241,4],[81,106,4],[81,194,4],[90,168,4],[90,238,4],[106,126,4],[168,241,4],[174,237,4],[174,238,4],[194,226,4],[215,237,4],[11,243,10],[118,266,8],[266,267,8]],"spawn":"Oxford Circus","note":"Stacje i połączenia: zbiór danych nicola/tubemaps (ok. 2016) + linia Northern do Battersea. Bez DLR i Overground."}};
+const $ = id => document.getElementById(id);
+const canvas = $('c'), mini = $('mini'), mctx = mini.getContext('2d');
+if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
+
+// ================= scena =================
+const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x030806);
+scene.fog = new THREE.Fog(0x030806, 40, 650);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 6000); camera.rotation.order = 'YXZ';
+scene.add(new THREE.HemisphereLight(0x9fffd0, 0x0a1a12, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(0.4, 1, 0.3); scene.add(sun);
+let world = new THREE.Group(); scene.add(world);
+const labelGroup = new THREE.Group(); scene.add(labelGroup);
+const grid = (() => { const p = [], c = [], H = 500, a = [.18, .54, .36], b = [.11, .33, .22];
+  for (let i = -H; i <= H; i += 10) { const col = i % 50 ? b : a; for (let t = -H; t < H; t += 20) { p.push(i, 0, t, i, 0, t + 20, t, 0, i, t + 20, 0, i); c.push(...col, ...col, ...col, ...col); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3));
+  const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({vertexColors: true})); l.frustumCulled = false; return l; })(); scene.add(grid);
+function resize(){ renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+// ================= stan =================
+const P = {x: 0, y: 0, z: 0, yaw: 0, pitch: 0, drone: false, reg: null};
+let cityKey = 'warszawa', city = null, stations = [], tunnels = [], regions = [], rgrid = new Map(), bpolys = [], bgrid = new Map(), roadsL = [], xray = false;
+let groundMat = null, buildMat = null, edgeMat = null;
+const CELL = 40, key = (x, z) => Math.floor(x / CELL) + ',' + Math.floor(z / CELL);
+
+// ================= losowość z ziarnem =================
+function rng(str){ let h = 1779033703 ^ str.length; for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+  return () => { h = Math.imul(h ^ h >>> 16, 2246822507); h = Math.imul(h ^ h >>> 13, 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; }; }
+const hex = c => { const n = parseInt(c.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+const mix = (a, k, b = [0, 0, 0]) => [a[0] * k + b[0], a[1] * k + b[1], a[2] * k + b[2]];
+
+// ================= parsowanie OSM =================
+function parseData(text){
+  const out = [], t = text.trim();
+  const add = (pts, tags) => { if (!tags) return; const b = (tags.building && tags.building !== 'no') || tags['building:part'];
+    if (b && pts.length >= 3) out.push({k: 'b', pts, tags}); else if (tags.highway && pts.length >= 2) out.push({k: 'r', pts, tags}); };
+  const addP = (p, tags) => { if (tags && (tags.railway || tags.public_transport)) out.push({k: 'p', pts: [p], tags}); };
+  if (t[0] === '<') {
+    const doc = new DOMParser().parseFromString(t, 'text/xml'), nodes = new Map();
+    for (const n of doc.getElementsByTagName('node')) { const p = [+n.getAttribute('lon'), +n.getAttribute('lat')]; nodes.set(n.getAttribute('id'), p);
+      const tg = n.getElementsByTagName('tag'); if (tg.length) { const tags = {}; for (const x of tg) tags[x.getAttribute('k')] = x.getAttribute('v'); addP(p, tags); } }
+    for (const w of doc.getElementsByTagName('way')) { const tags = {}; for (const x of w.getElementsByTagName('tag')) tags[x.getAttribute('k')] = x.getAttribute('v');
+      const pts = []; for (const nd of w.getElementsByTagName('nd')) { const p = nodes.get(nd.getAttribute('ref')); if (p) pts.push(p); } add(pts, tags); }
+  } else {
+    const j = JSON.parse(t);
+    if (j.features) { for (const f of j.features) { const g = f.geometry, tags = f.properties && (f.properties.tags || f.properties); if (!g) continue;
+        if (g.type === 'Polygon') add(g.coordinates[0], tags); else if (g.type === 'MultiPolygon') g.coordinates.forEach(c => add(c[0], tags));
+        else if (g.type === 'LineString') add(g.coordinates, tags); else if (g.type === 'MultiLineString') g.coordinates.forEach(c => add(c, tags));
+        else if (g.type === 'Point') addP(g.coordinates, tags); } }
+    else if (j.elements) { const nodes = new Map();
+      for (const e of j.elements) if (e.type === 'node') { nodes.set(e.id, [e.lon, e.lat]); addP([e.lon, e.lat], e.tags); }
+      for (const e of j.elements) if (e.type === 'way') add(e.geometry ? e.geometry.filter(Boolean).map(g => [g.lon, g.lat]) : (e.nodes || []).map(i => nodes.get(i)).filter(Boolean), e.tags); }
+    else throw new Error('Nieznany format pliku');
+  }
+  if (!out.some(f => f.k !== 'p')) throw new Error('W pliku nie ma budynków ani ulic');
+  return out;
+}
+function makeProj(o){ const kx = Math.cos(o[0] * Math.PI / 180) * 111320, ky = 110540; return (lat, lon) => [(lon - o[1]) * kx, -(lat - o[0]) * ky]; }
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\(.*?\)|metro|underground|station|stacja/g, '').replace(/[^a-z0-9]/g, '');
+
+// ================= prymitywy podziemi =================
+let SP, SC, LP, LC; // pozycje i kolory brył / linii
+function V(o, u, n, t, s, h){ return [o[0] + u[0] * t + n[0] * s, h, o[1] + u[1] * t + n[1] * s]; }
+function quad(a, b, c, d, col, nrm){
+  const ab = [b[0]-a[0], b[1]-a[1], b[2]-a[2]], ac = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+  const cr = [ab[1]*ac[2]-ab[2]*ac[1], ab[2]*ac[0]-ab[0]*ac[2], ab[0]*ac[1]-ab[1]*ac[0]];
+  if (cr[0]*nrm[0] + cr[1]*nrm[1] + cr[2]*nrm[2] < 0) [b, d] = [d, b];
+  for (const p of [a, b, c, a, c, d]) { SP.push(p[0], p[1], p[2]); SC.push(col[0], col[1], col[2]); }
+}
+function line(a, b, col){ const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 20)); // krótkie odcinki: długie linie znikają na niektórych GPU
+  for (let i = 0; i < n; i++) { const t0 = i / n, t1 = (i + 1) / n; LP.push(a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0, a[2] + (b[2] - a[2]) * t0, a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1, a[2] + (b[2] - a[2]) * t1); LC.push(...col, ...col); } }
+
+// region chodzenia: pas od punktu a w kierunku u, długość len, półszerokość hw, wysokość y0 -> y1
+function region(kind, ax, az, ux, uz, len, hw, y0, y1, info){
+  const r = {kind, a: [ax, az], u: [ux, uz], n: [-uz, ux], len, hw, y0, y1, info, slope: Math.abs(y1 - y0) > .01};
+  regions.push(r); const seen = new Set();
+  for (let t = 0; t <= len + 5; t += 8) for (const s of [-hw, 0, hw]) { const tt = Math.min(t, len);
+    const k = key(ax + ux * tt + r.n[0] * s, az + uz * tt + r.n[1] * s); if (!seen.has(k)) { seen.add(k); if (!rgrid.has(k)) rgrid.set(k, []); rgrid.get(k).push(r); } }
+  return r;
+}
+function inReg(r, x, z){ const dx = x - r.a[0], dz = z - r.a[1], t = dx * r.u[0] + dz * r.u[1], s = dx * r.n[0] + dz * r.n[1];
+  if (t < -0.05 || t > r.len + 0.05 || Math.abs(s) > r.hw) return null; return r.y0 + (r.y1 - r.y0) * Math.max(0, Math.min(1, t / r.len)); }
+
+// pomieszczenie / korytarz / schody: bryła wokół regionu, otwory w ścianach bocznych i czołowych
+function shell(r, H, wallC, edgeC, opt = {}){
+  const o = r.a, u = r.u, n = r.n, L = r.len, w = r.hw, h = t => r.y0 + (r.y1 - r.y0) * t / L, top = t => Math.min(h(t) + H, 0);
+  const floorC = mix(wallC, 1.25, [.05, .05, .05]), ceilC = mix(wallC, .6);
+  // podłoga i sufit
+  quad(V(o,u,n,0,-w,h(0)), V(o,u,n,L,-w,h(L)), V(o,u,n,L,w,h(L)), V(o,u,n,0,w,h(0)), floorC, [0,1,0]);
+  let tc = L; if (h(L) + H > 0 && h(0) + H < 0) tc = L * (-H - r.y0) / (r.y1 - r.y0); else if (h(0) + H >= 0) tc = 0;
+  if (tc > 0) quad(V(o,u,n,0,-w,h(0)+H), V(o,u,n,tc,-w,h(tc)+H), V(o,u,n,tc,w,h(tc)+H), V(o,u,n,0,w,h(0)+H), ceilC, [0,-1,0]);
+  // ściany boczne z otworami
+  for (const side of [-1, 1]) {
+    const holes = (side < 0 ? opt.left : opt.right) || []; let cuts = [0]; holes.slice().sort((a, b) => a[0] - b[0]).forEach(([a, b]) => cuts.push(a, b)); cuts.push(L);
+    const nn = [-n[0] * side, 0, -n[1] * side];
+    const brk = [0, tc, L].filter((v, i, a) => a.indexOf(v) === i);
+    for (let i = 0; i < cuts.length; i += 2) { const t0 = Math.max(0, cuts[i]), t1 = Math.min(L, cuts[i + 1]); if (t1 - t0 < .05) continue;
+      const pts = [t0, ...brk.filter(b => b > t0 && b < t1), t1];
+      for (let k = 0; k < pts.length - 1; k++) { const a = pts[k], b = pts[k + 1];
+        quad(V(o,u,n,a,w*side,h(a)), V(o,u,n,b,w*side,h(b)), V(o,u,n,b,w*side,top(b)), V(o,u,n,a,w*side,top(a)), wallC, nn); }
+      line(V(o,u,n,t0,w*side,h(t0)), V(o,u,n,t1,w*side,h(t1)), edgeC);
+      if (tc > t0) line(V(o,u,n,t0,w*side,top(t0)), V(o,u,n,Math.min(t1,tc),w*side,top(Math.min(t1,tc))), edgeC);
+      line(V(o,u,n,t0,w*side,h(t0)), V(o,u,n,t0,w*side,top(t0)), edgeC); line(V(o,u,n,t1,w*side,h(t1)), V(o,u,n,t1,w*side,top(t1)), edgeC);
+    }
+  }
+  // ściany czołowe (otwór o szerokości ow i wysokości oh pośrodku)
+  for (const [t, dir, op] of [[0, 1, opt.start], [L, -1, opt.end]]) {
+    if (op === 'open') continue; const y = h(t), yt = top(t), nn = [u[0] * dir, 0, u[1] * dir];
+    if (!op) { quad(V(o,u,n,t,-w,y), V(o,u,n,t,w,y), V(o,u,n,t,w,yt), V(o,u,n,t,-w,yt), wallC, nn); line(V(o,u,n,t,-w,yt), V(o,u,n,t,w,yt), edgeC); continue; }
+    const [ow, oh] = op, a = ow / 2, yo = Math.min(y + oh, yt);
+    quad(V(o,u,n,t,-w,y), V(o,u,n,t,-a,y), V(o,u,n,t,-a,yt), V(o,u,n,t,-w,yt), wallC, nn);
+    quad(V(o,u,n,t,a,y), V(o,u,n,t,w,y), V(o,u,n,t,w,yt), V(o,u,n,t,a,yt), wallC, nn);
+    if (yt - yo > .05) quad(V(o,u,n,t,-a,yo), V(o,u,n,t,a,yo), V(o,u,n,t,a,yt), V(o,u,n,t,-a,yt), wallC, nn);
+    line(V(o,u,n,t,-a,y), V(o,u,n,t,-a,yo), edgeC); line(V(o,u,n,t,a,y), V(o,u,n,t,a,yo), edgeC); line(V(o,u,n,t,-a,yo), V(o,u,n,t,a,yo), edgeC);
+  }
+  // stopnie
+  if (opt.steps && r.slope) { const nst = Math.round(Math.abs(r.y1 - r.y0) / .3); for (let i = 1; i < nst; i++) { const t = L * i / nst; line(V(o,u,n,t,-w,h(t)+.01), V(o,u,n,t,w,h(t)+.01), opt.steps); } }
+  // świetlówki
+  if (opt.lights) { for (const s of opt.lights) { const t0 = 1, t1 = Math.max(1, tc - 1); if (t1 > t0) line(V(o,u,n,t0,s,h(t0)+H-.05), V(o,u,n,t1,s,h(t1)+H-.05), [.85,.95,.9]); } }
+}
+
+function box(cx, cz, y, sx, sz, H, u, col, edge){ const n = [-u[1], u[0]], o = [cx, cz];
+  const c = [[-sx,-sz],[sx,-sz],[sx,sz],[-sx,sz]];
+  for (let i = 0; i < 4; i++) { const [t0, s0] = c[i], [t1, s1] = c[(i + 1) % 4], mt = (t0 + t1) / 2, ms = (s0 + s1) / 2;
+    quad(V(o,u,n,t0,s0,y), V(o,u,n,t1,s1,y), V(o,u,n,t1,s1,y+H), V(o,u,n,t0,s0,y+H), col, [u[0]*mt+n[0]*ms, 0, u[1]*mt+n[1]*ms]);
+    line(V(o,u,n,t0,s0,y), V(o,u,n,t0,s0,y+H), edge); }
+}
+
+// ================= budowa metra =================
+function buildMetro(stOverride, entrances){
+  const proj = makeProj(city.o);
+  stations = city.st.map(([name, lat, lon], i) => { const ov = stOverride && stOverride.get(i); const [x, z] = ov || proj(lat, lon);
+    return {i, name, x, z, lines: new Map(), halls: [], tops: [], real: !!ov}; });
+  // sąsiedzi na każdej linii
+  for (const [a, b, l] of city.ed) { for (const [p, q] of [[a, b], [b, a]]) { const s = stations[p]; if (!s.lines.has(l)) s.lines.set(l, []); s.lines.get(l).push(q); } }
+  // hale peronowe
+  for (const s of stations) {
+    const R = rng(city.name + s.name); const ls = [...s.lines.keys()].sort((a, b) => city.lines[a].d[0] - city.lines[b].d[0]);
+    let prevY = 0;
+    ls.forEach((l, k) => {
+      const nb = s.lines.get(l).map(q => stations[q]); let ux = 0, uz = 0;
+      if (nb.length === 1) { ux = nb[0].x - s.x; uz = nb[0].z - s.z; }
+      else { const a = nb[0], b = nb[1]; ux = b.x - a.x; uz = b.z - a.z; }
+      const m = Math.hypot(ux, uz) || 1; ux /= m; uz /= m;
+      const [d0, d1] = city.lines[l].d; let y = -(d0 + R() * (d1 - d0)); if (k > 0) y = Math.min(y, prevY - 7); prevY = y;
+      const L = 52 + R() * 16, W = 8.5 + R() * 4, H = 5.2 + R() * 1.8, island = R() < .6;
+      s.halls.push({l, ux, uz, L, W, H, y, island, R, side: {left: [], right: []}, start: [6.4, 5.4], end: [6.4, 5.4]});
+    });
+  }
+  // tunele
+  tunnels = [];
+  for (const [a, b, l] of city.ed) {
+    const A = stations[a], B = stations[b], ha = A.halls.find(h => h.l === l), hb = B.halls.find(h => h.l === l);
+    const end = (S, h, T) => { const sg = Math.sign((T.x - S.x) * h.ux + (T.z - S.z) * h.uz) || 1; return [S.x + h.ux * h.L * sg, S.z + h.uz * h.L * sg]; };
+    const pa = end(A, ha, B), pb = end(B, hb, A); tunnels.push({l, a: pa, b: pb, ya: ha.y, yb: hb.y, A: A.name, B: B.name});
+  }
+  // geometria
+  SP = []; SC = []; LP = []; LC = []; const holes = [], kiosks = [];
+  const ramps = [];
+  for (const s of stations) {
+    s.halls.forEach((h, k) => { // przejścia między poziomami (przesiadki)
+      if (k === 0) return; const up = s.halls[k - 1], dy = up.y - h.y, Lr = dy / .5, sg = k % 2 ? 1 : -1, t0 = 3 + (k - 1) * 5;
+      ramps.push({s, h, up, ax: s.x + h.ux * t0 * sg, az: s.z + h.uz * t0 * sg, ux: h.ux * sg, uz: h.uz * sg, Lr});
+    });
+    // zejścia z powierzchni: prawdziwe wejścia z pliku albo losowe
+    const top = s.halls[0]; if (!top) return;
+    const R = top.R, ent = (entrances.get(s.i) || []).slice(0, 4), exits = [];
+    for (const [ex, ez] of ent) { const dx = ex - s.x, dz = ez - s.z, t = Math.max(-top.L + 6, Math.min(top.L - 6, dx * top.ux + dz * top.uz)), sv = -dx * top.uz + dz * top.ux, side = sv >= 0 ? 1 : -1;
+      const px = s.x + top.ux * t + (-top.uz) * side * (top.W - .5), pz = s.z + top.uz * t + top.ux * side * (top.W - .5);
+      const D = Math.hypot(ex - px, ez - pz); if (D < 8) exits.push({t, side, real: false}); else exits.push({t, side, px, pz, ex, ez, D}); }
+    if (!exits.length) for (const sg of [-1, 1]) { const t = sg * (top.L - 10 - R() * 12); let side = R() < .5 ? -1 : 1;
+      const len = -top.y / .55, nx = -top.uz * side, nz = top.ux * side, tx = s.x + top.ux * t + nx * (top.W + len), tz = s.z + top.uz * t + nz * (top.W + len);
+      if (bHit(tx, tz)) side = -side; exits.push({t, side}); }
+    s.exits = exits;
+    // korytarze techniczne i lokale
+    s.rooms = []; const nr = Math.floor(R() * 3);
+    for (let i = 0; i < nr; i++) { const t = (R() * 2 - 1) * (top.L - 18); if (exits.some(e => Math.abs(e.t - t) < 8) || s.rooms.some(q => Math.abs(q.t - t) < 10)) continue;
+      s.rooms.push({t, side: R() < .5 ? -1 : 1, len: 10 + R() * 25, rw: 5 + R() * 4, rl: 8 + R() * 8}); }
+  }
+  // bryły hal
+  for (const s of stations) s.halls.forEach((h, k) => {
+    const lc = hex(city.lines[h.l].c), wallC = mix(lc, .16, [.07, .08, .08]), edgeC = mix(lc, .9, [.08, .08, .08]);
+    const u = [h.ux, h.uz], n = [-h.uz, h.ux];
+    if (k === 0) { for (const e of s.exits) (e.side < 0 ? h.side.left : h.side.right).push([e.t + h.L - 2.2, e.t + h.L + 2.2]);
+      for (const q of s.rooms) (q.side < 0 ? h.side.left : h.side.right).push([q.t + h.L - 1.6, q.t + h.L + 1.6]); }
+    const r = region('hall', s.x - h.ux * h.L, s.z - h.uz * h.L, h.ux, h.uz, h.L * 2, h.W, h.y, h.y, {s, l: h.l});
+    h.reg = r;
+    shell(r, h.H, wallC, edgeC, {left: h.side.left, right: h.side.right, start: h.start, end: h.end, lights: [-h.W / 3, h.W / 3]});
+    // tory, krawędzie peronów, filary, pasy w kolorze linii
+    const o = r.a, L2 = h.L * 2, tr = h.island ? [-(h.W - 2.6), h.W - 2.6] : [-1.9, 1.9], ed = h.island ? [-(h.W - 4.3), h.W - 4.3] : [-3.6, 3.6];
+    for (const ts of tr) for (const g of [-.72, .72]) line(V(o,u,n,0,ts+g,h.y+.02), V(o,u,n,L2,ts+g,h.y+.02), [.45,.5,.5]);
+    for (const es of ed) line(V(o,u,n,0,es,h.y+.03), V(o,u,n,L2,es,h.y+.03), [1,.85,.2]);
+    for (const sd of [-1, 1]) line(V(o,u,n,0,sd*(h.W-.02),h.y+2.4), V(o,u,n,L2,sd*(h.W-.02),h.y+2.4), mix(lc, 1));
+    const pr = h.island ? (h.W - 7 > 1.2 ? [-(h.W - 7), h.W - 7] : [0]) : [0], step = 8 + h.R() * 5;
+    for (let t = step; t < L2 - 4; t += step) for (const ps of pr) { const p = V(o,u,n,t,ps,0); box(p[0], p[2], h.y, .45, .45, h.H, u, mix(wallC, 1.6), edgeC); }
+  });
+  // tunele
+  for (const tn of tunnels) {
+    const lc = hex(city.lines[tn.l].c), dx = tn.b[0] - tn.a[0], dz = tn.b[1] - tn.a[1], len = Math.hypot(dx, dz); if (len < 1) continue;
+    const u = [dx / len, dz / len], n = [-u[1], u[0]], o = tn.a, yA = tn.ya, yB = tn.yb, yAt = t => yA + (yB - yA) * t / len;
+    region('tunnel', o[0], o[1], u[0], u[1], len, 1.5, yA, yB, {l: tn.l, A: tn.A, B: tn.B});
+    const SEG = 8, ring = (t, j) => { const a = j / SEG * Math.PI * 2; return V(o,u,n,t,Math.cos(a)*2.8,yAt(t)+2.2+Math.sin(a)*2.8); };
+    const wc = mix(lc, .12, [.05,.055,.055]);
+    const nseg = Math.max(1, Math.ceil(len / 25));
+    for (let q = 0; q < nseg; q++) { const t0 = len * q / nseg, t1 = len * (q + 1) / nseg;
+      for (let j = 0; j < SEG; j++) { const a = (j + .5) / SEG * Math.PI * 2; quad(ring(t0, j), ring(t1, j), ring(t1, j + 1), ring(t0, j + 1), wc, [-Math.cos(a)*n[0], -Math.sin(a), -Math.cos(a)*n[1]]); }
+      quad(V(o,u,n,t0,-1.6,yAt(t0)), V(o,u,n,t1,-1.6,yAt(t1)), V(o,u,n,t1,1.6,yAt(t1)), V(o,u,n,t0,1.6,yAt(t0)), mix(wc, 1.5), [0,1,0]); }
+    const rc = mix(lc, .55);
+    for (let t = 0; t <= len; t += 15) for (let j = 0; j < SEG; j++) line(ring(t, j), ring(t, j + 1), rc);
+    for (const g of [-.72, .72]) line(V(o,u,n,0,g,yA+.02), V(o,u,n,len,g,yB+.02), [.45,.5,.5]);
+    line(V(o,u,n,0,-2.6,yA+2.6), V(o,u,n,len,-2.6,yB+2.6), mix(lc, .9));
+  }
+  // przesiadki
+  for (const rp of ramps) { const r = region('ramp', rp.ax, rp.az, rp.ux, rp.uz, rp.Lr, 1.8, rp.up.y, rp.h.y, {s: rp.s});
+    const lc = hex(city.lines[rp.h.l].c); shell(r, 3.2, mix(lc, .1, [.04,.04,.04]), mix(lc, .9), {start: 'open', end: 'open', steps: [.7,.75,.72]});
+    const o = r.a, u = r.u, n = r.n, y = rp.up.y + .04; // obrys otworu w posadzce
+    [[0,-1.8,1.6,-1.8],[1.6,-1.8,1.6,1.8],[1.6,1.8,0,1.8],[0,1.8,0,-1.8]].forEach(([a,b,c,d]) => line(V(o,u,n,a,b,y), V(o,u,n,c,d,y), [1,.85,.2])); }
+  // zejścia i lokale
+  for (const s of stations) { const h = s.halls[0]; if (!h) continue; const u = [h.ux, h.uz], n = [-h.uz, h.ux];
+    const wallC = [.09,.11,.1], edgeC = [.6,.95,.75];
+    for (const e of s.exits) {
+      const sx = s.x + u[0] * e.t + n[0] * e.side * (h.W - .5), sz = s.z + u[1] * e.t + n[1] * e.side * (h.W - .5);
+      let stairA = [sx, sz], dir = [n[0] * e.side, n[1] * e.side], sl = -h.y / .55;
+      if (e.ex != null) { const dx = e.ex - sx, dz = e.ez - sz, D = Math.hypot(dx, dz); dir = [dx / D, dz / D];
+        if (D > sl + 2) { const cl = D - sl; const r = region('corr', sx, sz, dir[0], dir[1], cl, 1.7, h.y, h.y, {s});
+          shell(r, 3.2, wallC, edgeC, {start: 'open', end: 'open', lights: [0]}); stairA = [sx + dir[0] * cl, sz + dir[1] * cl]; } else sl = D; }
+      const r = region('stair', stairA[0], stairA[1], dir[0], dir[1], sl, 1.8, h.y, 0, {s});
+      shell(r, 3.2, wallC, edgeC, {start: 'open', end: 'open', steps: [.6,.8,.7], lights: [0]});
+      const tx = stairA[0] + dir[0] * sl, tz = stairA[1] + dir[1] * sl; s.tops.push([tx, tz, dir]);
+      // otwór w gruncie i pawilon
+      const th = sl * (1 - 3.4 / -h.y), nn = [-dir[1], dir[0]], hw = 2.1;
+      const P4 = [[th,-hw],[sl+.2,-hw],[sl+.2,hw],[th,hw]].map(([t, q]) => [stairA[0] + dir[0]*t + nn[0]*q, stairA[1] + dir[1]*t + nn[1]*q]);
+      holes.push(P4); kiosks.push({P4, s, top: [tx, tz]});
+      const kc = [.49, 1, .69]; for (let i = 0; i < 4; i++) { const a = P4[i], b = P4[(i + 1) % 4];
+        line([a[0], 3, a[1]], [b[0], 3, b[1]], kc); line([a[0], 0, a[1]], [a[0], 3, a[1]], kc); }
+      quad([P4[0][0],3.02,P4[0][1]], [P4[1][0],3.02,P4[1][1]], [P4[2][0],3.02,P4[2][1]], [P4[3][0],3.02,P4[3][1]], [.12,.35,.22], [0,1,0]); quad([P4[0][0],2.98,P4[0][1]], [P4[1][0],2.98,P4[1][1]], [P4[2][0],2.98,P4[2][1]], [P4[3][0],2.98,P4[3][1]], [.5,.95,.7], [0,-1,0]);
+    }
+    for (const q of s.rooms) { const ax = s.x + u[0] * q.t + n[0] * q.side * (h.W - .5), az = s.z + u[1] * q.t + n[1] * q.side * (h.W - .5), d = [n[0] * q.side, n[1] * q.side];
+      const r = region('corr', ax, az, d[0], d[1], q.len, 1.4, h.y, h.y, {s}); shell(r, 3, wallC, [.45,.7,.6], {start: 'open', end: 'open', lights: [0]});
+      const rr = region('room', ax + d[0] * q.len, az + d[1] * q.len, d[0], d[1], q.rl, q.rw, h.y, h.y, {s, room: true});
+      shell(rr, 3.6, [.07,.06,.04], [1,.75,.35], {start: [3, 2.6], lights: [-q.rw / 2, q.rw / 2]}); }
+  }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(SP, 3)); sg.setAttribute('color', new THREE.Float32BufferAttribute(SC, 3));
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(LP, 3)); lg.setAttribute('color', new THREE.Float32BufferAttribute(LC, 3));
+  world.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1})));
+  world.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({vertexColors: true})));
+  SP = SC = LP = LC = null;
+  return {holes, kiosks};
+}
+
+// ================= budynki =================
+const num = v => { if (v == null) return null; const s = String(v); const f = parseFloat(s.replace(',', '.')); if (!isFinite(f)) return null; return /'|ft/.test(s) ? f * .3048 : f; };
+const LOW = {house:6, detached:6, semidetached_house:7, terrace:8, bungalow:4, garage:3, garages:3, shed:3, hut:3, roof:4, carport:3, kiosk:3, service:4};
+const MID = {apartments:15, office:20, commercial:14, retail:8, church:20, cathedral:35, hotel:22, university:16, hospital:18, school:10, industrial:10, warehouse:9};
+function heightOf(t){ let lv = num(t['building:levels']), h = num(t.height) ?? num(t['building:height']);
+  if (h == null && lv != null) h = lv * 3.2 + (num(t['roof:levels']) || 0) * 2.5; if (h == null) h = LOW[t.building] ?? MID[t.building] ?? 9;
+  let mh = num(t.min_height); const ml = num(t['building:min_level']); if (mh == null && ml != null) mh = ml * 3.2; mh = mh || 0; if (h <= mh) h = mh + 3; return {h, mh}; }
+function pip(poly, x, z){ let s = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; }
+function bHit(x, z){ const l = bgrid.get(key(x, z)); if (!l) return false; for (const p of l) if (x >= p.a && x <= p.b && z >= p.c && z <= p.d && pip(p.poly, x, z)) return true; return false; }
+
+function buildSurface(feats, proj){
+  bpolys = []; bgrid = new Map(); roadsL = []; const solids = [], edges = [], rp = []; let nb = 0;
+  for (const f of feats) { if (f.k === 'p') continue;
+    let pts = f.pts.map(([lo, la]) => proj(la, lo)); if (pts.length > 2 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts = pts.slice(0, -1);
+    if (f.k === 'r') { roadsL.push(pts); for (let i = 0; i < pts.length - 1; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 20)); for (let k = 0; k < n; k++) rp.push(x0 + (x1 - x0) * k / n, .06, z0 + (z1 - z0) * k / n, x0 + (x1 - x0) * (k + 1) / n, .06, z0 + (z1 - z0) * (k + 1) / n); } continue; }
+    if (pts.length < 3) continue; const {h, mh} = heightOf(f.tags);
+    let g; try { g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))), {depth: h - mh, bevelEnabled: false}); } catch (e) { continue; }
+    g.rotateX(-Math.PI / 2); g.translate(0, mh, 0); if (g.index) g = g.toNonIndexed();
+    const v = .05 + Math.min(h, 80) / 80 * .09; g.userData.c = [v * .55, v * 1.1, v * .8]; solids.push(g); edges.push(new THREE.EdgesGeometry(g, 25)); nb++;
+    if (mh < 2) { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (const [x, z] of pts) { a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, z); d = Math.max(d, z); }
+      const q = {poly: pts, a, b, c, d, h}; bpolys.push(q);
+      for (let i = Math.floor(a / CELL); i <= Math.floor(b / CELL); i++) for (let j = Math.floor(c / CELL); j <= Math.floor(d / CELL); j++) { const k = i + ',' + j; if (!bgrid.has(k)) bgrid.set(k, []); bgrid.get(k).push(q); } }
+  }
+  const merge = (list, nrm) => { let n = 0; for (const g of list) n += g.attributes.position.count; const pos = new Float32Array(n * 3), no = nrm && new Float32Array(n * 3), co = nrm && new Float32Array(n * 3); let o = 0;
+    for (const g of list) { const c = g.attributes.position.count; pos.set(g.attributes.position.array, o * 3); if (nrm) { no.set(g.attributes.normal.array, o * 3); for (let i = 0; i < c; i++) co.set(g.userData.c, (o + i) * 3); } o += c; g.dispose(); }
+    const m = new THREE.BufferGeometry(); m.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (nrm) { m.setAttribute('normal', new THREE.BufferAttribute(no, 3)); m.setAttribute('color', new THREE.BufferAttribute(co, 3)); } return m; };
+  buildMat = new THREE.MeshLambertMaterial({vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, transparent: true});
+  edgeMat = new THREE.LineBasicMaterial({color: 0x7dffb0, transparent: true});
+  if (solids.length) world.add(new THREE.Mesh(merge(solids, true), buildMat));
+  if (edges.length) world.add(new THREE.LineSegments(merge(edges, false), edgeMat));
+  if (rp.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); world.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({color: 0xcfe9ff, transparent: true, opacity: .7}))); }
+  return nb;
+}
+
+function buildGround(holes){
+  let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
+  for (const s of stations) { a = Math.min(a, s.x); b = Math.max(b, s.x); c = Math.min(c, s.z); d = Math.max(d, s.z); }
+  for (const p of bpolys) { a = Math.min(a, p.a); b = Math.max(b, p.b); c = Math.min(c, p.c); d = Math.max(d, p.d); }
+  a -= 800; b += 800; c -= 800; d += 800;
+  const sh = new THREE.Shape([new THREE.Vector2(a, -c), new THREE.Vector2(b, -c), new THREE.Vector2(b, -d), new THREE.Vector2(a, -d)]);
+  for (const h of holes) sh.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
+  const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2);
+  groundMat = new THREE.MeshBasicMaterial({color: 0x020604, transparent: xray, opacity: xray ? .12 : 1, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2});
+  const gm = new THREE.Mesh(g, groundMat); gm.position.y = -.03; world.add(gm);
+
+}
+
+// ================= etykiety (tworzone tylko w pobliżu) =================
+const labels = new Map();
+function makeLabel(text, color, w = 9){ const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96; const x = cv.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,.75)'; x.fillRect(0, 0, 512, 96); x.fillStyle = color; x.fillRect(0, 0, 14, 96);
+  x.font = '600 46px "Chakra Petch", sans-serif'; x.fillStyle = '#fff'; x.textBaseline = 'middle'; let fs = 46; while (x.measureText(text).width > 470 && fs > 20) { fs -= 2; x.font = `600 ${fs}px "Chakra Petch", sans-serif`; } x.fillText(text, 30, 50);
+  const tex = new THREE.CanvasTexture(cv); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true})); sp.scale.set(w, w * 96 / 512, 1); return sp; }
+function updateLabels(){
+  const near = new Set(), C = cur();
+  for (const s of stations) { if (Math.abs(s.x - C.x) > 350 || Math.abs(s.z - C.z) > 350) continue; near.add(s.i); if (labels.has(s.i)) continue;
+    const g = new THREE.Group(), name = s.name;
+    s.halls.forEach(h => { const c = city.lines[h.l].c; for (const t of [-h.L * .5, h.L * .5]) for (const sd of [-1, 1]) { const sp = makeLabel(name + ' · ' + city.lines[h.l].n, c, 7);
+      sp.position.set(s.x + h.ux * t - h.uz * sd * (h.W - .8), h.y + 3.4, s.z + h.uz * t + h.ux * sd * (h.W - .8)); g.add(sp); } });
+    for (const [x, z] of s.tops) { const sp = makeLabel('M  ' + name, city.lines[s.halls[0].l].c, 8); sp.position.set(x, 4.6, z); g.add(sp); }
+    labelGroup.add(g); labels.set(s.i, g); }
+  for (const [i, g] of labels) if (!near.has(i)) { g.traverse(o => { if (o.material) { o.material.map.dispose(); o.material.dispose(); } }); labelGroup.remove(g); labels.delete(i); }
+}
+
+// ================= ładowanie miasta =================
+function loadCity(k, feats){
+  $('busy').style.display = 'grid';
+  setTimeout(() => { try { doLoad(k, feats); } catch (e) { $('status').textContent = 'Błąd: ' + e.message; console.error(e); } $('busy').style.display = 'none'; }, 30);
+}
+function doLoad(k, feats){
+  if (MODE !== 'walk') { MODE = 'walk'; modeUI(); }
+  cityKey = k; city = CITIES[k]; const proj = makeProj(city.o);
+  scene.remove(world); world.traverse(o => { if (o.geometry) o.geometry.dispose(); }); world = new THREE.Group(); scene.add(world);
+  for (const [, g] of labels) labelGroup.remove(g); labels.clear(); regions = []; rgrid = new Map();
+  let nb = 0; if (feats) nb = buildSurface(feats, proj); else { bpolys = []; bgrid = new Map(); roadsL = []; }
+  // stacje i wejścia z pliku
+  const ov = new Map(), ent = new Map();
+  if (feats) { const pts = feats.filter(f => f.k === 'p'); const idx = new Map(city.st.map((s, i) => [norm(s[0]), i]));
+    for (const f of pts) { const t = f.tags, isSt = (t.railway === 'station' && t.station === 'subway') || (t.public_transport === 'station' && t.subway === 'yes');
+      if (isSt && t.name) { const i = idx.get(norm(t.name)); if (i != null) { const p = proj(f.pts[0][1], f.pts[0][0]), q = proj(city.st[i][1], city.st[i][2]); if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 900) ov.set(i, p); } } }
+    for (const f of pts) if (f.tags.railway === 'subway_entrance') { const p = proj(f.pts[0][1], f.pts[0][0]); let best = -1, bd = 260;
+      city.st.forEach((s, i) => { const q = ov.get(i) || proj(s[1], s[2]); const d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d < bd) { bd = d; best = i; } });
+      if (best >= 0) { if (!ent.has(best)) ent.set(best, []); ent.get(best).push(p); } } }
+  const {holes} = buildMetro(ov, ent);
+  buildGround(holes);
+  $('cityName').textContent = city.name.toUpperCase();
+  $('info').textContent = `${stations.length} stacji · ${tunnels.length} tuneli` + (nb ? ` · budynki: ${nb}` : ' · bez budynków') + (ov.size ? ` · stacje z OSM: ${ov.size}` : '');
+  $('note').textContent = city.note;
+  $('cityW').className = k === 'warszawa' ? '' : 'ghost'; $('cityL').className = k === 'londyn' ? '' : 'ghost';
+  $('stSel').innerHTML = stations.map(s => [s.name, s.i]).sort((a, b) => a[0].localeCompare(b[0], 'pl')).map(([n, i]) => `<option value="${i}">${n} (${[...stations[i].lines.keys()].map(l => city.lines[l].n).join(', ')})</option>`).join('');
+  // start: na powierzchni przy budynkach albo na peronie
+  if (feats && bpolys.length) { let cx = 0, cz = 0; bpolys.forEach(p => { cx += p.a; cz += p.c; }); cx /= bpolys.length; cz /= bpolys.length;
+    let best = null, bd = Infinity; for (const r of roadsL) for (const [x, z] of r) { const d = (x - cx) ** 2 + (z - cz) ** 2; if (d < bd && !bHit(x, z)) { bd = d; best = [x, z]; } }
+    if (best) { P.x = best[0]; P.z = best[1]; P.y = 0; P.reg = null; } else goStation(stations.find(s => s.real) || stations[0]);
+  } else goStation(stations.find(s => s.name === city.spawn) || stations[0]);
+  $('stSel').value = String(nearestStation().i);
+}
+function goStation(s){ const h = s.halls[0]; const off = h.island ? (h.W - 7 > 1.2 ? 0 : 2) : -(h.W - 2); P.x = s.x - h.uz * off + h.ux * 3; P.z = s.z + h.ux * off + h.uz * 3; P.y = h.y; P.yaw = Math.atan2(-h.ux, -h.uz); P.pitch = 0; P.reg = h.reg; if (MODE !== 'walk') { MODE = 'walk'; modeUI(); } }
+function goUp(s){ if (MODE !== 'walk') { MODE = 'walk'; modeUI(); } const [x, z, d] = s.tops[0]; P.x = x + d[0] * 2.5; P.z = z + d[1] * 2.5; P.y = 0; P.reg = null; P.yaw = Math.atan2(-d[0], -d[1]); P.pitch = 0; }
+function nearestStation(){ const C = cur(); let b = stations[0], bd = Infinity; for (const s of stations) { const d = (s.x - C.x) ** 2 + (s.z - C.z) ** 2; if (d < bd) { bd = d; b = s; } } return b; }
+
+// ================= ruch i podłoże =================
+function support(x, z, y){
+  let best = null, bd = 0.95, slope = false;
+  const l = rgrid.get(key(x, z));
+  if (l) for (const r of l) { const h = inReg(r, x, z); if (h == null) continue; const d = Math.abs(h - y); if (d > .95) continue;
+    if ((r.slope && !slope) || ((r.slope === slope) && d < bd)) { best = {h, r}; bd = d; slope = r.slope; } }
+  if (!best && y > -1.2 && !bHit(x, z)) best = {h: 0, r: null};
+  return best;
+}
+const keys = {}; const look = (dx, dy) => { if (MODE !== 'walk') { camOff -= dx * .004; camPit = Math.max(-.6, Math.min(1.2, camPit + dy * .003)); lastLook = performance.now(); return; } P.yaw -= dx * .0025; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * .0025)); };
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyF') setMode('heli'); if (e.code === 'KeyG') setMode('car'); if (e.code === 'KeyV') { camFP = !camFP; camInit = true; modeUI(); } if (e.code === 'Digit1') setMode('walk'); if (e.code === 'Digit2') setMode('car'); if (e.code === 'Digit3') setMode('heli'); if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyX') toggleXray(); if (e.code === 'KeyM') $('menuBtn').onclick(); });
+addEventListener('keyup', e => { keys[e.code] = false; });
+let locked = false, drag = false;
+document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; });
+canvas.addEventListener('mousedown', () => { drag = true; if (!locked) { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
+addEventListener('mouseup', () => { drag = false; });
+addEventListener('mousemove', e => { if (locked || drag) look(e.movementX, e.movementY); });
+const joy = {id: null, x: 0, y: 0, ox: 0, oy: 0}, lk = {id: null, x: 0, y: 0}, knob = $('knob'), jb = $('joy');
+canvas.addEventListener('touchstart', e => { for (const t of e.changedTouches) if (t.clientX > innerWidth * .4 && lk.id == null) { lk.id = t.identifier; lk.x = t.clientX; lk.y = t.clientY; } }, {passive: true});
+jb.addEventListener('touchstart', e => { const t = e.changedTouches[0], r = jb.getBoundingClientRect(); joy.id = t.identifier; joy.ox = r.left + r.width / 2; joy.oy = r.top + r.height / 2; moveJoy(t); e.preventDefault(); }, {passive: false});
+function moveJoy(t){ let dx = t.clientX - joy.ox, dy = t.clientY - joy.oy; const m = Math.hypot(dx, dy), R = 55; if (m > R) { dx *= R / m; dy *= R / m; } joy.x = dx / R; joy.y = dy / R; knob.style.transform = `translate(${dx}px,${dy}px)`; }
+addEventListener('touchmove', e => { for (const t of e.changedTouches) { if (t.identifier === joy.id) moveJoy(t); else if (t.identifier === lk.id) { look((t.clientX - lk.x) * 1.6, (t.clientY - lk.y) * 1.6); lk.x = t.clientX; lk.y = t.clientY; } } }, {passive: true});
+addEventListener('touchend', e => { for (const t of e.changedTouches) { if (t.identifier === joy.id) { joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; } if (t.identifier === lk.id) lk.id = null; } });
+
+// ================= pojazdy =================
+let MODE = 'walk', camFP = false, camOff = 0, camPit = 0, lastLook = 0, btnUp = false, btnDn = false, camInit = true;
+const VH = {x: 0, y: 0, z: 0, yaw: 0, speed: 0, vx: 0, vz: 0, vy: 0, roll: 0, tilt: 0};
+function part(geo, x, y, z, fill, edge){ const g = new THREE.Group();
+  g.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: fill, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1})));
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), new THREE.LineBasicMaterial({color: edge}))); g.position.set(x, y, z); return g; }
+const car = new THREE.Group(), heli = new THREE.Group(), rotor = new THREE.Group(), trotor = new THREE.Group();
+{ const E = 0xffcc33, F = 0x1a1406;
+  car.add(part(new THREE.BoxGeometry(1.9, .7, 4.4), 0, .62, 0, F, E));
+  car.add(part(new THREE.BoxGeometry(1.6, .6, 2.1), 0, 1.27, .25, F, E));
+  for (const [x, z] of [[-.95, -1.4], [.95, -1.4], [-.95, 1.45], [.95, 1.45]]) { const w = new THREE.CylinderGeometry(.38, .38, .3, 10); w.rotateZ(Math.PI / 2); car.add(part(w, x, .38, z, 0x050505, 0xcfe9ff)); }
+  for (const x of [-.6, .6]) { car.add(part(new THREE.BoxGeometry(.4, .15, .05), x, .75, -2.22, 0xffffcc, 0xffffff)); car.add(part(new THREE.BoxGeometry(.4, .15, .05), x, .75, 2.22, 0xff2a2a, 0xff6666)); } }
+{ const E = 0x66e0ff, F = 0x06141a, R = 0xcfe9ff;
+  const body = new THREE.SphereGeometry(1.5, 8, 6); body.scale(1, .95, 1.9); heli.add(part(body, 0, 1.9, 0, F, E));
+  heli.add(part(new THREE.BoxGeometry(.35, .35, 4.6), 0, 2.2, 4.4, F, E));
+  heli.add(part(new THREE.BoxGeometry(.12, 1.3, .8), 0, 2.8, 6.5, F, E));
+  for (const x of [-.9, .9]) { heli.add(part(new THREE.BoxGeometry(.12, .12, 3.6), x, .15, 0, F, E)); for (const z of [-.9, .9]) heli.add(part(new THREE.BoxGeometry(.08, .7, .08), x, .5, z, F, E)); }
+  rotor.add(part(new THREE.BoxGeometry(11, .05, .35), 0, 0, 0, F, R)); rotor.add(part(new THREE.BoxGeometry(.35, .05, 11), 0, 0, 0, F, R)); rotor.position.set(0, 3.35, 0); heli.add(rotor);
+  trotor.add(part(new THREE.BoxGeometry(.05, 1.8, .2), 0, 0, 0, F, R)); trotor.position.set(.25, 2.9, 6.6); heli.add(trotor); heli.rotation.order = 'YXZ'; }
+car.visible = heli.visible = false; scene.add(car, heli);
+
+function bTop(x, z){ const l = bgrid.get(key(x, z)); let t = 0; if (l) for (const p of l) if (p.h > t && x >= p.a && x <= p.b && z >= p.c && z <= p.d && pip(p.poly, x, z)) t = p.h; return t; }
+function carHit(x, z, yaw){ const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+  for (const [a, b] of [[1, 2.3], [-1, 2.3], [1, -2.3], [-1, -2.3], [1, 0], [-1, 0]]) if (bHit(x + rx * a + fx * b, z + rz * a + fz * b)) return true; return false; }
+function freeSpot(x, z, yaw, point){ const ok = (a, b) => point ? !bHit(a, b) : !carHit(a, b, yaw); if (ok(x, z)) return [x, z];
+  for (let r = 2; r < 300; r += 2) for (let a = 0; a < 6.28; a += .4) { const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r; if (ok(px, pz)) return [px, pz]; } return [x, z]; }
+function cur(){ return MODE === 'walk' ? P : VH; }
+function modeUI(){ car.visible = MODE === 'car' && !camFP; heli.visible = MODE === 'heli' && !camFP;
+  for (const [id, k] of [['walkBtn', 'walk'], ['carBtn', 'car'], ['heliBtn', 'heli']]) $(id).className = MODE === k ? 'on' : 'ghost';
+  document.body.classList.toggle('heli', MODE === 'heli'); document.body.classList.toggle('car', MODE === 'car'); }
+function setMode(m){
+  if (m === MODE && m !== 'walk') m = 'walk'; if (m === MODE) return; const from = MODE;
+  if (m !== 'walk') {
+    if (from === 'walk') { let x = P.x, z = P.z, yaw = P.yaw, under = P.y < -1;
+      if (under) { const s = nearestStation(), t = s.tops[0]; if (t) { x = t[0] + t[2][0] * 5; z = t[1] + t[2][1] * 5; yaw = Math.atan2(-t[2][0], -t[2][1]); } else { x = s.x; z = s.z; } }
+      if (m === 'car') [x, z] = freeSpot(x, z, yaw);
+      Object.assign(VH, {x, z, yaw, y: m === 'heli' ? bTop(x, z) + (under ? 40 : 0) : 0, speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0});
+    } else if (m === 'car') { [VH.x, VH.z] = freeSpot(VH.x, VH.z, VH.yaw); VH.y = 0; VH.speed = 0; }
+    else { VH.vx = -Math.sin(VH.yaw) * VH.speed; VH.vz = -Math.cos(VH.yaw) * VH.speed; VH.vy = 0; }
+  } else { const rx = Math.cos(VH.yaw), rz = -Math.sin(VH.yaw); let p = [VH.x - rx * 2.6, VH.z - rz * 2.6];
+    if (bHit(p[0], p[1])) p = freeSpot(VH.x, VH.z, VH.yaw, true);
+    P.x = p[0]; P.z = p[1]; P.y = 0; P.reg = null; P.yaw = VH.yaw; P.pitch = 0; }
+  MODE = m; camOff = 0; camPit = 0; camInit = true; modeUI();
+}
+function chase(dist, h, lookH, dt){
+  if (performance.now() - lastLook > 2000) { camOff *= Math.max(0, 1 - 2 * dt); camPit *= Math.max(0, 1 - 2 * dt); }
+  if (camFP) { const fx = -Math.sin(VH.yaw), fz = -Math.cos(VH.yaw), hd = MODE === 'car' ? [1.25, .2] : [1.7, 2.2];
+    camera.position.set(VH.x - fx * hd[1], VH.y + hd[0], VH.z - fz * hd[1]); camera.rotation.set(camPit - (MODE === 'heli' ? .2 : .03), VH.yaw + camOff, MODE === 'heli' ? VH.roll : 0); return; }
+  const yaw = VH.yaw + camOff, pit = Math.max(-.1, Math.min(1.3, .22 + camPit));
+  const tx = VH.x + Math.sin(yaw) * dist * Math.cos(pit), tz = VH.z + Math.cos(yaw) * dist * Math.cos(pit), ty = VH.y + h + Math.sin(pit) * dist;
+  const k = camInit ? 1 : 1 - Math.exp(-7 * dt); camInit = false;
+  camera.position.x += (tx - camera.position.x) * k; camera.position.y += (ty - camera.position.y) * k; camera.position.z += (tz - camera.position.z) * k;
+  camera.position.y = Math.max(camera.position.y, bTop(camera.position.x, camera.position.z) + .6, .6);
+  camera.lookAt(VH.x, VH.y + lookH, VH.z);
+}
+function carStep(dt, f, s, run){
+  const max = run ? 45 : 28;
+  if (f > 0) VH.speed = VH.speed < 0 ? VH.speed + 22 * dt : Math.min(max, VH.speed + 8 * f * (run ? 1.7 : 1) * dt);
+  else if (f < 0) VH.speed = VH.speed > 0 ? VH.speed - 22 * dt : Math.max(-9, VH.speed + 6 * f * dt);
+  else VH.speed *= Math.max(0, 1 - .45 * dt);
+  if (keys.Space) VH.speed *= Math.max(0, 1 - 3 * dt);
+  if (Math.abs(VH.speed) < .08 && !f) VH.speed = 0;
+  const as = Math.abs(VH.speed), turn = s * 1.6 / (1 + as / 18) * Math.min(1, as / 3) * Math.sign(VH.speed), ny = VH.yaw - turn * dt;
+  const nx = VH.x - Math.sin(ny) * VH.speed * dt, nz = VH.z - Math.cos(ny) * VH.speed * dt;
+  if (!carHit(nx, nz, ny)) { VH.x = nx; VH.z = nz; VH.yaw = ny; }
+  else { if (!carHit(VH.x, VH.z, ny)) VH.yaw = ny; VH.speed *= -.3; }
+  VH.roll += (turn * as * .004 - VH.roll) * Math.min(1, 5 * dt);
+  car.position.set(VH.x, 0, VH.z); car.rotation.set(0, VH.yaw, 0); car.rotateZ(VH.roll);
+  chase(9, 2.2, 1.2, dt);
+}
+function heliStep(dt, f, s, run){
+  const max = run ? 85 : 42, fx = -Math.sin(VH.yaw), fz = -Math.cos(VH.yaw), k = Math.min(1, 1.2 * dt);
+  VH.yaw -= s * 1.3 * dt;
+  VH.vx += (fx * f * max - VH.vx) * k; VH.vz += (fz * f * max - VH.vz) * k;
+  const up = (keys.KeyE || keys.Space || btnUp ? 1 : 0) - (keys.KeyQ || keys.ControlLeft || keys.KeyC && false || btnDn ? 1 : 0);
+  VH.vy += (up * (run ? 25 : 14) - VH.vy) * Math.min(1, 2.5 * dt);
+  let nx = VH.x + VH.vx * dt, nz = VH.z + VH.vz * dt, ny = Math.min(1500, VH.y + VH.vy * dt);
+  if (bTop(nx, nz) > ny + .3) { VH.vx = VH.vz = 0; nx = VH.x; nz = VH.z; }
+  const floor = bTop(nx, nz); if (ny < floor) { ny = floor; if (VH.vy < 0) VH.vy = 0; }
+  VH.x = nx; VH.z = nz; VH.y = ny;
+  const fs = VH.vx * fx + VH.vz * fz, air = ny > floor + .2;
+  VH.tilt += ((air ? -fs / max * .3 : 0) - VH.tilt) * Math.min(1, 3 * dt); VH.roll += ((air ? -s * .3 : 0) - VH.roll) * Math.min(1, 3 * dt);
+  heli.position.set(VH.x, VH.y, VH.z); heli.rotation.set(VH.tilt, VH.yaw, VH.roll);
+  rotor.rotation.y += dt * (air || up > 0 ? 30 : 10); trotor.rotation.x += dt * 45;
+  chase(17, 5, 2.5, dt);
+}
+
+function toggleXray(){ xray = !xray; if (groundMat) { groundMat.opacity = xray ? .12 : 1; groundMat.transparent = xray; groundMat.needsUpdate = true; } if (buildMat) buildMat.opacity = xray ? .25 : 1; if (edgeMat) edgeMat.opacity = xray ? .35 : 1; groundMat && (groundMat.depthWrite = !xray);
+  $('xrayBtn').className = xray ? 'on' : 'ghost'; }
+$('xrayBtn').onclick = toggleXray; $('walkBtn').onclick = () => setMode('walk'); $('carBtn').onclick = () => setMode('car'); $('heliBtn').onclick = () => setMode('heli'); $('camBtn').onclick = () => { camFP = !camFP; camInit = true; modeUI(); };
+for (const [id, v] of [['upB', 'btnUp'], ['dnB', 'btnDn']]) { const b = $(id); b.addEventListener('pointerdown', e => { e.preventDefault(); if (v === 'btnUp') btnUp = true; else btnDn = true; }); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => { if (v === 'btnUp') btnUp = false; else btnDn = false; }); }
+$('menuBtn').onclick = () => { $('menu').classList.remove('hide'); $('stSel').value = String(nearestStation().i); if (locked) document.exitPointerLock(); };
+$('cityW').onclick = () => { loadCity('warszawa', null); $('menu').classList.add('hide'); };
+$('cityL').onclick = () => { loadCity('londyn', null); $('menu').classList.add('hide'); };
+$('goBtn').onclick = () => { goStation(stations[+$('stSel').value]); $('menu').classList.add('hide'); };
+$('upBtn').onclick = () => { goUp(stations[+$('stSel').value]); $('menu').classList.add('hide'); };
+$('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText($('q').textContent); $('copyBtn').textContent = 'Skopiowano'; } catch (e) { $('copyBtn').textContent = 'Zaznacz i skopiuj ręcznie'; } };
+$('fileIn').onchange = async e => { const f = e.target.files[0]; if (!f) return; $('status').textContent = 'Wczytuję ' + f.name + '…';
+  try { const feats = parseData(await f.text()); let la = 0, lo = 0, n = 0; for (const x of feats) for (const p of x.pts) { lo += p[0]; la += p[1]; n++; } la /= n; lo /= n;
+    let best = null, bd = 60; for (const k in CITIES) { const o = CITIES[k].o, d = Math.hypot((la - o[0]) * 111, (lo - o[1]) * 111 * Math.cos(la * Math.PI / 180)); if (d < bd) { bd = d; best = k; } }
+    if (!best) throw new Error('Ten plik nie leży w Warszawie ani w Londynie');
+    $('status').textContent = ''; $('menu').classList.add('hide'); loadCity(best, feats); }
+  catch (err) { $('status').textContent = 'Błąd: ' + err.message; } e.target.value = ''; };
+
+// ================= minimapa =================
+function renderMini(){
+  const W = mini.width; mctx.clearRect(0, 0, W, W); if (!city) return; const C = cur();
+  const under = (MODE === 'walk' && C.y < -1) || xray;
+  const view = MODE === 'heli' ? Math.min(3000, 300 + C.y * 5) : MODE === 'car' ? 450 : (C.y < -1 ? 500 : 260), s = W / view, R = view / 2 * 1.45;
+  mctx.save(); mctx.beginPath(); mctx.arc(W / 2, W / 2, W / 2 - 2, 0, 7); mctx.clip();
+  mctx.translate(W / 2, W / 2); mctx.rotate(C.yaw); mctx.scale(s, s); mctx.translate(-C.x, -C.z);
+  const lw = 1 / s;
+  if (C.y > -1) { mctx.fillStyle = 'rgba(125,255,176,.3)'; mctx.strokeStyle = 'rgba(125,255,176,.8)'; mctx.lineWidth = lw; const seen = new Set();
+    if (view < 1500) for (let i = Math.floor((C.x - R) / CELL); i <= Math.floor((C.x + R) / CELL); i++) for (let j = Math.floor((C.z - R) / CELL); j <= Math.floor((C.z + R) / CELL); j++) { const l = bgrid.get(i + ',' + j); if (!l) continue;
+      for (const p of l) { if (seen.has(p)) continue; seen.add(p); mctx.beginPath(); p.poly.forEach((q, k) => mctx[k ? 'lineTo' : 'moveTo'](q[0], q[1])); mctx.closePath(); mctx.fill(); mctx.stroke(); } }
+    mctx.strokeStyle = 'rgba(207,233,255,.5)'; mctx.lineWidth = 2 * lw;
+    for (const r of roadsL) { const p0 = r[0]; if (Math.abs(p0[0] - C.x) > R + 400 || Math.abs(p0[1] - C.z) > R + 400) continue; mctx.beginPath(); r.forEach((q, k) => mctx[k ? 'lineTo' : 'moveTo'](q[0], q[1])); mctx.stroke(); } }
+  mctx.globalAlpha = under ? 1 : .45;
+  for (const t of tunnels) { if (Math.min(t.a[0], t.b[0]) > C.x + R || Math.max(t.a[0], t.b[0]) < C.x - R || Math.min(t.a[1], t.b[1]) > C.z + R || Math.max(t.a[1], t.b[1]) < C.z - R) continue;
+    mctx.strokeStyle = city.lines[t.l].c; mctx.lineWidth = 3 * lw; mctx.beginPath(); mctx.moveTo(t.a[0], t.a[1]); mctx.lineTo(t.b[0], t.b[1]); mctx.stroke(); }
+  for (const r of regions) { if (r.kind === 'tunnel' || Math.abs(r.a[0] - C.x) > R + 150 || Math.abs(r.a[1] - C.z) > R + 150) continue;
+    mctx.fillStyle = r.kind === 'hall' ? city.lines[r.info.l].c : r.kind === 'room' ? '#ffbe5a' : '#9fd8b8';
+    const c = [[0, -r.hw], [r.len, -r.hw], [r.len, r.hw], [0, r.hw]].map(([t, q]) => [r.a[0] + r.u[0] * t + r.n[0] * q, r.a[1] + r.u[1] * t + r.n[1] * q]);
+    mctx.beginPath(); c.forEach((q, k) => mctx[k ? 'lineTo' : 'moveTo'](q[0], q[1])); mctx.closePath(); mctx.fill(); }
+  mctx.globalAlpha = 1; mctx.restore();
+  mctx.fillStyle = MODE === 'car' ? '#ffcc33' : MODE === 'heli' ? '#66e0ff' : '#fff';
+  mctx.beginPath(); mctx.moveTo(W / 2, W / 2 - 13); mctx.lineTo(W / 2 - 9, W / 2 + 9); mctx.lineTo(W / 2 + 9, W / 2 + 9); mctx.closePath(); mctx.fill();
+}
+function locText(){
+  if (MODE === 'car') return `Samochód · ${Math.round(Math.abs(VH.speed) * 3.6)} km/h · najbliżej: ${nearestStation().name}`;
+  if (MODE === 'heli') return `Helikopter · ${Math.round(VH.y)} m · ${Math.round(Math.hypot(VH.vx, VH.vz) * 3.6)} km/h · nad: ${nearestStation().name}`;
+  const r = P.reg; if (!r) return 'Ulica · najbliżej: ' + nearestStation().name;
+  const d = Math.round(-P.y) + ' m pod ziemią';
+  if (r.kind === 'hall') return `Peron ${r.info.s.name} · ${city.lines[r.info.l].n} · ${d}`;
+  if (r.kind === 'tunnel') return `Tunel ${city.lines[r.info.l].n}: ${r.info.A} ↔ ${r.info.B} · ${d}`;
+  if (r.kind === 'room') return `Lokal pod stacją ${r.info.s.name} · ${d}`;
+  if (r.kind === 'stair') return `Schody · ${r.info.s.name} · ${d}`;
+  if (r.kind === 'ramp') return `Przejście między liniami · ${r.info.s.name}`;
+  return `Korytarz · ${r.info.s.name} · ${d}`;
+}
+
+// ================= pętla =================
+let last = performance.now(), lt = 0;
+function frame(now){
+  requestAnimationFrame(frame); if (!stations.length) return;
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  let f = 0, s = 0; if (keys.KeyW || keys.ArrowUp) f++; if (keys.KeyS || keys.ArrowDown) f--; if (keys.KeyD || keys.ArrowRight) s++; if (keys.KeyA || keys.ArrowLeft) s--;
+  f -= joy.y; s += joy.x; f = Math.max(-1, Math.min(1, f)); s = Math.max(-1, Math.min(1, s));
+  const run = keys.ShiftLeft || keys.ShiftRight || Math.hypot(joy.x, joy.y) > .95;
+  if (MODE === 'car') carStep(dt, f, s, run);
+  else if (MODE === 'heli') heliStep(dt, f, s, run);
+  else {
+    const sp = 4.5 * (run ? 3 : 1);
+    if (f || s) { const m = Math.min(1, Math.hypot(f, s)) / Math.hypot(f, s), sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
+      const dx = (-sy * f + cy * s) * m * sp * dt, dz = (-cy * f - sy * s) * m * sp * dt;
+      let g = support(P.x + dx, P.z + dz, P.y);
+      if (g) { P.x += dx; P.z += dz; } else if ((g = support(P.x + dx, P.z, P.y))) P.x += dx; else if ((g = support(P.x, P.z + dz, P.y))) P.z += dz;
+      if (g) { P.y = g.h; P.reg = g.r; } }
+    const bob = (f || s) ? Math.sin(now / 140) * .04 : 0;
+    camera.position.set(P.x, P.y + 1.7 + bob, P.z); camera.rotation.set(P.pitch, P.yaw, 0);
+  }
+  const under = MODE === 'walk' && P.y < -1;
+  { const C = cur(), gs = MODE === 'heli' && VH.y > 120 ? 5 : 1, st = 10 * gs; grid.scale.set(gs, 1, gs); grid.position.set(Math.round(C.x / st) * st, .04, Math.round(C.z / st) * st); }
+  scene.fog.near = under ? 30 : 60; scene.fog.far = under ? 240 : MODE === 'heli' ? Math.min(6000, 700 + VH.y * 12) : MODE === 'car' ? 900 : 650;
+  if (now - lt > 500) { lt = now; updateLabels(); $('loc').textContent = locText(); }
+  renderer.render(scene, camera); renderMini();
+}
+loadCity('warszawa', null); $('menu').classList.add('hide');
+requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
