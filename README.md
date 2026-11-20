@@ -3,7 +3,15 @@
 Gra z otwartym światem w prawdziwych miastach (Warszawa, Londyn), w wektorowym stylu terminala CRT.
 Założenia i plan etapów: [`docs/PROMPT_CLAUDE_CODE.md`](docs/PROMPT_CLAUDE_CODE.md).
 
-## Uruchomienie
+## Jak zagrać
+
+**Bez instalacji:** pobierz `moje-miasto.html` i otwórz go dwuklikiem w Chrome, Edge albo Firefoksie.
+Cała gra jest w tym jednym pliku i działa bez internetu. Świeży plik buduje się sam po każdym pushu:
+GitHub → zakładka **Actions** → ostatni przebieg „Build” → **Artifacts** → `moje-miasto`.
+
+Lokalnie zbudujesz go poleceniem `npm run build:single` (wynik: `dist-single/moje-miasto.html`).
+
+## Uruchomienie dla programisty
 
 ```bash
 npm install
