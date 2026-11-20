@@ -13,6 +13,7 @@ import { CityView } from '../world/cityView';
 import { loadTerrain } from '../world/terrainLoader';
 import { loadTransit } from '../world/transitLoader';
 import { TransitView } from '../world/transitView';
+import { AirView, loadAir } from '../world/airView';
 import { TransitSystem } from '@miasto/shared/transit/system';
 import type { TransitData } from '@miasto/shared/transit/timetable';
 import { EMBEDDED_TILES } from '../world/embedded';
@@ -55,6 +56,7 @@ export class Game {
   /** komunikacja miejska wg rozkładów (liczona lokalnie z zegara sesji) */
   transit: TransitSystem | null = null;
   private transitView: TransitView | null = null;
+  airView: AirView | null = null;
   /** świat zbudowany z wczytanego pliku OSM */
   fromFile = false;
   /** gra sieciowa (null = jednoosobowa) */
@@ -158,6 +160,8 @@ export class Game {
       this.transit = new TransitSystem(transit, world, s.clock);
       const lc: Record<string, string> = {}; for (const l of world.city.lines) lc[l.n] = l.c;
       this.transitView = new TransitView(this.transit, lc); this.world3d.add(this.transitView.group);
+      const transitSys = this.transit;
+      loadAir(key).then(d => { if (d && this.transit === transitSys) { this.airView = new AirView(d, world, transitSys); this.world3d.add(this.airView.group); } });
     }
     view.streamer.init().then(n => { if (this.view === view && n) this.ui.slowFrame(this); });
     await Promise.race([s.ready, new Promise((_, rej) => setTimeout(() => rej(new Error('Serwer gry nie odpowiada')), 15000))]);
@@ -184,6 +188,7 @@ export class Game {
   private teardown(): void {
     this.session?.close(); this.session = null;
     if (this.transitView) { this.world3d.remove(this.transitView.group); this.transitView.dispose(); this.transitView = null; } this.transit = null;
+    if (this.airView) { this.world3d.remove(this.airView.group); this.airView.dispose(); this.airView = null; }
     if (this.view) { this.world3d.remove(this.view.group); this.view.dispose(); this.view = null; }
     this.labels.clear();
     for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
@@ -276,6 +281,7 @@ export class Game {
     const radius = mode === 'heli' ? Math.min(3000, 900 + alt * 10) : mode === 'car' ? 1200 : under ? 600 : 900;
     this.view!.update(P.x, P.z, radius);
     this.transitView?.update(P.x, P.z, Math.min(radius, 1500), this.riding);
+    this.airView?.update(P.x, P.z);
     const { grid, fog } = this.ctx;
     const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
     grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);

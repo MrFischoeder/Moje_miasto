@@ -54,3 +54,21 @@ export function makeAvatar(color: string, name: string): AvatarModel {
   label.scale.set(1.6, .4, 1); label.position.y = 2.35; label.renderOrder = 10; root.add(label);
   return { root, legs, arms, label };
 }
+
+/** Samolot pasażerski (kadłub, skrzydła, usterzenie, silniki) w skali wg rozmiaru. */
+export function makePlane(size: 'heavy' | 'medium' | 'regional' | 'light'): VehicleModel {
+  const root = new THREE.Group(), E = 0xe8f4ff, F = 0x0a1418, S = { heavy: 1.75, medium: 1, regional: .85, light: .32 }[size];
+  const L = 38 * S, R = 2 * S;
+  const body = new THREE.CylinderGeometry(R, R * .7, L, 10); body.rotateX(Math.PI / 2); root.add(part(body, 0, R + 1.2 * S, 0, F, E));
+  const nose = new THREE.ConeGeometry(R, 4 * S, 10); nose.rotateX(-Math.PI / 2); root.add(part(nose, 0, R + 1.2 * S, -L / 2 - 2 * S, F, E));
+  root.add(part(new THREE.BoxGeometry(34 * S, .5 * S, 6 * S), 0, R * .6 + 1.2 * S, -1 * S, F, E));
+  root.add(part(new THREE.BoxGeometry(12 * S, .4 * S, 3 * S), 0, R + 2 * S, L / 2 - 2 * S, F, E));
+  root.add(part(new THREE.BoxGeometry(.4 * S, 7 * S, 4 * S), 0, R + 5 * S, L / 2 - 2.5 * S, F, E));
+  if (size !== 'light') for (const x of [-7 * S, 7 * S]) { const en = new THREE.CylinderGeometry(1.2 * S, 1.2 * S, 4.5 * S, 8); en.rotateX(Math.PI / 2); root.add(part(en, x, R * .6, -3 * S, F, 0x66e0ff)); }
+  // światła: czerwone i zielone na końcach skrzydeł
+  root.add(part(new THREE.BoxGeometry(.6 * S, .6 * S, .6 * S), -17 * S, R * .6 + 1.2 * S, -1 * S, 0xff3030, 0xff6060));
+  root.add(part(new THREE.BoxGeometry(.6 * S, .6 * S, .6 * S), 17 * S, R * .6 + 1.2 * S, -1 * S, 0x30ff60, 0x80ff9f));
+  root.rotation.order = 'YXZ';
+  root.traverse(o => { const m = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined; if (m) m.fog = false; }); // widoczne z daleka na niebie
+  return { root };
+}
