@@ -21,6 +21,10 @@ export interface Entity {
   lift: number;
   /** gracz prowadzący pojazd */
   driver: number | null;
+  /** pasażerowie (id graczy) */
+  pass: number[];
+  /** ukryty (pieszy siedzący w pojeździe) */
+  hide: boolean;
   /** właściciel (pojazd przywoływany przez gracza) */
   owner: number | null;
 }
@@ -32,11 +36,17 @@ export interface PlayerState {
   walker: number;
   /** pojazd, w którym gracz siedzi */
   vehicle: number | null;
+  /** siedzi jako pasażer (nie steruje) */
+  passenger: boolean;
+  /** kolor gracza (#rrggbb) */
+  color: string;
   /**
    * Rośnie, gdy symulacja sama ustawia kierunek patrzenia pieszego
    * (teleport, wyjście z pojazdu). Klient przejmuje wtedy yaw/pitch z bytu.
    */
   viewSeq: number;
+  /** kierunek patrzenia ustawiony przez symulację przy zmianie viewSeq */
+  viewYaw?: number; viewPitch?: number;
 }
 
 /** Polecenie wejścia wysyłane co krok (klient nigdy nie wysyła pozycji). */
@@ -61,6 +71,10 @@ export type Command =
   | { type: 'mode'; mode: Mode }
   | { type: 'enter' }
   | { type: 'goStation'; station: number; street: boolean };
+
+export const PLAYER_COLORS = ['#7dffb0', '#ffcc33', '#66e0ff', '#ff6b9a', '#b18cff', '#ff8a3d', '#3dffea', '#e8ff5a'];
+/** Miejsca dla pasażerów w pojeździe. */
+export const SEATS: Record<EntityKind, number> = { walker: 0, car: 3, heli: 3 };
 
 export interface SaveState {
   v: 1;

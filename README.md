@@ -11,6 +11,25 @@ GitHub → zakładka **Actions** → ostatni przebieg „Build” → **Artifact
 
 Lokalnie zbudujesz go poleceniem `npm run build:single` (wynik: `dist-single/moje-miasto.html`).
 
+## Gra wieloosobowa (etap 2c)
+
+```bash
+npm run build      # zbudowana gra, którą serwer udostępnia znajomym
+npm run server     # serwer gry: http://localhost:8787 (lobby, WebSocket /ws, statystyki /api/stats)
+```
+
+Znajomi w tej samej sieci otwierają `http://<adres-komputera>:8787`, w menu wpisują nick i klikają „Pokaż gry” → „Dołącz”.
+Z wersji deweloperskiej (`npm run dev`) albo z pliku `moje-miasto.html` wpisz adres serwera w polu „Adres serwera”.
+Bez serwera gra działa jednoosobowo: ten sam kod serwera uruchamia się wtedy w Web Workerze.
+
+- Serwer jest autorytatywny: klient wysyła tylko wejście (13 bajtów, 30 Hz) i polecenia (wsiądź, tryb, teleport, czat).
+- Klient przewiduje własny ruch (ten sam kod kroku co serwer) i poprawia go po odpowiedzi serwera; innych graczy
+  interpoluje ~100 ms w przeszłości.
+- Migawki 15 Hz: binarne, tylko zmienione pola, tylko byty w promieniu ~1 km (helikopter 2,5 km).
+- E przy cudzym aucie albo helikopterze = wsiadasz jako pasażer; T albo Enter = czat.
+- Postęp (pozycja) zapisuje serwer w `server/data/players.json` po nicku.
+- Test obciążenia: `npm run bots` (8–64 botów), wyniki: [`docs/RAPORT-MULTIPLAYER.md`](docs/RAPORT-MULTIPLAYER.md).
+
 ## Uruchomienie dla programisty
 
 ```bash
@@ -56,8 +75,11 @@ client/   przeglądarka (Vite + three.js 0.186)
   src/player/       kamera (pierwsza osoba, pościgowa, kokpit), modele pojazdów
   src/input/        warstwa wejścia: klawiatura, mysz, dotyk -> akcje (bindings.ts to dane)
   src/ui/           HUD, minimapa
-  src/game/         pętla gry, sesja (LocalSession; później Worker i WebSocket)
-server/   Node.js: na razie symulacja bez przeglądarki (headless.ts)
+  src/game/         pętla gry, renderowanie bytów i innych graczy
+server/   Node.js: serwer gry (WebSocket, lobby, zapis graczy), test z botami, symulacja bez przeglądarki
+  shared/src/net/     protokół: wejście, migawki (kwantyzacja, maski zmian), komunikaty JSON
+  shared/src/server/  pokój gry (Room): wspólny dla serwera i Workera gry jednoosobowej
+  client/src/net/     sesja sieciowa (przewidywanie, korekta, interpolacja), transporty WebSocket i Worker
 tools/    przetwarzanie danych miasta: fetch-osm, build-tiles, update-stations, fetch-dem
   shared/src/tiles/  format i budowa kafelków (wspólne dla skryptów i gry)
 data/     dane metra i skrypt prep.py ze źródłami

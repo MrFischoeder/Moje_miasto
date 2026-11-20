@@ -1,0 +1,26 @@
+// Dane miasta z dysku (te same pliki, które pobiera klient): teren i kafelki z client/public.
+import { existsSync, readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
+import type { CityKey } from '@miasto/shared/data/cities';
+import { Terrain } from '@miasto/shared/world/terrain';
+import { tileKey, type TileData, type TileIndex } from '@miasto/shared/tiles/types';
+import type { TileLoader } from '@miasto/shared/server/room';
+
+export const ROOT = new URL('../..', import.meta.url).pathname;
+const PUB = join(ROOT, 'client/public');
+
+export function loadTerrain(city: CityKey): Terrain | null {
+  const f = join(PUB, 'terrain', `${city}.bin.gz`); if (!existsSync(f)) return null;
+  const b = gunzipSync(readFileSync(f)); return Terrain.parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+}
+
+export function tileLoader(city: CityKey): TileLoader | null {
+  const dir = join(PUB, 'tiles', city), ix = join(dir, 'index.json'); if (!existsSync(ix)) return null;
+  const idx = JSON.parse(readFileSync(ix, 'utf8')) as TileIndex, have = new Set(idx.tiles.map(([x, y]) => tileKey(x, y)));
+  return {
+    has: (x, y) => have.has(tileKey(x, y)),
+    load: async (x, y) => JSON.parse(gunzipSync(await readFile(join(dir, `${tileKey(x, y)}.json.gz`))).toString('utf8')) as TileData,
+  };
+}

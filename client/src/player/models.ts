@@ -35,5 +35,22 @@ export function makeHeli(): VehicleModel {
 }
 
 export function disposeModel(m: VehicleModel): void {
-  m.root.traverse(o => { const x = o as THREE.Mesh; if (x.geometry) x.geometry.dispose(); if (x.material) (x.material as THREE.Material).dispose(); });
+  m.root.traverse(o => { const x = o as THREE.Mesh; if (x.geometry) x.geometry.dispose(); if (x.material) { const mt = x.material as THREE.SpriteMaterial; mt.map?.dispose(); mt.dispose(); } });
+}
+
+export interface AvatarModel extends VehicleModel { legs: THREE.Group[]; arms: THREE.Group[]; label: THREE.Sprite }
+
+/** Wektorowa postać innego gracza: kolor gracza na krawędziach, nick nad głową. */
+export function makeAvatar(color: string, name: string): AvatarModel {
+  const root = new THREE.Group(), c = new THREE.Color(color).getHex(), F = 0x07120c;
+  root.add(part(new THREE.BoxGeometry(.5, .7, .28), 0, 1.25, 0, F, c));
+  root.add(part(new THREE.BoxGeometry(.28, .3, .28), 0, 1.78, 0, F, c));
+  const limb = (x: number, y: number, h: number) => { const g = new THREE.Group(); g.position.set(x, y, 0); const p = part(new THREE.BoxGeometry(.16, h, .16), 0, -h / 2, 0, F, c); g.add(p); root.add(g); return g; };
+  const legs = [limb(-.13, .9, .9), limb(.13, .9, .9)], arms = [limb(-.34, 1.55, .65), limb(.34, 1.55, .65)];
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const x = cv.getContext('2d')!;
+  x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(0, 0, 256, 64); x.fillStyle = color; x.fillRect(0, 60, 256, 4);
+  x.font = '600 34px "Chakra Petch", sans-serif'; x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(name.slice(0, 16), 128, 32);
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
+  label.scale.set(1.6, .4, 1); label.position.y = 2.35; label.renderOrder = 10; root.add(label);
+  return { root, legs, arms, label };
 }

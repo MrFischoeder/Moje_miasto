@@ -16,6 +16,7 @@
   <button class="ghost" id="heliBtn">Heli</button>
   <button class="ghost" id="camBtn" aria-label="Zmień kamerę">Kamera</button>
   <button class="ghost" id="xrayBtn">Prześwietl</button>
+  <button class="ghost" id="chatBtn">Czat</button>
   <button class="ghost" id="menuBtn">Menu</button>
 </div>
 <div id="heliCtl">
@@ -23,6 +24,7 @@
   <button class="ghost" id="dnB" aria-label="W dół">▼</button>
 </div>
 <div id="busy">Buduję miasto…</div>
+<div id="chat" aria-live="polite"><div id="chatLog"></div><input id="chatIn" maxlength="200" placeholder="Wiadomość (Enter wysyła, Esc zamyka)" autocomplete="off"></div>
 
 <div id="menu">
   <div class="card">
@@ -32,6 +34,18 @@
       <button id="cityW">Warszawa</button>
       <button class="ghost" id="cityL">Londyn</button>
     </div>
+    <h2>Gra wieloosobowa</h2>
+    <div class="row">
+      <input id="nick" maxlength="20" placeholder="Nick" aria-label="Nick" autocomplete="off">
+      <input id="server" placeholder="Adres serwera" aria-label="Adres serwera" autocomplete="off">
+      <button class="ghost" id="refreshBtn">Pokaż gry</button>
+    </div>
+    <div id="sessList" class="small"></div>
+    <div class="row">
+      <button class="ghost" id="newW">Nowa gra: Warszawa</button>
+      <button class="ghost" id="newL">Nowa gra: Londyn</button>
+    </div>
+    <p class="small">Przyciski Warszawa i Londyn u góry uruchamiają grę jednoosobową (bez serwera).</p>
     <h2>Teleport na peron</h2>
     <div class="row">
       <select id="stSel" aria-label="Stacja"></select>

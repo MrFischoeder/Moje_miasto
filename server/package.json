@@ -4,9 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "headless": "tsx src/headless.ts"
+    "headless": "tsx src/headless.ts",
+    "start": "tsx src/main.ts",
+    "bots": "tsx src/bots.ts"
   },
   "dependencies": {
-    "@miasto/shared": "*"
+    "@miasto/shared": "*",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.1"
   }
 }

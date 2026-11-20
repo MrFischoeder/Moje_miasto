@@ -1,5 +1,6 @@
 // Stały krok symulacji oddzielony od renderowania.
-export const SIM_HZ = 60;
+/** Krok symulacji: serwer i klient (przewidywanie) liczą tak samo. */
+export const SIM_HZ = 30;
 export const SIM_DT = 1 / SIM_HZ;
 
 export class FixedStep {

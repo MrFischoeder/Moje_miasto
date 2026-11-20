@@ -1,27 +1,34 @@
-// Gra po stronie klienta: ładowanie miasta, pętla (stały krok symulacji + renderowanie), widok bytów.
+// Gra po stronie klienta: ładowanie miasta, sesja (lokalny serwer w Workerze albo serwer sieciowy),
+// przewidywanie własnego ruchu, interpolacja innych graczy, renderowanie.
 import * as THREE from 'three';
 import { CITIES, type CityKey } from '@miasto/shared/data/cities';
 import type { RawOsm } from '@miasto/shared/osm/raw';
 import { buildTiles } from '@miasto/shared/tiles/build';
 import type { Entity, Mode, SaveState } from '@miasto/shared/sim/types';
+import type { TileData } from '@miasto/shared/tiles/types';
 import { World } from '@miasto/shared/world/world';
+import type { Terrain } from '@miasto/shared/world/terrain';
 import { createScene, GridDrape, type SceneCtx } from '../render/scene';
 import { CityView } from '../world/cityView';
 import { loadTerrain } from '../world/terrainLoader';
-import type { Terrain } from '@miasto/shared/world/terrain';
 import { HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
-import { disposeModel, makeCar, makeHeli, type VehicleModel } from '../player/models';
+import { disposeModel, makeAvatar, makeCar, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
 import { Input } from '../input/input';
 import type { Action } from '../input/bindings';
-import { LocalSession, type GameSession } from './session';
+import { NetSession, type ChatLine } from '../net/netSession';
+import { WorkerTransport, WsTransport, type Transport, type WorkerIn } from '../net/transport';
+import type { LocalInit } from '../net/localServer.worker';
+import LocalServer from '../net/localServer.worker?worker&inline';
 
 export interface GameUI {
   onCityLoaded(game: Game): void;
   onModeChanged(mode: Mode, fp: boolean): void;
   onXray(on: boolean): void;
   onMenu(): void;
+  onChat(l: ChatLine): void;
+  onPlayers(game: Game): void;
   setBusy(on: boolean): void;
   setStatus(text: string): void;
   frame(game: Game): void;
@@ -30,26 +37,34 @@ export interface GameUI {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpAngle = (a: number, b: number, t: number) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t; };
+const tilesBase = (key: string) => `${new URL(import.meta.env.BASE_URL, location.href).href}tiles/${key}/`;
+
+export interface OnlineInfo { http: string; session: string; name: string }
 
 export class Game {
   readonly ctx: SceneCtx;
   readonly input: Input;
   readonly rig: CameraRig;
-  session: GameSession | null = null;
+  session: NetSession | null = null;
   view: CityView | null = null;
   /** świat zbudowany z wczytanego pliku OSM */
   fromFile = false;
+  /** gra sieciowa (null = jednoosobowa) */
+  online: OnlineInfo | null = null;
   xray = false;
+  playerName = 'Gracz';
   readonly labels = new StationLabels();
-  private drape!: GridDrape;
+  private drape: GridDrape;
   private world3d = new THREE.Group();
-  private models = new Map<number, VehicleModel>();
+  private models = new Map<number, VehicleModel | AvatarModel>();
+  private walkPhase = new Map<number, { x: number; z: number; ph: number }>();
   /** kierunek patrzenia pieszego (należy do klienta, wysyłany w poleceniu wejścia) */
   viewYaw = 0; viewPitch = 0;
   private viewSeq = -1;
   private lastMode: Mode = 'walk';
   private last = performance.now(); private lastSlow = 0;
-  /** pozycja do renderowania (interpolowana) bytu sterowanego przez gracza */
+  private loadGen = 0;
+  /** pozycja do renderowania bytu, za którym podąża kamera */
   readonly pose = { x: 0, y: 0, z: 0, yaw: 0 };
 
   constructor(canvas: HTMLCanvasElement, private ui: GameUI) {
@@ -65,42 +80,78 @@ export class Game {
 
   get world(): World | null { return this.session?.world ?? null; }
   get mode(): Mode { return this.lastMode; }
+  get cityName(): string { return this.world ? CITIES[this.world.key].name : ''; }
 
-  /** Ładuje miasto (z obiektami OSM albo bez). */
-  loadCity(key: CityKey, raw: RawOsm | null): void {
-    this.ui.setBusy(true);
-    setTimeout(async () => {
-      try { this.doLoad(key, raw, await loadTerrain(key)); } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); }
-      this.ui.setBusy(false);
-    }, 30);
+  // ---------- start ----------
+  /** Gra jednoosobowa: lokalny serwer w Workerze (z obiektami OSM z pliku albo bez). */
+  loadCity(key: CityKey, raw: RawOsm | null): Promise<void> { return this.start(key, raw, null); }
+
+  /** Gra sieciowa: dołączenie do sesji na serwerze. */
+  async joinOnline(http: string, session: string, name: string): Promise<void> {
+    const r = await fetch(`${http}/api/sessions`); if (!r.ok) throw new Error('Serwer nie odpowiada');
+    const s = (await r.json() as { id: string; city: CityKey }[]).find(x => x.id === session);
+    if (!s) throw new Error('Nie ma takiej sesji');
+    return this.start(s.city, null, { http, session, name });
   }
 
-  private doLoad(key: CityKey, raw: RawOsm | null, terrain: Terrain | null): void {
-    this.view?.dispose(); this.labels.clear();
-    for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
-    if (this.view) this.world3d.remove(this.view.group);
-    let world: World, source: TileSource;
+  private start(key: CityKey, raw: RawOsm | null, online: OnlineInfo | null): Promise<void> {
+    const gen = ++this.loadGen;
+    this.ui.setBusy(true);
+    return new Promise((res, rej) => setTimeout(async () => {
+      try {
+        const terrain = await loadTerrain(key); if (gen !== this.loadGen) return res();
+        await this.setup(key, raw, terrain, online); res();
+      } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); rej(e); }
+      finally { this.ui.setBusy(false); }
+    }, 30));
+  }
+
+  private async setup(key: CityKey, raw: RawOsm | null, terrain: Terrain | null, online: OnlineInfo | null): Promise<void> {
+    this.teardown();
+    let world: World, source: TileSource, fileTiles: TileData[] | null = null;
     if (raw) {
       // plik OSM: te same kafelki co z tools/fetch-osm, budowane w pamięci
-      const tiles = buildTiles(raw, key, CITIES[key].o);
-      world = new World(key, { tiles: tiles.values(), osmPoints: raw.taggedNodes(), terrain });
+      const tiles = buildTiles(raw, key, CITIES[key].o); fileTiles = [...tiles.values()];
+      world = new World(key, { tiles: fileTiles, osmPoints: raw.taggedNodes(), terrain });
       source = new MemoryTileSource(tiles, key);
     } else {
       world = new World(key, { terrain });
-      // plik otwarty z dysku (wersja jednoplikowa) nie może pobierać kafelków
-      source = location.protocol === 'file:' ? new NoTiles() : new HttpTileSource(`${import.meta.env.BASE_URL}tiles/${key}/`);
+      source = location.protocol === 'file:' ? new NoTiles() : new HttpTileSource(tilesBase(key));
     }
-    this.fromFile = !!raw;
-    this.session = new LocalSession(world);
+    let tr: Transport;
+    if (online) {
+      const ws = new WsTransport(`${online.http.replace(/^http/, 'ws')}/ws?session=${encodeURIComponent(online.session)}&name=${encodeURIComponent(online.name)}`);
+      await ws.opened; tr = ws;
+    } else {
+      const w = new LocalServer(), init: LocalInit = {
+        city: key, name: this.playerName, terrain: terrain ? terrain.encode() : null,
+        tiles: fileTiles, tilesBase: raw || location.protocol === 'file:' ? null : tilesBase(key), osmPoints: raw ? raw.taggedNodes() : null,
+      };
+      tr = new WorkerTransport(w);
+      const m: WorkerIn = { t: 'init', init }; w.postMessage(m);
+    }
+    const s = this.session = new NetSession(world, tr);
+    s.onChat = l => this.ui.onChat(l);
+    s.onPlayers = () => this.ui.onPlayers(this);
+    s.onError = t => this.ui.setStatus(t);
+    s.onClose = () => { if (this.session === s) this.ui.onChat({ from: '', color: '#ff6b6b', text: 'Rozłączono z serwerem.', sys: true, at: performance.now() }); };
+    this.fromFile = !!raw; this.online = online;
     const view = this.view = new CityView(world, source, this.xray);
     this.world3d.add(view.group);
     view.streamer.init().then(n => { if (this.view === view && n) this.ui.slowFrame(this); });
+    await Promise.race([s.ready, new Promise((_, rej) => setTimeout(() => rej(new Error('Serwer gry nie odpowiada')), 15000))]);
+    await new Promise<void>(res => { const chk = () => s.player() ? res() : setTimeout(chk, 20); chk(); });
     this.viewSeq = -1; this.syncView();
     this.lastMode = 'walk'; this.rig.reset(); this.ui.onModeChanged('walk', this.rig.fp);
     this.ui.onCityLoaded(this);
   }
 
-  get cityName(): string { return this.world ? CITIES[this.world.key].name : ''; }
+  private teardown(): void {
+    this.session?.close(); this.session = null;
+    if (this.view) { this.world3d.remove(this.view.group); this.view.dispose(); this.view = null; }
+    this.labels.clear();
+    for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
+  }
 
   // ---------- sterowanie ----------
   private look(dx: number, dy: number): void {
@@ -119,58 +170,51 @@ export class Game {
       case 'xray': this.toggleXray(); break;
       case 'menu': this.ui.onMenu(); break;
     }
-    this.afterCommand();
   }
 
-  goStation(i: number, street: boolean): void { this.session?.sendCommand({ type: 'goStation', station: i, street }); this.afterCommand(); }
-
+  goStation(i: number, street: boolean): void { this.session?.sendCommand({ type: 'goStation', station: i, street }); }
   toggleXray(): void { this.xray = !this.xray; this.view?.setXray(this.xray); this.ui.onXray(this.xray); }
+  chat(text: string): void { this.session?.chat(text); }
 
-  save(): SaveState | null { return this.session?.save() ?? null; }
+  /** Zapis i odczyt (gra jednoosobowa; w sieci stan zapisuje serwer). */
+  async save(): Promise<SaveState | null> { return this.session && !this.online ? this.session.save() : null; }
   async load(s: SaveState): Promise<void> {
-    if (!this.session) return;
-    if (s.city !== this.session.world.key) { this.doLoad(s.city as CityKey, null, await loadTerrain(s.city)); }
-    this.session.load(s); this.afterCommand();
+    if (this.online) throw new Error('W grze sieciowej postęp zapisuje serwer');
+    if (!this.session || s.city !== this.session.world.key) await this.loadCity(s.city as CityKey, null);
+    this.session!.load(s);
   }
 
-  /** Po poleceniu: przejmij kierunek patrzenia z symulacji i odśwież tryb. */
-  private afterCommand(): void {
-    if (!this.session) return;
-    this.syncView();
-    const m = this.sessionMode();
-    if (m !== this.lastMode) { this.lastMode = m; this.rig.reset(); this.ui.onModeChanged(m, this.rig.fp); }
-  }
-
+  /** Tryb (pieszo / auto / helikopter) wg serwera. */
   private sessionMode(): Mode {
-    const s = this.session!, p = s.player();
-    if (p.vehicle == null) return 'walk';
-    for (const e of s.entities()) if (e.id === p.vehicle) return e.kind === 'heli' ? 'heli' : 'car';
-    return 'walk';
+    const s = this.session!, p = s.player(); if (!p || p.vehicle == null) return 'walk';
+    const v = s.entity(p.vehicle); return v ? (v.kind === 'heli' ? 'heli' : 'car') : this.lastMode;
   }
 
   private syncView(): void {
-    const s = this.session!, p = s.player();
-    if (p.viewSeq === this.viewSeq) return; this.viewSeq = p.viewSeq;
-    for (const e of s.entities()) if (e.id === p.walker) { this.viewYaw = e.yaw; this.viewPitch = e.pitch; }
+    const p = this.session?.player(); if (!p || p.viewSeq === this.viewSeq) return;
+    this.viewSeq = p.viewSeq;
+    if (p.viewYaw != null) { this.viewYaw = p.viewYaw; this.viewPitch = p.viewPitch ?? 0; }
   }
 
-  /** Byt sterowany przez gracza. */
+  /** Byt, za którym podąża kamera (pieszy albo pojazd, także jako pasażer). */
   controlled(): Entity | null {
-    const s = this.session; if (!s) return null; const p = s.player(), id = p.vehicle ?? p.walker;
-    for (const e of s.entities()) if (e.id === id) return e;
-    return null;
+    const s = this.session, p = s?.player(); if (!s || !p) return null;
+    return s.entity(p.vehicle ?? p.walker) ?? null;
   }
+  get isPassenger(): boolean { return !!this.session?.player()?.passenger; }
 
   // ---------- pętla ----------
   private frame(now: number): void {
     requestAnimationFrame(t => this.frame(t));
-    const s = this.session; if (!s) return;
-    const dt = Math.min(.05, (now - this.last) / 1000); this.last = now;
+    const s = this.session; if (!s || !s.player()) return;
+    const raw = (now - this.last) / 1000, dt = Math.min(.05, raw); this.last = now;
     const I = this.input;
     const f = I.axis('throttle'), st = I.axis('steer');
     s.sendInput({ f, s: st, run: I.button('run'), brake: I.button('handbrake'), lift: I.axis('lift'), yaw: this.viewYaw, pitch: this.viewPitch });
-    const alpha = s.advance(dt);
-    this.afterCommand();
+    const alpha = s.advance(Math.min(.25, raw)); // stały krok nadrabia wolne klatki
+    this.syncView();
+    const m = this.sessionMode();
+    if (m !== this.lastMode) { this.lastMode = m; this.rig.reset(); this.ui.onModeChanged(m, this.rig.fp); }
     const me = this.controlled(); if (!me) return;
     const pv = s.previous(me.id) ?? me, P = this.pose;
     P.x = lerp(pv.x, me.x, alpha); P.y = lerp(pv.y, me.y, alpha); P.z = lerp(pv.z, me.z, alpha); P.yaw = lerpAngle(pv.yaw, me.yaw, alpha);
@@ -184,29 +228,38 @@ export class Game {
       const top = (x: number, z: number) => w.roofTop(x, z);
       if (mode === 'car') cam.chase(V, 9, 2.2, 1.2, dt, now, top); else cam.chase(V, 17, 5, 2.5, dt, now, top);
     }
-    {
-      const radius = mode === 'heli' ? Math.min(3000, 900 + alt * 10) : mode === 'car' ? 1200 : under ? 600 : 900;
-      this.view!.update(P.x, P.z, radius);
-    }
+    const radius = mode === 'heli' ? Math.min(3000, 900 + alt * 10) : mode === 'car' ? 1200 : under ? 600 : 900;
+    this.view!.update(P.x, P.z, radius);
     const { grid, fog } = this.ctx;
-    {
-      const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
-      grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);
-    }
+    const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
+    grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);
     fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + alt * 12) : mode === 'car' ? 900 : 650;
     if (now - this.lastSlow > 500) { this.lastSlow = now; this.labels.update(w, P.x, P.z); this.view!.slowUpdate(P.x, P.z); this.ui.slowFrame(this); }
     this.ctx.renderer.render(this.ctx.scene, this.ctx.camera);
     this.ui.frame(this);
   }
 
-  /** Modele pojazdów: jeden na byt, interpolowane między krokami symulacji. */
+  /** Pojazdy i postacie innych graczy; własny byt interpolowany między krokami przewidywania. */
   private renderEntities(alpha: number, dt: number): void {
-    const s = this.session!, p = s.player(), seen = new Set<number>();
+    const s = this.session!, p = s.player()!, seen = new Set<number>();
     for (const e of s.entities()) {
-      if (e.kind === 'walker') continue; seen.add(e.id);
+      if (e.kind === 'walker' && (e.id === p.walker || e.hide)) continue;
+      seen.add(e.id);
       let m = this.models.get(e.id);
-      if (!m) { m = e.kind === 'car' ? makeCar() : makeHeli(); this.models.set(e.id, m); this.world3d.add(m.root); }
+      if (!m) {
+        if (e.kind === 'walker') { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?'); }
+        else m = e.kind === 'car' ? makeCar() : makeHeli();
+        this.models.set(e.id, m); this.world3d.add(m.root);
+      }
       const pv = s.previous(e.id) ?? e, x = lerp(pv.x, e.x, alpha), y = lerp(pv.y, e.y, alpha), z = lerp(pv.z, e.z, alpha), yaw = lerpAngle(pv.yaw, e.yaw, alpha);
+      if (e.kind === 'walker') {
+        const a = m as AvatarModel, w = this.walkPhase.get(e.id) ?? { x, z, ph: 0 }, sp = Math.hypot(x - w.x, z - w.z) / Math.max(dt, 1e-3);
+        w.ph += sp * dt * 2.2; w.x = x; w.z = z; this.walkPhase.set(e.id, w);
+        const sw = Math.min(1, sp / 4) * Math.sin(w.ph) * .6;
+        a.legs[0].rotation.x = sw; a.legs[1].rotation.x = -sw; a.arms[0].rotation.x = -sw; a.arms[1].rotation.x = sw;
+        a.root.position.set(x, y, z); a.root.rotation.set(0, yaw, 0);
+        continue;
+      }
       m.root.visible = !(e.id === p.vehicle && this.rig.fp);
       if (e.kind === 'car') { m.root.position.set(x, y, z); m.root.rotation.set(0, yaw, 0); m.root.rotateZ(e.roll); }
       else {
@@ -214,6 +267,6 @@ export class Game {
         m.rotor!.rotation.y += dt * (e.driver == null ? 0 : e.air || e.lift > 0 ? 30 : 10); m.trotor!.rotation.x += dt * 45;
       }
     }
-    for (const [id, m] of this.models) if (!seen.has(id)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(id); }
+    for (const [id, m] of this.models) if (!seen.has(id)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(id); this.walkPhase.delete(id); }
   }
 }

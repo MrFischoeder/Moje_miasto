@@ -35,7 +35,9 @@ export class Input {
   }
 
   private keyboard(): void {
+    const typing = (e: KeyboardEvent) => { const t = e.target as HTMLElement | null; return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'); };
     addEventListener('keydown', e => {
+      if (typing(e)) return;
       this.keys[e.code] = true;
       if (e.code === 'Space') e.preventDefault();
       if (e.repeat) return;
