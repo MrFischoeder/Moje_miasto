@@ -8,8 +8,9 @@ const air = new AirTraffic(data), g = () => 0;
 
 describe('ruch lotniczy', () => {
   it('Heathrow w dzień: kilka samolotów naraz, w nocy cisza; powtarzalnie', () => {
-    const day = air.active(10 * 3600, '2026-11-25', g).filter(f => f.ap.iata === 'LHR');
-    expect(day.length).toBeGreaterThan(1);
+    let sum = 0, n = 0; for (let t = 10 * 3600; t < 11 * 3600; t += 30, n++) sum += air.active(t, '2026-11-25', g).filter(f => f.ap.iata === 'LHR').length;
+    expect(sum / n).toBeGreaterThan(1.5); // ~38 operacji/h po ~4,5 min
+    const day = air.active(10 * 3600, '2026-11-25', g);
     expect(air.active(3 * 3600, '2026-11-25', g).filter(f => f.ap.iata === 'LHR').length).toBe(0);
     expect(air.active(10 * 3600, '2026-11-25', g).map(f => f.id)).toEqual(day.map(f => f.id));
   });
