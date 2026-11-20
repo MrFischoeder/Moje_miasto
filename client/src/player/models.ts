@@ -8,7 +8,7 @@ function part(geo: THREE.BufferGeometry, x: number, y: number, z: number, fill: 
   g.position.set(x, y, z); return g;
 }
 
-export interface VehicleModel { root: THREE.Group; rotor?: THREE.Group; trotor?: THREE.Group }
+export interface VehicleModel { root: THREE.Group; rotor?: THREE.Group; trotor?: THREE.Group; lights?: THREE.Group[] }
 
 export function makeCar(edge = 0xffcc33): VehicleModel {
   const car = new THREE.Group(), E = edge, F = new THREE.Color(edge).multiplyScalar(.1).getHex();
@@ -20,6 +20,16 @@ export function makeCar(edge = 0xffcc33): VehicleModel {
     car.add(part(new THREE.BoxGeometry(.4, .15, .05), x, .75, 2.22, 0xff2a2a, 0xff6666));
   }
   return { root: car };
+}
+
+/** Radiowóz: biało-niebieskie krawędzie, migająca belka świetlna (czerwony/niebieski). */
+export function makePoliceCar(): VehicleModel {
+  const m = makeCar(0x4a8cff), bar = new THREE.Group();
+  bar.add(part(new THREE.BoxGeometry(1.2, .14, .3), 0, 1.65, .25, 0x0a0a14, 0xe8f0ff));
+  const red = part(new THREE.BoxGeometry(.5, .16, .32), -.33, 1.66, .25, 0xff2a2a, 0xff8080), blue = part(new THREE.BoxGeometry(.5, .16, .32), .33, 1.66, .25, 0x2a5aff, 0x80a0ff);
+  bar.add(red, blue); m.root.add(bar);
+  for (const x of [-.96, .96]) m.root.add(part(new THREE.BoxGeometry(.02, .12, 3.6), x, .7, 0, 0xe8f0ff, 0xe8f0ff));
+  return { root: m.root, lights: [red, blue] };
 }
 
 export function makeHeli(): VehicleModel {
@@ -53,6 +63,13 @@ export function makeAvatar(color: string, name: string): AvatarModel {
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
   label.scale.set(1.6, .4, 1); label.position.y = 2.35; label.renderOrder = 10; if (name) root.add(label);
   return { root, legs, arms, label };
+}
+
+/** Policjant: granatowy mundur, czapka. */
+export function makeOfficer(): AvatarModel {
+  const a = makeAvatar('#4a8cff', '');
+  a.root.add(part(new THREE.BoxGeometry(.34, .1, .36), 0, 1.98, -.03, 0x0a1430, 0x4a8cff));
+  return a;
 }
 
 /** Samolot pasażerski (kadłub, skrzydła, usterzenie, silniki) w skali wg rozmiaru. */

@@ -48,6 +48,11 @@ const ui: GameUI = {
   setStatus(t) { $('status').textContent = t; },
   onMenu: openMenu,
   onChat(l) { addChat(l.from, l.color, l.text, l.sys); },
+  onEvent(text, kind) {
+    const box = $('evt'), d = document.createElement('div'); d.className = kind; d.textContent = text; box.append(d);
+    while (box.children.length > 3) box.firstChild!.remove();
+    setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 700); }, kind === 'info' ? 2600 : 4500);
+  },
   onPlayers(g) { info(g); },
   onXray(on) { $('xrayBtn').className = on ? 'on' : 'ghost'; },
   onModeChanged(mode) {
@@ -70,6 +75,14 @@ const ui: GameUI = {
     $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)); info(g);
   },
   frame(g) {
+    const st = g.session?.me;
+    if (st) {
+      const hp = Math.max(0, Math.min(100, st.hp));
+      $('hpFill').style.width = hp + '%'; $('hpBar').classList.toggle('low', hp < 30);
+      $('money').textContent = `${st.money.toFixed(2).replace(/\.00$/, '')} ${st.cur}`;
+      $('stars').textContent = '★'.repeat(st.wanted) + '☆'.repeat(5 - st.wanted); $('stars').classList.toggle('flash', st.wanted > 0);
+      document.body.classList.toggle('dead', st.dead);
+    }
     const w = g.world, P = g.pose, gr = w ? w.ground(P.x, P.z) : 0;
     const s = g.session, me = s?.player(), others = [];
     if (s && me) for (const p of s.players.values()) if (p.id !== me.id) { const e = s.entity(p.vehicle ?? p.walker); if (e) others.push({ x: e.x, z: e.z, color: p.color }); }

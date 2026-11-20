@@ -91,12 +91,21 @@ export interface PedHost {
 export class Pedestrians {
   readonly graph = new WalkGraph();
   readonly peds = new Map<number, Ped>();
+  /** potrąceni: leżą chwilę, potem znikają */
+  private down = new Map<number, { e: Entity; t: number }>();
   private R = rng('piesi');
   private tileCount = -1; private tick = 0;
   constructor(private host: PedHost) {}
 
+  /** Potrącenie: pieszy przewraca się i znika po 20 s. */
+  knock(id: number): boolean {
+    const p = this.peds.get(id); if (!p) return false;
+    this.peds.delete(id); p.e.tilt = -Math.PI / 2; p.e.speed = 0; this.down.set(id, { e: p.e, t: 20 }); return true;
+  }
+
   step(dt: number, hour: number, players: { x: number; z: number }[]): void {
     const W = this.host.world;
+    for (const [id, d] of this.down) { d.t -= dt; if (d.t <= 0) { this.down.delete(id); this.host.despawn(id); } }
     if (W.tiles.size !== this.tileCount || this.tick++ % 30 === 0) {
       this.tileCount = W.tiles.size;
       if (this.graph.sync(W)) for (const p of [...this.peds.values()]) if (!this.graph.has(p.edge)) this.remove(p);

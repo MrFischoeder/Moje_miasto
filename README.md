@@ -46,6 +46,10 @@ python3 tools/airports.py --city warszawa --pbf Warsaw.osm.pbf
 W grze: E przy stojącym autobusie, tramwaju, pociągu albo metrze = wsiadasz; E albo 1 na przystanku = wysiadasz.
 W menu (gra jednoosobowa): godzina gry (np. szczyt 7:30, noc 2:00) i tempo czasu (×1–×300).
 
+Przestępstwa i policja: E przy zatrzymanym aucie NPC = kradzież (★). Policja wyjeżdża z prawdziwych komisariatów,
+policjanci wysiadają i zatrzymują (grzywna). HUD: zdrowie, pieniądze (bilety po prawdziwych cenach), gwiazdki.
+Śmierć = odrodzenie przy szpitalu. Szczegóły w [`docs/ARCHITEKTURA-SWIAT.md`](docs/ARCHITEKTURA-SWIAT.md#zasady-gry-policja-zdrowie-pieniądze-sharedsrcgamerulests-sharedsrctrafficpolicets).
+
 ## Uruchomienie dla programisty
 
 ```bash

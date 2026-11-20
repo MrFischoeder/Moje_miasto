@@ -15,7 +15,7 @@ test('przejęcie auta NPC i piesi na chodnikach', async ({ page }) => {
   await expect.poll(() => count('car'), { timeout: 60_000 }).toBeGreaterThan(10);
   // stań przed jadącym autem; jeśli skręci w inną ulicę, spróbuj z następnym
   let car = -1;
-  for (let attempt = 0; attempt < 6 && car < 0; attempt++) {
+  for (let attempt = 0; attempt < 12 && car < 0; attempt++) {
     const id = await page.evaluate(n => {
       const g = (window as unknown as G).__game, me = g.controlled();
       const cs = [...g.session.entities()].filter((e: { npc?: boolean; kind: string; speed: number }) => e.npc && e.kind === 'car' && e.speed > 3)
@@ -28,10 +28,15 @@ test('przejęcie auta NPC i piesi na chodnikach', async ({ page }) => {
     if (ok) car = id;
   }
   expect(car).toBeGreaterThan(0);
-  await page.evaluate(id => { const g = (window as unknown as G).__game, c = g.session.entity(id); g.session.sendCommand({ type: 'teleport', x: c.x - Math.cos(c.yaw) * 2, z: c.z + Math.sin(c.yaw) * 2 }); }, car);
+  await page.evaluate(id => { const g = (window as unknown as G).__game, c = g.session.entity(id); g.session.sendCommand({ type: 'teleport', x: c.x - Math.cos(c.yaw) * 1.8 - Math.sin(c.yaw) * 1.2, z: c.z + Math.sin(c.yaw) * 1.8 - Math.cos(c.yaw) * 1.2 }); }, car); // przy przednim błotniku: auto dalej hamuje
   await page.waitForTimeout(800);
   await page.evaluate(() => (window as unknown as G).__game.action('interact'));
   await expect(page.locator('#loc')).toContainText('Samochód', { timeout: 10_000 });
   expect(await page.evaluate(() => (window as unknown as G).__game.session.player().vehicle)).toBe(car);
+  // kradzież: gwiazdka w HUD, komunikat, policja wysyła radiowóz
+  await expect(page.locator('#stars')).toContainText('★', { timeout: 5_000 });
+  await expect(page.locator('#evt')).toContainText('Kradzież');
+  await expect(page.locator('#money')).toContainText('zł');
+  await expect.poll(() => page.evaluate(() => [...(window as unknown as G).__game.session.entities()].some((e: { police?: boolean; kind: string }) => e.police && e.kind === 'car')), { timeout: 15_000 }).toBe(true);
   expect(errors).toEqual([]);
 });

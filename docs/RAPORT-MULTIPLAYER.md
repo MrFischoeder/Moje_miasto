@@ -1,6 +1,6 @@
 # Raport: test obciążenia serwera (boty)
 
-Wygenerowany: 2026-11-20 22:52 UTC, `npm run bots` (10 s na scenariusz, po 3 s rozgrzewki).
+Wygenerowany: 2026-11-20 23:13 UTC, `npm run bots` (12 s na scenariusz, po 3 s rozgrzewki).
 Maszyna: linux, Node v22.23.5. Serwer w osobnym procesie, boty przez prawdziwe WebSockety na tym samym komputerze.
 Świat: Warszawa z terenem, bez kafelków OSM (zablokowane pobieranie), więc kolizje z budynkami nie obciążają kroku.
 
@@ -9,12 +9,14 @@ Boty: 1/3 jeździ autem, 1/3 lata helikopterem, 1/3 chodzi; wejście 30 Hz jak p
 
 | scenariusz | graczy | krok śr. [ms] | krok maks. [ms] | budżet kroku 33 ms | w dół [KB/s/gracza] | w górę [KB/s/gracza] | migawki/s | byty |
 |---|---|---|---|---|---|---|---|---|
-| rozproszeni | 8 | 2.01 | 28.8 | 6.0% | 2.9 | 0.4 | 15.0 | 116 |
-| rozproszeni | 32 | 3.99 | 18.7 | 12.0% | 3.3 | 0.4 | 14.9 | 166 |
-| rozproszeni | 64 | 6.23 | 19.2 | 18.7% | 4.5 | 0.4 | 15.0 | 240 |
-| skupieni | 8 | 0.48 | 4.4 | 1.4% | 6.8 | 0.4 | 15.0 | 37 |
-| skupieni | 32 | 1.09 | 4.4 | 3.3% | 13.5 | 0.4 | 15.0 | 79 |
-| skupieni | 64 | 2.59 | 9.8 | 7.8% | 22.9 | 0.4 | 14.9 | 140 |
+| rozproszeni | 8 | 2.34 | 23.3 | 7.0% | 2.2 | 0.4 | 15.0 | 82 |
+| rozproszeni | 16 | 3.53 | 26.1 | 10.6% | 2.0 | 0.4 | 15.1 | 85 |
+| rozproszeni | 32 | 5.67 | 33.5 | 17.0% | 4.4 | 0.4 | 15.0 | 135 |
+| rozproszeni | 64 | 10.52 | 55.7 | 31.5% | 6.5 | 0.4 | 15.0 | 204 |
+| skupieni | 8 | 0.62 | 6.0 | 1.8% | 5.4 | 0.4 | 15.0 | 30 |
+| skupieni | 16 | 0.79 | 7.1 | 2.4% | 7.4 | 0.4 | 15.0 | 45 |
+| skupieni | 32 | 1.41 | 14.0 | 4.2% | 11.0 | 0.4 | 15.0 | 70 |
+| skupieni | 64 | 3.11 | 17.5 | 9.3% | 19.6 | 0.4 | 15.0 | 131 |
 
 ## Wnioski
 

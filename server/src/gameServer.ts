@@ -19,7 +19,7 @@ export class GameServer {
   readonly http: Server;
   private wss: WebSocketServer;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private saved: Record<string, { x: number; y: number; z: number; yaw: number }> = {};
+  private saved: Record<string, { x: number; y: number; z: number; yaw: number; money?: number }> = {};
   private nextSession = 1;
 
   constructor(readonly opt: ServerOptions) {

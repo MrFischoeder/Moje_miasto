@@ -20,7 +20,7 @@ import { EMBEDDED_TILES } from '../world/embedded';
 import { decodeTile, HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
-import { disposeModel, makeAvatar, makeCar, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
+import { disposeModel, makeAvatar, makeOfficer, makePoliceCar, makeCar, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
 import { Input } from '../input/input';
 import type { Action } from '../input/bindings';
 import { NetSession, type ChatLine } from '../net/netSession';
@@ -34,6 +34,7 @@ export interface GameUI {
   onXray(on: boolean): void;
   onMenu(): void;
   onChat(l: ChatLine): void;
+  onEvent(text: string, kind: 'crime' | 'arrest' | 'death' | 'info'): void;
   onPlayers(game: Game): void;
   setBusy(on: boolean): void;
   setStatus(text: string): void;
@@ -155,6 +156,7 @@ export class Game {
     }
     const s = this.session = new NetSession(world, tr);
     s.onChat = l => this.ui.onChat(l);
+    s.onEvent = (t, k) => this.ui.onEvent(t, k);
     s.onPlayers = () => this.ui.onPlayers(this);
     s.onError = t => this.ui.setStatus(t);
     s.onClose = () => { if (this.session === s) this.ui.onChat({ from: '', color: '#ff6b6b', text: 'Rozłączono z serwerem.', sys: true, at: performance.now() }); };
@@ -305,10 +307,11 @@ export class Game {
       let m = this.models.get(e.id);
       if (!m) {
         if (e.kind === 'walker') {
-          if (e.npc) m = makeAvatar(PED_COLORS[e.id % PED_COLORS.length], '');
+          if (e.police) m = makeOfficer();
+          else if (e.npc) m = makeAvatar(PED_COLORS[e.id % PED_COLORS.length], '');
           else { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?'); }
         }
-        else m = e.kind === 'car' ? makeCar(e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : undefined) : makeHeli();
+        else m = e.kind === 'car' ? (e.police ? makePoliceCar() : makeCar(e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : undefined)) : makeHeli();
         this.models.set(e.id, m); this.world3d.add(m.root);
       }
       const pv = s.previous(e.id) ?? e, x = lerp(pv.x, e.x, alpha), y = lerp(pv.y, e.y, alpha), z = lerp(pv.z, e.z, alpha), yaw = lerpAngle(pv.yaw, e.yaw, alpha);
@@ -317,11 +320,14 @@ export class Game {
         w.ph += sp * dt * 2.2; w.x = x; w.z = z; this.walkPhase.set(e.id, w);
         const sw = Math.min(1, sp / 4) * Math.sin(w.ph) * .6;
         a.legs[0].rotation.x = sw; a.legs[1].rotation.x = -sw; a.arms[0].rotation.x = -sw; a.arms[1].rotation.x = sw;
-        a.root.position.set(x, y, z); a.root.rotation.set(0, yaw, 0);
+        a.root.position.set(x, y + (e.tilt ? .15 : 0), z); a.root.rotation.set(0, yaw, 0); a.root.rotateX(e.tilt);
         continue;
       }
       m.root.visible = !(e.id === p.vehicle && this.rig.fp);
-      if (e.kind === 'car') { m.root.position.set(x, y, z); m.root.rotation.set(0, yaw, 0); m.root.rotateZ(e.roll); }
+      if (e.kind === 'car') {
+        m.root.position.set(x, y, z); m.root.rotation.set(0, yaw, 0); m.root.rotateZ(e.roll);
+        if (m.lights) { const ph = Math.floor(performance.now() / 160) % 2; m.lights[0].visible = ph === 0; m.lights[1].visible = ph === 1; }
+      }
       else {
         m.root.position.set(x, y, z); m.root.rotation.set(e.tilt, yaw, e.roll);
         m.rotor!.rotation.y += dt * (e.driver == null ? 0 : e.air || e.lift > 0 ? 30 : 10); m.trotor!.rotation.x += dt * 45;

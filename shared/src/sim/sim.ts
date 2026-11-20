@@ -4,9 +4,13 @@ import type { World } from '../world/world';
 import type { TransitSystem } from '../transit/system';
 import { Traffic } from '../traffic/traffic';
 import { Pedestrians } from '../traffic/peds';
+import { Rules } from '../game/rules';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
 import { NO_INPUT, PLAYER_COLORS, SEATS, type Command, type Entity, type EntityKind, type InputCmd, type Mode, type PlayerState, type SaveState } from './types';
+
+/** Pieniądze na start. */
+export const START_MONEY = 500;
 
 /** Promień, w którym można wsiąść do pojazdu. */
 export const ENTER_RADIUS = 4.5;
@@ -33,9 +37,20 @@ export class Simulation {
   /** piesi NPC wokół graczy */
   peds: Pedestrians | null = null;
 
-  /** Włącza ruch uliczny (auta NPC) i pieszych NPC. */
+  /** zasady gry: przestępstwa, policja, zdrowie, pieniądze */
+  rules: Rules | null = null;
+
+  /** Włącza ruch uliczny (auta NPC), pieszych NPC, policję i zasady gry. */
   enableTraffic(): Traffic {
     this.peds = new Pedestrians({ world: this.world, spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw), despawn: id => { this.entities.delete(id); } });
+    this.rules = new Rules({
+      world: this.world, players: () => this.players.values(), entity: id => this.entities.get(id),
+      spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw), despawn: id => { this.entities.delete(id); },
+      get traffic() { return sim.traffic; }, get peds() { return sim.peds; },
+      dropOut: p => { if (p.ride) this.leaveRide(p, null); else this.exitVehicle(p, true); },
+      place: (p, x, z) => this.place(p, x, z),
+    });
+    const sim = this;
     return this.traffic = new Traffic({
       world: this.world,
       spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw),
@@ -43,6 +58,7 @@ export class Simulation {
       obstacles: () => {
         const out: Entity[] = []; for (const p of this.players.values()) { const e = this.controlled(p); if (!e.hide) out.push(e); }
         if (this.peds) for (const p of this.peds.peds.values()) out.push(p.e);
+        if (this.rules) for (const e of this.rules.police.entities()) if (e.kind === 'walker') out.push(e);
         return out;
       },
     });
@@ -53,12 +69,21 @@ export class Simulation {
     const pts: { x: number; z: number }[] = []; for (const p of this.players.values()) { const w = this.entity(p.walker); pts.push({ x: w.x, z: w.z }); }
     this.traffic.step(SIM_DT, t, hour, pts);
     this.peds?.step(SIM_DT, hour, pts);
+    this.rules?.step(SIM_DT, t);
   }
 
-  /** Przejęcie auta NPC: kierowca wyrzucony (ucieka chodnikiem), gracz siada za kierownicą. */
+  /** Przeniesienie pieszego gracza w punkt (teleport, szpital, komisariat). */
+  place(p: PlayerState, x: number, z: number): void {
+    const w = this.entity(p.walker); w.x = x; w.z = z; w.y = this.world.surfaceAt(x, z, 1e6); w.reg = -1; w.hide = false;
+    p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0;
+  }
+
+  /** Przejęcie auta NPC albo radiowozu: kierowca wyrzucony (ucieka chodnikiem), gracz siada za kierownicą. */
   private hijack(p: PlayerState, v: Entity): boolean {
-    if (!this.traffic || Math.abs(v.speed) > 2) return false;
-    if (!this.traffic.release(v.id)) return false;
+    if (Math.abs(v.speed) > 2) return false;
+    if (this.rules?.police.isUnitCar(v.id)) { this.rules.police.release(v.id); this.rules.crime(p, 2, 'Kradzież radiowozu'); this.enter(p, v); return true; }
+    if (!this.traffic || !this.traffic.release(v.id)) return false;
+    this.rules?.crime(p, 1, 'Kradzież auta');
     const rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw), side = this.world.key === 'londyn' ? 1 : -1; // drzwi kierowcy
     this.peds?.flee(v.x + rx * 1.8 * side, v.z + rz * 1.8 * side);
     v.speed = 0; this.enter(p, v); return true;
@@ -87,7 +112,7 @@ export class Simulation {
     if (at) { Object.assign(w, at); const g = this.world.support(w.x, w.z, w.y); w.reg = g && g.r ? g.r.id : -1; }
     const used = new Set([...this.players.values()].map(q => q.color));
     const color = PLAYER_COLORS.find(c => !used.has(c)) ?? PLAYER_COLORS[this.players.size % PLAYER_COLORS.length];
-    const p: PlayerState = { id: w.id, name, walker: w.id, vehicle: null, passenger: false, ride: null, color, viewSeq: 1, viewYaw: w.yaw, viewPitch: w.pitch };
+    const p: PlayerState = { id: w.id, name, walker: w.id, vehicle: null, passenger: false, ride: null, color, hp: 100, money: START_MONEY, wanted: 0, seenAt: 0, hurtAt: 0, dead: 0, viewSeq: 1, viewYaw: w.yaw, viewPitch: w.pitch };
     w.owner = p.id;
     this.players.set(p.id, p);
     return p;
@@ -105,14 +130,14 @@ export class Simulation {
   /** Byt, za którym podąża gracz (pieszy albo pojazd, także jako pasażer). */
   controlled(p: PlayerState): Entity { return this.entity(p.vehicle ?? p.walker); }
   /** Byt, którym gracz steruje (null dla pasażera). */
-  driven(p: PlayerState): Entity | null { return p.passenger || p.ride ? null : this.controlled(p); }
+  driven(p: PlayerState): Entity | null { return p.passenger || p.ride || p.dead ? null : this.controlled(p); }
 
   // ---------- wejście ----------
   setInput(pid: number, cmd: InputCmd): void { this.inputs.set(pid, cmd); }
 
   /** Polecenie gracza; zwraca komunikat dla gracza (np. „drzwi zamknięte”) albo undefined. */
   command(pid: number, c: Command): string | undefined {
-    const p = this.players.get(pid); if (!p) return;
+    const p = this.players.get(pid); if (!p || p.dead) return;
     if (p.ride) {
       if (c.type === 'goStation') { this.leaveRide(p, null); }
       else if (c.type === 'enter' || c.type === 'alight' || c.type === 'mode') return this.alight(p);
@@ -143,12 +168,17 @@ export class Simulation {
   /** Jeden krok sterowanego bytu gracza (serwer: jeden krok na jedno wejście klienta). */
   stepPlayer(pid: number, cmd: InputCmd): void {
     const p = this.players.get(pid), e = p && this.driven(p); if (!e) return;
-    const x = e.x, z = e.z, yaw = e.yaw;
+    const x = e.x, z = e.z, yaw = e.yaw, v0 = e.speed;
     stepEntity(e, cmd, SIM_DT, this.world);
-    // zderzenie auta gracza z autem NPC (prosto: okręgi 3,2 m)
-    if (e.kind === 'car' && this.traffic) for (const c of this.traffic.cars.values()) {
-      const o = c.e; if (Math.abs(o.x - e.x) > 6 || Math.abs(o.z - e.z) > 6) continue;
-      if (Math.hypot(o.x - e.x, o.z - e.z) < 3.2) { e.x = x; e.z = z; e.yaw = yaw; e.speed *= -.3; c.v = 0; break; }
+    // zderzenie auta gracza z autami NPC, radiowozami i innymi autami (prosto: okręgi 3,2 m)
+    if (e.kind === 'car') for (const o of this.entities.values()) {
+      if (o === e || o.kind !== 'car' || Math.abs(o.x - e.x) > 6 || Math.abs(o.z - e.z) > 6 || Math.abs(o.y - e.y) > 2) continue;
+      if (Math.hypot(o.x - e.x, o.z - e.z) < 3.2) { e.x = x; e.z = z; e.yaw = yaw; e.speed *= -.3; const c = this.traffic?.cars.get(o.id); if (c) c.v = 0; break; }
+    }
+    // mocne uderzenie (w budynek albo auto) rani kierowcę i pasażerów
+    if (e.kind === 'car' && Math.abs(v0) > 12 && Math.sign(e.speed) !== Math.sign(v0) && this.rules) {
+      const dmg = (Math.abs(v0) - 12) * 3;
+      for (const q of this.players.values()) if (q.vehicle === e.id) this.rules.hurt(q, dmg, 'wypadek');
     }
   }
 
@@ -171,7 +201,7 @@ export class Simulation {
   board(p: PlayerState): boolean {
     if (!this.transit || p.vehicle != null || p.ride) return false;
     const w = this.entity(p.walker), a = this.transit.boardable(w.x, w.y, w.z); if (!a) return false;
-    p.ride = a.key; w.hide = true; w.reg = -1; return true;
+    p.ride = a.key; w.hide = true; w.reg = -1; this.rules?.fare(p); return true;
   }
   /** Wysiada, jeśli pojazd stoi na przystanku. */
   alight(p: PlayerState): string | undefined {
@@ -287,7 +317,7 @@ export class Simulation {
       if (c.kind === 'walker') { const g = this.world.support(c.x, c.z, c.y); c.reg = g && g.r ? g.r.id : -1; }
       this.entities.set(c.id, c);
     }
-    for (const p of s.players) this.players.set(p.id, { ...p, ride: null, passenger: p.passenger ?? false, color: p.color ?? PLAYER_COLORS[0], viewSeq: p.viewSeq + 1 });
+    for (const p of s.players) this.players.set(p.id, { ...p, hp: p.hp ?? 100, money: p.money ?? START_MONEY, wanted: p.wanted ?? 0, seenAt: 0, hurtAt: 0, dead: 0, ride: null, passenger: p.passenger ?? false, color: p.color ?? PLAYER_COLORS[0], viewSeq: p.viewSeq + 1 });
     for (const e of this.entities.values()) { e.pass ??= []; e.hide ??= false; }
   }
 }

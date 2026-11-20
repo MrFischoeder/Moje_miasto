@@ -27,6 +27,8 @@ export interface Entity {
   hide: boolean;
   /** pojazd z kierowcą NPC (ruch uliczny) */
   npc?: boolean;
+  /** policja (radiowóz albo policjant) */
+  police?: boolean;
   /** właściciel (pojazd przywoływany przez gracza) */
   owner: number | null;
 }
@@ -44,6 +46,18 @@ export interface PlayerState {
   ride: string | null;
   /** kolor gracza (#rrggbb) */
   color: string;
+  /** zdrowie 0..100 */
+  hp: number;
+  /** pieniądze (w walucie miasta) */
+  money: number;
+  /** poziom poszukiwania 0..5 */
+  wanted: number;
+  /** czas zegara gry [s], gdy policja ostatnio widziała gracza */
+  seenAt: number;
+  /** czas ostatniego obrażenia [s] (regeneracja po przerwie) */
+  hurtAt: number;
+  /** odliczanie do odrodzenia po śmierci [s] (0 = żyje) */
+  dead: number;
   /**
    * Rośnie, gdy symulacja sama ustawia kierunek patrzenia pieszego
    * (teleport, wyjście z pojazdu). Klient przejmuje wtedy yaw/pitch z bytu.

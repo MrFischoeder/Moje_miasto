@@ -45,6 +45,9 @@ export class NetSession {
   private savedWait: ((s: SaveState) => void) | null = null;
   ready: Promise<void>;
   private readyRes!: () => void;
+  /** własny stan z serwera: zdrowie, pieniądze, gwiazdki */
+  readonly me = { hp: 100, money: 0, wanted: 0, dead: false, cur: 'zł' };
+  onEvent: (text: string, kind: 'crime' | 'arrest' | 'death' | 'info') => void = () => {};
   onChat: (l: ChatLine) => void = () => {};
   onPlayers: () => void = () => {};
   onError: (text: string) => void = () => {};
@@ -82,6 +85,8 @@ export class NetSession {
       } else if (m.t === 'players') { this.players.clear(); for (const p of m.list) this.players.set(p.id, p); this.onPlayers(); }
       else if (m.t === 'chat') this.onChat({ ...m, at: performance.now() });
       else if (m.t === 'time') this.clock.set(m.time, m.scale);
+      else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur });
+      else if (m.t === 'event') this.onEvent(m.text, m.kind);
       else if (m.t === 'saved') { this.savedWait?.(m.data); this.savedWait = null; }
       else if (m.t === 'error') this.onError(m.text);
       return;

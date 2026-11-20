@@ -59,3 +59,18 @@ Ten sam model dwóch poziomów:
    NPC na chodnikach i przejściach, pasażerami pojazdów komunikacji albo kierowcami aut z ruchu ulicznego;
    osoby „w budynku” pojawiają się we wnętrzach (etap wnętrz). Po oddaleniu gracza wracają do planu.
 4. Natężenie ruchu ulicznego i obłożenie pojazdów komunikacji będzie wynikać z planów mieszkańców zamiast z krzywej godzinowej.
+
+## Zasady gry: policja, zdrowie, pieniądze (`shared/src/game/rules.ts`, `shared/src/traffic/police.ts`)
+
+Wszystko liczy serwer (autorytatywnie); klient dostaje tylko swój stan (`me`: zdrowie, pieniądze, gwiazdki) i komunikaty (`event`).
+
+- **Poziom poszukiwania 0–5 ★.** Kradzież auta +1, kradzież radiowozu +2, potrącenie pieszego +1, policjanta +2, innego gracza +1.
+  Gwiazdki spadają o jedną, gdy żaden policjant nie widzi gracza (150 m) przez 30 s + 10 s × poziom.
+- **Policja.** Liczba radiowozów zależy od gwiazdek (1, 2, 3, 4, 6). Radiowóz wyjeżdża z najbliższego komisariatu z OSM
+  (do 700 m), inaczej ze skrzyżowania 180–320 m od gracza; jedzie grafem ulic, zwalnia przed zakrętami, cofa, gdy utknie.
+  Przy stojącym celu policjanci wysiadają i biegną; zatrzymanie po 1,6 s w zasięgu 1,8 m. Kradzież radiowozu jest możliwa.
+- **Zatrzymanie:** grzywna (100 zł / £50 albo 10% gotówki, jeśli więcej), gwiazdki zerowane, wypuszczenie przy komisariacie.
+- **Zdrowie 0–100:** zderzenia aut (powyżej 12 m/s), potrącenia; regeneracja po 8 s bez obrażeń.
+  Śmierć: utrata 100 zł / £50, po 4 s odrodzenie przy najbliższym szpitalu z OSM.
+- **Pieniądze:** start 500 zł / £500, prawdziwa cena biletu jednorazowego (Warszawa 4,40 zł, Londyn £1,75) pobierana przy wsiadaniu;
+  bez pieniędzy jazda na gapę. Stan zapisywany na serwerze razem z pozycją.

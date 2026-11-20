@@ -30,6 +30,8 @@ export interface TileLoader { has(x: number, y: number): boolean; load(x: number
 
 interface Client {
   conn: Conn; player: PlayerState;
+  /** ostatnio wysłany stan gracza (hp, pieniądze, gwiazdki) */
+  meSig: string;
   inputs: InputMsg[]; ack: number;
   /** żetony: ile wejść wolno przetworzyć (średnio jedno na krok serwera) */
   credit: number;
@@ -60,7 +62,7 @@ export class Room {
   private timing = { sum: 0, n: 0, max: 0, bytes: 0, since: 0 };
   stats: RoomStats = { players: 0, entities: 0, tiles: 0, tick: 0, tickMs: 0, tickMsMax: 0, bytesPerClientPerSec: 0 };
   /** zapis stanu graczy przy wyjściu (serwer zapisuje w pliku) */
-  onLeave: (p: PlayerState, pos: { x: number; y: number; z: number; yaw: number }) => void = () => {};
+  onLeave: (p: PlayerState, pos: { x: number; y: number; z: number; yaw: number; money: number }) => void = () => {};
 
   constructor(readonly id: string, readonly world: World, private tiles: TileLoader | null, opt: RoomOptions = {}, private now: () => number = () => Date.now()) {
     this.sim = new Simulation(world);
@@ -77,13 +79,13 @@ export class Room {
   get full(): boolean { return this.clients.size >= this.opt.maxPlayers; }
 
   // ---------- połączenia ----------
-  join(conn: Conn, name: string, at?: { x: number; y: number; z: number; yaw: number }): number | null {
+  join(conn: Conn, name: string, at?: { x: number; y: number; z: number; yaw: number; money?: number }): number | null {
     if (this.full) { this.sendJson(conn, { t: 'error', text: 'Sesja jest pełna' }); conn.close(); return null; }
     let nick = clean(name, 20) || 'Gracz', k = 2;
     const taken = new Set([...this.sim.players.values()].map(p => p.name));
     while (taken.has(nick)) nick = `${clean(name, 17) || 'Gracz'}#${k++}`;
-    const p = this.sim.addPlayer(nick, at);
-    this.clients.set(p.id, { conn, player: p, inputs: [], ack: 0, credit: 1, sent: new Map(), bytes: 0, chat: [] });
+    const p = this.sim.addPlayer(nick, at); if (at?.money != null && Number.isFinite(at.money)) p.money = at.money;
+    this.clients.set(p.id, { conn, player: p, meSig: '', inputs: [], ack: 0, credit: 1, sent: new Map(), bytes: 0, chat: [] });
     this.welcome(conn, p.id);
     if (!this.opt.local) this.broadcast({ t: 'chat', from: '', color: p.color, text: `${nick} dołącza do gry`, sys: true });
     this.playersSig = '';
@@ -92,7 +94,7 @@ export class Room {
 
   leave(pid: number): void {
     const c = this.clients.get(pid); if (!c) return;
-    const w = this.sim.entity(c.player.walker); this.onLeave(c.player, { x: w.x, y: w.y, z: w.z, yaw: w.yaw });
+    const w = this.sim.entity(c.player.walker); this.onLeave(c.player, { x: w.x, y: w.y, z: w.z, yaw: w.yaw, money: c.player.money });
     this.clients.delete(pid); this.sim.removePlayer(pid);
     if (!this.opt.local) this.broadcast({ t: 'chat', from: '', color: c.player.color, text: `${c.player.name} opuszcza grę`, sys: true });
     this.playersSig = '';
@@ -161,6 +163,7 @@ export class Room {
     if (this.sim.traffic) { const now = this.clock.now(), lt = localTime(now, CITY_TZ[this.world.key] ?? 'UTC'); this.sim.stepTraffic(now / 1000, lt.sec / 3600); }
     if (this.sim.tick % 15 === 0) this.streamTiles();
     this.sendPlayers();
+    this.sendMe();
     if (this.sim.tick % (SIM_HZ * 10) === 0) this.broadcast({ t: 'time', time: this.clock.now(), scale: this.clock.scale });
     if (this.sim.tick % this.opt.snapEvery === 0) this.sendSnapshots();
     const dt = this.now() - t0, T = this.timing;
@@ -191,6 +194,16 @@ export class Room {
       }
     }
     for (const k of [...this.world.tiles.keys()]) if (!near(k, 1500)) this.world.removeTile(k);
+  }
+
+  /** Własny stan gracza (tylko przy zmianie) i zdarzenia (przestępstwa, zatrzymania, śmierć). */
+  private sendMe(): void {
+    const R = this.sim.rules;
+    for (const c of this.clients.values()) {
+      const p = c.player, sig = `${Math.round(p.hp)}|${p.money.toFixed(2)}|${p.wanted}|${p.dead > 0}`;
+      if (sig !== c.meSig) { c.meSig = sig; this.sendJson(c.conn, { t: 'me', hp: Math.round(p.hp), money: p.money, wanted: p.wanted, dead: p.dead > 0, cur: R?.money.cur ?? 'zł' }); }
+    }
+    if (R) for (const e of R.events.splice(0)) { const c = this.clients.get(e.pid); if (c) this.sendJson(c.conn, { t: 'event', text: e.text, kind: e.kind }); }
   }
 
   private sendPlayers(): void {
