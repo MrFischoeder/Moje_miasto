@@ -1,6 +1,5 @@
 // Kamera: pierwsza osoba pieszo, pościgowa albo z kokpitu w pojazdach.
 import type * as THREE from 'three';
-import type { BuildingIndex } from '@miasto/shared/world/collision';
 
 export interface VehiclePose { x: number; y: number; z: number; yaw: number; roll: number; kind: 'car' | 'heli' }
 
@@ -27,7 +26,7 @@ export class CameraRig {
   }
 
   /** Kamera pościgowa: dist za pojazdem, h nad nim, patrzy na lookH. */
-  chase(V: VehiclePose, dist: number, h: number, lookH: number, dt: number, now: number, B: BuildingIndex): void {
+  chase(V: VehiclePose, dist: number, h: number, lookH: number, dt: number, now: number, top: (x: number, z: number) => number): void {
     const cam = this.camera;
     if (now - this.lastLook > 2000) { this.off *= Math.max(0, 1 - 2 * dt); this.pit *= Math.max(0, 1 - 2 * dt); }
     if (this.fp) {
@@ -39,7 +38,7 @@ export class CameraRig {
     const tx = V.x + Math.sin(yaw) * dist * Math.cos(pit), tz = V.z + Math.cos(yaw) * dist * Math.cos(pit), ty = V.y + h + Math.sin(pit) * dist;
     const k = this.snap ? 1 : 1 - Math.exp(-7 * dt); this.snap = false;
     cam.position.x += (tx - cam.position.x) * k; cam.position.y += (ty - cam.position.y) * k; cam.position.z += (tz - cam.position.z) * k;
-    cam.position.y = Math.max(cam.position.y, B.top(cam.position.x, cam.position.z) + .6, .6);
+    cam.position.y = Math.max(cam.position.y, top(cam.position.x, cam.position.z) + .6);
     cam.lookAt(V.x, V.y + lookH, V.z);
   }
 }

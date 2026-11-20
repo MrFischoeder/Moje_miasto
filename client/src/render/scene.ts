@@ -36,3 +36,17 @@ function makeGrid(): THREE.LineSegments {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3));
   const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true })); l.frustumCulled = false; return l;
 }
+
+/** Siatka gruntu: dopasowanie wysokości wierzchołków do terenu po przesunięciu (bez terenu: płaska). */
+export class GridDrape {
+  private base: Float32Array | null = null;
+  private key = '';
+  constructor(private grid: THREE.LineSegments) {}
+  update(ox: number, oz: number, scale: number, ground: ((x: number, z: number) => number) | null): void {
+    const k = ground ? `${ox},${oz},${scale}` : 'flat'; if (k === this.key) return; this.key = k;
+    const pos = this.grid.geometry.getAttribute('position') as THREE.BufferAttribute, a = pos.array as Float32Array;
+    if (!this.base) this.base = a.slice();
+    for (let i = 0; i < a.length; i += 3) a[i + 1] = ground ? ground(ox + this.base[i] * scale, oz + this.base[i + 2] * scale) + .12 : 0;
+    pos.needsUpdate = true;
+  }
+}

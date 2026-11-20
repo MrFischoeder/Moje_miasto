@@ -5,17 +5,17 @@ import type { Mode } from '@miasto/shared/sim/types';
 import type { World } from '@miasto/shared/world/world';
 import type { TileData } from '@miasto/shared/tiles/types';
 
-export interface MiniView { x: number; y: number; z: number; yaw: number; mode: Mode; xray: boolean }
+export interface MiniView { x: number; y: number; z: number; yaw: number; mode: Mode; xray: boolean; under: boolean; height: number }
 
 export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: MiniView): void {
   const mctx = mini.getContext('2d')!, W = mini.width; mctx.clearRect(0, 0, W, W); if (!world) return;
   const city = world.city, MODE = C.mode;
-  const under = (MODE === 'walk' && C.y < -1) || C.xray;
-  const view = MODE === 'heli' ? Math.min(3000, 300 + C.y * 5) : MODE === 'car' ? 450 : (C.y < -1 ? 500 : 260), s = W / view, R = view / 2 * 1.45;
+  const under = (MODE === 'walk' && C.under) || C.xray;
+  const view = MODE === 'heli' ? Math.min(3000, 300 + C.height * 5) : MODE === 'car' ? 450 : (C.under ? 500 : 260), s = W / view, R = view / 2 * 1.45;
   mctx.save(); mctx.beginPath(); mctx.arc(W / 2, W / 2, W / 2 - 2, 0, 7); mctx.clip();
   mctx.translate(W / 2, W / 2); mctx.rotate(C.yaw); mctx.scale(s, s); mctx.translate(-C.x, -C.z);
   const lw = 1 / s;
-  if (C.y > -1) {
+  if (!C.under) {
     mctx.fillStyle = 'rgba(125,255,176,.3)'; mctx.strokeStyle = 'rgba(125,255,176,.8)'; mctx.lineWidth = lw; const seen = new Set<BuildingPoly>();
     if (view < 1500) for (let i = Math.floor((C.x - R) / CELL); i <= Math.floor((C.x + R) / CELL); i++) for (let j = Math.floor((C.z - R) / CELL); j <= Math.floor((C.z + R) / CELL); j++) {
       const l = world.buildings.grid.get(i + ',' + j); if (!l) continue;

@@ -1,25 +1,38 @@
-// Grunt: siatka komórek 500 m (zgodna z kafelkami) z otworami nad zejściami do metra i nad wodą.
-// Komórki bez otworów to 2 trójkąty; całość to jeden mesh przebudowywany po zmianie komórki.
+// Grunt: siatka komórek 500 m (zgodna z kafelkami) z otworami nad zejściami do metra
+// (i nad wodą, gdy świat jest płaski). Z modelem terenu komórki są siatką wysokości:
+// dokładną (co ~30 m) w promieniu widoczności, zgrubną (co 250 m) dalej.
+// Całość to jeden mesh przebudowywany po zmianie komórek.
 import * as THREE from 'three';
 import { clipRing } from '@miasto/shared/tiles/clip';
 import { TILE_SIZE, tileKey } from '@miasto/shared/tiles/types';
 import type { XZ } from '@miasto/shared/world/collision';
 
+type Ground = (x: number, z: number) => number;
+
 export class GroundGrid {
   readonly mat: THREE.MeshBasicMaterial;
   readonly mesh: THREE.Mesh;
-  private cells = new Map<string, Float32Array>();
+  private cells = new Map<string, { lod: number; pos: Float32Array; lines: Float32Array }>();
+  /** linie terenu (co ~60 m w komórkach wokół gracza) */
+  readonly lines: THREE.LineSegments;
   private holes = new Map<string, XZ[][]>();
   private water = new Map<string, XZ[][]>();
   private dirty = true;
+  private fine: number;
 
-  constructor(private x0: number, private y0: number, private x1: number, private y1: number, kioskHoles: XZ[][], xray: boolean) {
+  constructor(private x0: number, private y0: number, private x1: number, private y1: number, kioskHoles: XZ[][], xray: boolean,
+    private ground: Ground | null = null, step = 30) {
     this.mat = new THREE.MeshBasicMaterial({ color: 0x020604, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.mat); this.mesh.position.y = -.03; this.mesh.frustumCulled = false;
+    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x14402a })); this.lines.frustumCulled = false;
+    this.fine = ground ? Math.max(2, Math.round(TILE_SIZE / step)) : 5;
     for (const h of kioskHoles) for (const k of this.cellsOf(h)) { let l = this.holes.get(k); if (!l) this.holes.set(k, l = []); l.push(h); }
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) this.buildCell(x, y);
-    this.setXray(xray); this.update();
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) this.buildCell(x, y, this.coarse);
+    this.setXray(xray); this.flush();
   }
+
+  /** podział komórki daleko od gracza */
+  private get coarse(): number { return this.ground ? 2 : 5; }
 
   /** Komórki obejmujące wielokąt. */
   private cellsOf(p: XZ[]): string[] {
@@ -28,42 +41,69 @@ export class GroundGrid {
     return out;
   }
 
-  /** Woda w komórce (otwory w gruncie); null usuwa. */
+  /** Woda w komórce (otwory w gruncie, tylko w płaskim świecie); null usuwa. */
   setWater(x: number, y: number, polys: XZ[][] | null): void {
+    if (this.ground) return;
     const k = tileKey(x, y);
     if (polys && polys.length) this.water.set(k, polys); else if (!this.water.delete(k)) return;
-    if (x < this.x0 || x > this.x1 || y < this.y0 || y > this.y1) { this.x0 = Math.min(this.x0, x); this.x1 = Math.max(this.x1, x); this.y0 = Math.min(this.y0, y); this.y1 = Math.max(this.y1, y); for (let a = this.x0; a <= this.x1; a++) for (let b = this.y0; b <= this.y1; b++) if (!this.cells.has(tileKey(a, b))) this.buildCell(a, b); }
-    this.buildCell(x, y);
-  }
-
-  private buildCell(x: number, y: number): void {
-    const k = tileKey(x, y), bx = x * TILE_SIZE, bz = y * TILE_SIZE, e = .02;
-    const hs = [...(this.holes.get(k) || []), ...(this.water.get(k) || [])]
-      .map(h => clipRing(h, bx + e, bz + e, bx + TILE_SIZE - e, bz + TILE_SIZE - e)).filter(h => h.length >= 3);
-    const out: number[] = [];
-    // komórka dzielona na 25 kwadratów po 100 m (bez długich trójkątów)
-    if (!hs.length) {
-      const S = 100;
-      for (let i = 0; i < TILE_SIZE; i += S) for (let j = 0; j < TILE_SIZE; j += S) {
-        const a = bx + i, b = bz + j; out.push(a, 0, b, a, 0, b + S, a + S, 0, b + S, a, 0, b, a + S, 0, b + S, a + S, 0, b);
-      }
-    } else {
-      const outer: XZ[] = [[bx, bz], [bx, bz + TILE_SIZE], [bx + TILE_SIZE, bz + TILE_SIZE], [bx + TILE_SIZE, bz]];
-      const v = (r: XZ[]) => r.map(([px, pz]) => new THREE.Vector2(px, pz));
-      const all = [...outer, ...hs.flat()];
-      try { for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(v(outer), hs.map(v))) out.push(all[a][0], 0, all[a][1], all[b][0], 0, all[b][1], all[c][0], 0, all[c][1]); } catch { /* zostaw pustą */ }
+    if (x < this.x0 || x > this.x1 || y < this.y0 || y > this.y1) {
+      this.x0 = Math.min(this.x0, x); this.x1 = Math.max(this.x1, x); this.y0 = Math.min(this.y0, y); this.y1 = Math.max(this.y1, y);
+      for (let a = this.x0; a <= this.x1; a++) for (let b = this.y0; b <= this.y1; b++) if (!this.cells.has(tileKey(a, b))) this.buildCell(a, b, this.coarse);
     }
-    this.cells.set(k, new Float32Array(out)); this.dirty = true;
+    this.buildCell(x, y, this.cells.get(k)?.lod ?? this.coarse);
   }
 
-  /** Przebudowa scalonego mesha (raz na klatkę, jeśli coś się zmieniło). */
-  update(): void {
+  private buildCell(x: number, y: number, n: number): void {
+    const k = tileKey(x, y), bx = x * TILE_SIZE, bz = y * TILE_SIZE, S = TILE_SIZE / n, e = .02, g = this.ground;
+    const all = [...(this.holes.get(k) || []), ...(this.water.get(k) || [])];
+    const out: number[] = [], Y = (px: number, pz: number) => g ? g(px, pz) : 0;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const a = bx + i * S, b = bz + j * S;
+      const hs = all.map(h => clipRing(h, a + e, b + e, a + S - e, b + S - e)).filter(h => h.length >= 3);
+      if (!hs.length) {
+        const y00 = Y(a, b), y01 = Y(a, b + S), y11 = Y(a + S, b + S), y10 = Y(a + S, b);
+        out.push(a, y00, b, a, y01, b + S, a + S, y11, b + S, a, y00, b, a + S, y11, b + S, a + S, y10, b);
+        continue;
+      }
+      const outer: XZ[] = [[a, b], [a, b + S], [a + S, b + S], [a + S, b]], v = (r: XZ[]) => r.map(([px, pz]) => new THREE.Vector2(px, pz));
+      const pts = [...outer, ...hs.flat()];
+      try {
+        for (const tri of THREE.ShapeUtils.triangulateShape(v(outer), hs.map(v))) for (const q of tri) out.push(pts[q][0], Y(pts[q][0], pts[q][1]), pts[q][1]);
+      } catch { /* zostaw pustą */ }
+    }
+    // linie terenu: co drugą krawędź podkomórki (tylko w szczegółowych komórkach z terenem)
+    const ln: number[] = [];
+    if (g && n === this.fine) for (let i = 0; i <= n; i += 2) for (let j = 0; j < n; j++) {
+      const a = bx + i * S, b0 = bz + j * S, b1 = b0 + S, c0 = bx + j * S, c1 = c0 + S, d = bz + i * S;
+      ln.push(a, Y(a, b0) + .2, b0, a, Y(a, b1) + .2, b1, c0, Y(c0, d) + .2, d, c1, Y(c1, d) + .2, d);
+    }
+    this.cells.set(k, { lod: n, pos: new Float32Array(out), lines: new Float32Array(ln) }); this.dirty = true;
+  }
+
+  /** Szczegółowość komórek wokół gracza (tylko z terenem). */
+  private last: [number, number, number] = [NaN, 0, 0];
+  update(px: number, pz: number, radius: number): void {
+    const L = this.last, moved = !(Math.hypot(px - L[1], pz - L[2]) < 50 && Math.abs(radius - L[0]) < 100);
+    if (moved) this.last = [radius, px, pz];
+    if (this.ground && moved) for (const [k, c] of this.cells) {
+      const [x, y] = k.split('_').map(Number);
+      const dx = Math.max(0, Math.abs((x + .5) * TILE_SIZE - px) - TILE_SIZE / 2), dz = Math.max(0, Math.abs((y + .5) * TILE_SIZE - pz) - TILE_SIZE / 2);
+      const want = Math.hypot(dx, dz) <= radius ? this.fine : this.coarse;
+      if (c.lod !== want) this.buildCell(x, y, want);
+    }
+    this.flush();
+  }
+
+  private flush(): void {
     if (!this.dirty) return; this.dirty = false;
-    let n = 0; for (const c of this.cells.values()) n += c.length;
-    const pos = new Float32Array(n); let o = 0; for (const c of this.cells.values()) { pos.set(c, o); o += c.length; }
+    let n = 0; for (const c of this.cells.values()) n += c.pos.length;
+    const pos = new Float32Array(n); let o = 0; for (const c of this.cells.values()) { pos.set(c.pos, o); o += c.pos.length; }
     this.mesh.geometry.dispose(); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); this.mesh.geometry = g;
+    let m = 0; for (const c of this.cells.values()) m += c.lines.length;
+    const lp = new Float32Array(m); o = 0; for (const c of this.cells.values()) { lp.set(c.lines, o); o += c.lines.length; }
+    this.lines.geometry.dispose(); const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(lp, 3)); this.lines.geometry = lg;
   }
 
   setXray(xray: boolean): void { const m = this.mat; m.opacity = xray ? .12 : 1; m.transparent = xray; m.depthWrite = !xray; m.needsUpdate = true; }
-  dispose(): void { this.mesh.geometry.dispose(); this.mat.dispose(); }
+  dispose(): void { this.mesh.geometry.dispose(); this.mat.dispose(); this.lines.geometry.dispose(); (this.lines.material as THREE.Material).dispose(); }
 }

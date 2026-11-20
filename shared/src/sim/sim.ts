@@ -98,7 +98,7 @@ export class Simulation {
     if (place) {
       const rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw); let q: [number, number] = [v.x - rx * 2.6, v.z - rz * 2.6];
       if (W.blocked(q[0], q[1])) q = W.freeSpot(v.x, v.z, v.yaw, true);
-      Object.assign(w, { x: q[0], z: q[1], y: 0, reg: -1, yaw: v.yaw, pitch: 0 });
+      Object.assign(w, { x: q[0], z: q[1], y: W.surfaceAt(q[0], q[1], v.y), reg: -1, yaw: v.yaw, pitch: 0 });
       p.viewSeq++;
     }
     this.park(v); p.vehicle = null;
@@ -107,7 +107,7 @@ export class Simulation {
   /** Wsiada do najbliższego wolnego pojazdu w zasięgu. */
   enterNearest(p: PlayerState): boolean {
     if (p.vehicle != null) return false;
-    const w = this.entity(p.walker); if (w.y < -1) return false;
+    const w = this.entity(p.walker); if (this.world.underground(w.x, w.z, w.y)) return false;
     let best: Entity | null = null, bd = ENTER_RADIUS ** 2;
     for (const e of this.entities.values()) {
       if (e.kind === 'walker' || e.driver != null) continue;
@@ -124,14 +124,14 @@ export class Simulation {
     const W = this.world;
     if (m === 'walk') { this.exitVehicle(p); return; }
     if (from === 'walk') {
-      const w = this.entity(p.walker); let x = w.x, z = w.z, yaw = w.yaw; const under = w.y < -1;
+      const w = this.entity(p.walker); let x = w.x, z = w.z, yaw = w.yaw; const under = W.underground(w.x, w.z, w.y);
       if (under) {
         const s = W.nearestStation(w.x, w.z), t = s.tops[0];
         if (t) { x = t[0] + t[2][0] * 5; z = t[1] + t[2][1] * 5; yaw = Math.atan2(-t[2][0], -t[2][1]); } else { x = s.x; z = s.z; }
       }
       if (m === 'car') [x, z] = W.freeSpot(x, z, yaw);
       const v = this.personal(p, m);
-      Object.assign(v, { x, z, yaw, y: m === 'heli' ? W.roofTop(x, z) + (under ? 40 : 0) : 0, speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0, air: false });
+      Object.assign(v, { x, z, yaw, y: m === 'heli' ? W.roofTop(x, z) + (under ? 40 : 0) : under ? W.ground(x, z) : W.surfaceAt(x, z, w.y), speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0, air: false });
       this.enter(p, v);
       return;
     }
@@ -139,7 +139,7 @@ export class Simulation {
     const old = this.entity(p.vehicle!), v = this.personal(p, m);
     if (m === 'car') {
       const [x, z] = W.freeSpot(old.x, old.z, old.yaw);
-      Object.assign(v, { x, z, y: 0, yaw: old.yaw, speed: 0, roll: 0, tilt: 0 });
+      Object.assign(v, { x, z, y: W.ground(x, z), yaw: old.yaw, speed: 0, roll: 0, tilt: 0 });
     } else {
       Object.assign(v, { x: old.x, y: old.y, z: old.z, yaw: old.yaw, vx: -Math.sin(old.yaw) * old.speed, vz: -Math.cos(old.yaw) * old.speed, vy: 0, roll: old.roll, tilt: 0 });
     }

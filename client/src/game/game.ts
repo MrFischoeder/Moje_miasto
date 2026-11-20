@@ -5,8 +5,10 @@ import type { RawOsm } from '@miasto/shared/osm/raw';
 import { buildTiles } from '@miasto/shared/tiles/build';
 import type { Entity, Mode, SaveState } from '@miasto/shared/sim/types';
 import { World } from '@miasto/shared/world/world';
-import { createScene, type SceneCtx } from '../render/scene';
+import { createScene, GridDrape, type SceneCtx } from '../render/scene';
 import { CityView } from '../world/cityView';
+import { loadTerrain } from '../world/terrainLoader';
+import type { Terrain } from '@miasto/shared/world/terrain';
 import { HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
@@ -39,6 +41,7 @@ export class Game {
   fromFile = false;
   xray = false;
   readonly labels = new StationLabels();
+  private drape!: GridDrape;
   private world3d = new THREE.Group();
   private models = new Map<number, VehicleModel>();
   /** kierunek patrzenia pieszego (należy do klienta, wysyłany w poleceniu wejścia) */
@@ -52,6 +55,7 @@ export class Game {
   constructor(canvas: HTMLCanvasElement, private ui: GameUI) {
     this.ctx = createScene(canvas);
     this.ctx.scene.add(this.world3d, this.labels.group);
+    this.drape = new GridDrape(this.ctx.grid);
     this.rig = new CameraRig(this.ctx.camera);
     this.input = new Input(canvas);
     this.input.onLook = (dx, dy) => this.look(dx, dy);
@@ -65,13 +69,13 @@ export class Game {
   /** Ładuje miasto (z obiektami OSM albo bez). */
   loadCity(key: CityKey, raw: RawOsm | null): void {
     this.ui.setBusy(true);
-    setTimeout(() => {
-      try { this.doLoad(key, raw); } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); }
+    setTimeout(async () => {
+      try { this.doLoad(key, raw, await loadTerrain(key)); } catch (e) { this.ui.setStatus('Błąd: ' + (e as Error).message); console.error(e); }
       this.ui.setBusy(false);
     }, 30);
   }
 
-  private doLoad(key: CityKey, raw: RawOsm | null): void {
+  private doLoad(key: CityKey, raw: RawOsm | null, terrain: Terrain | null): void {
     this.view?.dispose(); this.labels.clear();
     for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
     if (this.view) this.world3d.remove(this.view.group);
@@ -79,10 +83,10 @@ export class Game {
     if (raw) {
       // plik OSM: te same kafelki co z tools/fetch-osm, budowane w pamięci
       const tiles = buildTiles(raw, key, CITIES[key].o);
-      world = new World(key, { tiles: tiles.values(), osmPoints: raw.taggedNodes() });
+      world = new World(key, { tiles: tiles.values(), osmPoints: raw.taggedNodes(), terrain });
       source = new MemoryTileSource(tiles, key);
     } else {
-      world = new World(key);
+      world = new World(key, { terrain });
       // plik otwarty z dysku (wersja jednoplikowa) nie może pobierać kafelków
       source = location.protocol === 'file:' ? new NoTiles() : new HttpTileSource(`${import.meta.env.BASE_URL}tiles/${key}/`);
     }
@@ -123,9 +127,9 @@ export class Game {
   toggleXray(): void { this.xray = !this.xray; this.view?.setXray(this.xray); this.ui.onXray(this.xray); }
 
   save(): SaveState | null { return this.session?.save() ?? null; }
-  load(s: SaveState): void {
+  async load(s: SaveState): Promise<void> {
     if (!this.session) return;
-    if (s.city !== this.session.world.key) { this.doLoad(s.city as CityKey, null); }
+    if (s.city !== this.session.world.key) { this.doLoad(s.city as CityKey, null, await loadTerrain(s.city)); }
     this.session.load(s); this.afterCommand();
   }
 
@@ -171,21 +175,25 @@ export class Game {
     const pv = s.previous(me.id) ?? me, P = this.pose;
     P.x = lerp(pv.x, me.x, alpha); P.y = lerp(pv.y, me.y, alpha); P.z = lerp(pv.z, me.z, alpha); P.yaw = lerpAngle(pv.yaw, me.yaw, alpha);
     this.renderEntities(alpha, dt);
-    const mode = this.lastMode, w = s.world, cam = this.rig;
+    const mode = this.lastMode, w = s.world, cam = this.rig, gr = w.ground(P.x, P.z), alt = P.y - gr, under = mode === 'walk' && P.y < gr - 1;
     if (mode === 'walk') {
       const bob = (f || st) ? Math.sin(now / 140) * .04 : 0;
       cam.walk(P.x, P.y, P.z, this.viewYaw, this.viewPitch, bob);
     } else {
       const V = { x: P.x, y: P.y, z: P.z, yaw: P.yaw, roll: me.roll, kind: mode };
-      if (mode === 'car') cam.chase(V, 9, 2.2, 1.2, dt, now, w.buildings); else cam.chase(V, 17, 5, 2.5, dt, now, w.buildings);
+      const top = (x: number, z: number) => w.roofTop(x, z);
+      if (mode === 'car') cam.chase(V, 9, 2.2, 1.2, dt, now, top); else cam.chase(V, 17, 5, 2.5, dt, now, top);
     }
     {
-      const radius = mode === 'heli' ? Math.min(3000, 900 + P.y * 10) : mode === 'car' ? 1200 : P.y < -1 ? 600 : 900;
+      const radius = mode === 'heli' ? Math.min(3000, 900 + alt * 10) : mode === 'car' ? 1200 : under ? 600 : 900;
       this.view!.update(P.x, P.z, radius);
     }
-    const under = mode === 'walk' && P.y < -1, { grid, fog } = this.ctx;
-    { const gs = mode === 'heli' && P.y > 120 ? 5 : 1, step = 10 * gs; grid.scale.set(gs, 1, gs); grid.position.set(Math.round(P.x / step) * step, .04, Math.round(P.z / step) * step); }
-    fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + P.y * 12) : mode === 'car' ? 900 : 650;
+    const { grid, fog } = this.ctx;
+    {
+      const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
+      grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);
+    }
+    fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + alt * 12) : mode === 'car' ? 900 : 650;
     if (now - this.lastSlow > 500) { this.lastSlow = now; this.labels.update(w, P.x, P.z); this.view!.slowUpdate(P.x, P.z); this.ui.slowFrame(this); }
     this.ctx.renderer.render(this.ctx.scene, this.ctx.camera);
     this.ui.frame(this);
@@ -200,7 +208,7 @@ export class Game {
       if (!m) { m = e.kind === 'car' ? makeCar() : makeHeli(); this.models.set(e.id, m); this.world3d.add(m.root); }
       const pv = s.previous(e.id) ?? e, x = lerp(pv.x, e.x, alpha), y = lerp(pv.y, e.y, alpha), z = lerp(pv.z, e.z, alpha), yaw = lerpAngle(pv.yaw, e.yaw, alpha);
       m.root.visible = !(e.id === p.vehicle && this.rig.fp);
-      if (e.kind === 'car') { m.root.position.set(x, 0, z); m.root.rotation.set(0, yaw, 0); m.root.rotateZ(e.roll); }
+      if (e.kind === 'car') { m.root.position.set(x, y, z); m.root.rotation.set(0, yaw, 0); m.root.rotateZ(e.roll); }
       else {
         m.root.position.set(x, y, z); m.root.rotation.set(e.tilt, yaw, e.roll);
         m.rotor!.rotation.y += dt * (e.driver == null ? 0 : e.air || e.lift > 0 ? 30 : 10); m.trotor!.rotation.x += dt * 45;

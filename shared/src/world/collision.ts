@@ -52,15 +52,21 @@ export class PolyIndex {
     }
   }
 
+  /** Wielokąty zawierające punkt. */
+  containing(x: number, z: number): IndexedPoly[] {
+    const l = this.grid.get(cellKey(x, z)); if (!l) return [];
+    return l.filter(p => inside(p, x, z));
+  }
+
   hit(x: number, z: number): boolean {
     const l = this.grid.get(cellKey(x, z)); if (!l) return false;
     for (const p of l) if (inside(p, x, z)) return true;
     return false;
   }
 
-  /** Najwyższe h wielokątów zawierających punkt (0, gdy żaden). */
-  top(x: number, z: number): number {
-    const l = this.grid.get(cellKey(x, z)); let t = 0;
+  /** Najwyższe h wielokątów zawierających punkt (def, gdy żaden). */
+  top(x: number, z: number, def = 0): number {
+    const l = this.grid.get(cellKey(x, z)); let t = def;
     if (l) for (const p of l) if (p.h > t && inside(p, x, z)) t = p.h;
     return t;
   }

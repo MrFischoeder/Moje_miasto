@@ -25,8 +25,9 @@ export function carStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
   if (Math.abs(e.speed) < .08 && !f) e.speed = 0;
   const as = Math.abs(e.speed), turn = s * 1.6 / (1 + as / 18) * Math.min(1, as / 3) * Math.sign(e.speed), ny = e.yaw - turn * dt;
   const nx = e.x - Math.sin(ny) * e.speed * dt, nz = e.z - Math.cos(ny) * e.speed * dt;
-  if (!w.carHit(nx, nz, ny)) { e.x = nx; e.z = nz; e.yaw = ny; }
-  else { if (!w.carHit(e.x, e.z, ny)) e.yaw = ny; e.speed *= -.3; }
+  if (!w.carHit(nx, nz, ny, e.y)) { e.x = nx; e.z = nz; e.yaw = ny; }
+  else { if (!w.carHit(e.x, e.z, ny, e.y)) e.yaw = ny; e.speed *= -.3; }
+  e.y = w.surfaceAt(e.x, e.z, e.y);
   e.roll += (turn * as * .004 - e.roll) * Math.min(1, 5 * dt);
 }
 

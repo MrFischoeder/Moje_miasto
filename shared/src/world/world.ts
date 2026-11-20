@@ -8,10 +8,14 @@ import { tileKey, type Flat, type TileData } from '../tiles/types';
 import { CAR_PTS, PolyIndex, type XZ } from './collision';
 import { RegionIndex, type Region, type Support, type Surface } from './regions';
 import { buildMetroLayout, type MetroLayout, type Station } from './metro/layout';
+import { Terrain } from './terrain';
+import { deckY } from './bridges';
 
 export interface Pose { x: number; y: number; z: number; yaw: number; pitch: number; reg: Region | null }
 
 export interface WorldOptions {
+  /** model terenu (bez niego świat jest płaski) */
+  terrain?: Terrain | null;
   /** kafelki dostępne od razu (np. z wczytanego pliku), przed zbudowaniem metra */
   tiles?: Iterable<TileData>;
   /** punkty stacji i wejść z wczytanego pliku OSM (przesuwają stacje i zejścia) */
@@ -36,29 +40,36 @@ export class World implements Surface {
   readonly metro: MetroLayout;
   /** liczba stacji przesuniętych na pozycję z OSM (z pliku) */
   readonly osmStations: number;
+  readonly terrain: Terrain | null;
 
   constructor(key: CityKey, opt: WorldOptions = {}) {
-    this.key = key; this.city = CITIES[key]; this.proj = makeProj(this.city.o);
+    this.key = key; this.city = CITIES[key]; this.proj = makeProj(this.city.o); this.terrain = opt.terrain ?? null;
     if (opt.tiles) for (const t of opt.tiles) this.addTile(t);
     const { ov, ent } = matchOsmStations(opt.osmPoints ?? null, this.city);
     if (!opt.osmPoints) for (const [i, lat, lon] of this.city.ent || []) { let l = ent.get(i); if (!l) ent.set(i, l = []); l.push(this.proj(lat, lon)); }
     this.osmStations = ov.size;
-    this.metro = buildMetroLayout(this.city, ov, ent, this.buildings, this.regions);
+    this.metro = buildMetroLayout(this.city, ov, ent, this.buildings, this.regions, this.ground);
   }
 
   get stations(): Station[] { return this.metro.stations; }
 
+  // ---------- teren ----------
+  /** Wysokość gruntu (0 bez modelu terenu). */
+  readonly ground = (x: number, z: number): number => this.terrain ? this.terrain.height(x, z) : 0;
+  /** Poziom posadowienia budynku: najniższy punkt terenu pod obrysem. */
+  baseOf(pts: XZ[]): number { if (!this.terrain) return 0; let m = Infinity; for (const [x, z] of pts) m = Math.min(m, this.ground(x, z)); return m; }
+
   // ---------- kafelki ----------
   addTile(t: TileData): void {
     const k = tileKey(t.x, t.y); if (this.tiles.has(k)) return; this.tiles.set(k, t);
-    for (const b of t.b) if (b.mh < 2) this.buildings.add(toXZ(b.o), b.h, b.i?.map(toXZ), k);
+    for (const b of t.b) if (b.mh < 2) { const o = toXZ(b.o); this.buildings.add(o, this.baseOf(o) + b.h, b.i?.map(toXZ), k); }
     for (const a of t.a) if (a.k === 'water') this.water.add(toXZ(a.o), 0, a.i?.map(toXZ), k);
     for (const r of t.r) if (r.br) {
-      const p = toXZ(r.p), hw = r.w / 2 + (r.sw ? 2.5 : .6);
+      const p = toXZ(r.p), hw = r.w / 2 + (r.sw ? 2.5 : .6); let arc = 0;
       for (let i = 0; i < p.length - 1; i++) {
         const [x0, z0] = p[i], [x1, z1] = p[i + 1], L = Math.hypot(x1 - x0, z1 - z0) || 1, nx = -(z1 - z0) / L * hw, nz = (x1 - x0) / L * hw;
-        const ex = (x1 - x0) / L * .5, ez = (z1 - z0) / L * .5;
-        this.decks.add([[x0 - ex + nx, z0 - ez + nz], [x1 + ex + nx, z1 + ez + nz], [x1 + ex - nx, z1 + ez - nz], [x0 - ex - nx, z0 - ez - nz]], 0, undefined, k);
+        const ex = (x1 - x0) / L * .5, ez = (z1 - z0) / L * .5, y = deckY(r.bw, arc + L / 2, this.ground); arc += L;
+        this.decks.add([[x0 - ex + nx, z0 - ez + nz], [x1 + ex + nx, z1 + ez + nz], [x1 + ex - nx, z1 + ez - nz], [x0 - ex - nx, z0 - ez - nz]], y, undefined, k);
       }
     }
   }
@@ -68,17 +79,29 @@ export class World implements Surface {
   }
 
   // ---------- zapytania fizyki ----------
-  /** Punkt zablokowany: budynek albo woda poza mostem. */
-  blocked(x: number, z: number): boolean { return this.buildings.hit(x, z) || (this.water.hit(x, z) && !this.decks.hit(x, z)); }
+  /** Punkt zablokowany: budynek albo woda poza mostem (y: wysokość sprawdzającego, do wyboru poziomu). */
+  blocked(x: number, z: number, y?: number): boolean {
+    if (this.buildings.hit(x, z)) return true;
+    if (!this.water.hit(x, z)) return false;
+    return !this.decks.containing(x, z).some(d => y == null || Math.abs(d.h - y) < 3);
+  }
+  /** Wysokość powierzchni najbliższa y: grunt albo pomost mostu (nie wyżej niż 1,2 m nad y). */
+  surfaceAt(x: number, z: number, y: number): number {
+    let best = this.ground(x, z);
+    for (const d of this.decks.containing(x, z)) if (d.h <= y + 1.2 && Math.abs(d.h - y) < Math.abs(best - y)) best = d.h;
+    return best;
+  }
   /** Podłoże dla pieszego (region podziemny albo powierzchnia). */
   support(x: number, z: number, y: number): Support | null { return this.regions.support(x, z, y, this); }
-  /** Wysokość najwyższego dachu w punkcie (0 = grunt). */
-  roofTop(x: number, z: number): number { return this.buildings.top(x, z); }
+  /** Najwyższa powierzchnia w punkcie: dach albo grunt (dla helikoptera i kamery). */
+  roofTop(x: number, z: number): number { return this.buildings.top(x, z, this.ground(x, z)); }
+  /** Czy punkt jest pod ziemią. */
+  underground(x: number, z: number, y: number): boolean { return y < this.ground(x, z) - 1; }
 
   /** Kolizja auta: 6 punktów prostokąta. */
-  carHit(x: number, z: number, yaw: number): boolean {
+  carHit(x: number, z: number, yaw: number, y?: number): boolean {
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
-    for (const [a, b] of CAR_PTS) if (this.blocked(x + rx * a + fx * b, z + rz * a + fz * b)) return true;
+    for (const [a, b] of CAR_PTS) if (this.blocked(x + rx * a + fx * b, z + rz * a + fz * b, y)) return true;
     return false;
   }
 
@@ -106,7 +129,8 @@ export class World implements Surface {
   /** Pozycja na ulicy przy pierwszym wyjściu stacji. */
   streetPose(s: Station): Pose {
     const [x, z, d] = s.tops[0];
-    return { x: x + d[0] * 2.5, z: z + d[1] * 2.5, y: 0, yaw: Math.atan2(-d[0], -d[1]), pitch: 0, reg: null };
+    const px = x + d[0] * 2.5, pz = z + d[1] * 2.5;
+    return { x: px, z: pz, y: this.ground(px, pz), yaw: Math.atan2(-d[0], -d[1]), pitch: 0, reg: null };
   }
 
   /** Start: na ulicy przy budynkach z pliku albo na peronie stacji startowej. */
@@ -118,7 +142,7 @@ export class World implements Surface {
       for (const t of this.tiles.values()) for (const r of t.r) for (let i = 0; i < r.p.length; i += 2) {
         const x = r.p[i], z = r.p[i + 1], d = (x - cx) ** 2 + (z - cz) ** 2; if (d < bd && !this.blocked(x, z)) { bd = d; best = [x, z]; }
       }
-      if (best) return { x: best[0], z: best[1], y: 0, yaw: 0, pitch: 0, reg: null };
+      if (best) return { x: best[0], z: best[1], y: this.ground(best[0], best[1]), yaw: 0, pitch: 0, reg: null };
       return this.platformPose(this.stations.find(s => s.real) || this.stations[0]);
     }
     return this.platformPose(this.stations.find(s => s.name === this.city.spawn) || this.stations[0]);

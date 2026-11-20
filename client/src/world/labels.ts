@@ -30,7 +30,7 @@ export class StationLabels {
           sp.position.set(s.x + h.ux * t - h.uz * sd * (h.W - .8), h.y + 3.4, s.z + h.uz * t + h.ux * sd * (h.W - .8)); g.add(sp);
         }
       });
-      for (const [x, z] of s.tops) { const sp = makeLabel('M  ' + name, city.lines[s.halls[0].l].c, 8); sp.position.set(x, 4.6, z); g.add(sp); }
+      s.tops.forEach(([x, z], i) => { const sp = makeLabel('M  ' + name, city.lines[s.halls[0].l].c, 8); sp.position.set(x, (s.exitGeoms[i]?.ty ?? 0) + 4.6, z); g.add(sp); });
       this.group.add(g); this.labels.set(s.i, g);
     }
     for (const [i, g] of this.labels) if (!near.has(i)) this.remove(i, g);

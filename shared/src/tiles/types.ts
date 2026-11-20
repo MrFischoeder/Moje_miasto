@@ -38,6 +38,12 @@ export interface TileRoad {
   n?: string;
   /** most (warstwa) */
   br?: number;
+  /**
+   * most: końce całego ciągu mostu i położenie kawałka na nim:
+   * [xA, zA, xB, zB, s (odległość od A pierwszego wierzchołka), kierunek (1 / -1), długość ciągu]
+   * (wysokość pomostu = interpolacja terenu między końcami)
+   */
+  bw?: number[];
   /** tunel / przejście podziemne */
   tu?: 1;
   /** chodniki: 1 lewy, 2 prawy, 3 oba */
@@ -50,7 +56,7 @@ export type AreaKind = 'park' | 'forest' | 'water' | 'parking' | 'square' | 'cem
 export interface TileArea { id: number; k: AreaKind; o: Flat; i?: Flat[] }
 
 export type RailKind = 'rail' | 'tram' | 'light_rail' | 'subway' | 'narrow_gauge';
-export interface TileRail { id: number; k: RailKind; p: Flat; br?: number }
+export interface TileRail { id: number; k: RailKind; p: Flat; br?: number; bw?: number[] }
 
 export type NodeKind = 'signals' | 'crossing' | 'stop' | 'give_way' | 'lamp' | 'tram_stop' | 'entrance' | 'station';
 export interface TileNode {

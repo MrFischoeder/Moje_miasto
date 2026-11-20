@@ -45,7 +45,10 @@ const ui: GameUI = {
     stSel.value = String(nearestIndex(g));
   },
   slowFrame(g) { const e = g.controlled(); if (e && g.world) { $('loc').textContent = locText(g.world, g.mode, e); info(g); } },
-  frame(g) { renderMinimap(mini, g.world, { ...g.pose, yaw: g.mode === 'walk' ? g.viewYaw : g.pose.yaw, mode: g.mode, xray: g.xray }); },
+  frame(g) {
+    const w = g.world, P = g.pose, gr = w ? w.ground(P.x, P.z) : 0;
+    renderMinimap(mini, w, { ...P, yaw: g.mode === 'walk' ? g.viewYaw : P.yaw, mode: g.mode, xray: g.xray, under: P.y < gr - 1, height: P.y - gr });
+  },
 };
 
 const game = new Game(canvas, ui);
@@ -83,7 +86,7 @@ $('loadBtn').onclick = () => {
   let s: SaveState | null = null;
   try { const t = localStorage.getItem(SAVE_KEY); s = t ? JSON.parse(t) : null; } catch { s = null; }
   if (!s) { $('status').textContent = 'Brak zapisanego stanu.'; return; }
-  try { game.load(s); $('status').textContent = ''; closeMenu(); } catch (err) { $('status').textContent = 'Błąd: ' + (err as Error).message; }
+  game.load(s).then(() => { $('status').textContent = ''; closeMenu(); }, err => { $('status').textContent = 'Błąd: ' + (err as Error).message; });
 };
 
 game.loadCity('warszawa' as CityKey, null); closeMenu();

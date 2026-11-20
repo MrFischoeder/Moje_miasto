@@ -17,6 +17,8 @@ export interface ShellOpts {
   left?: [number, number][]; right?: [number, number][];
   start?: [number, number] | 'open'; end?: [number, number] | 'open';
   steps?: RGB; lights?: number[];
+  /** wysokość powierzchni nad pomieszczeniem (sufit nie wyżej) */
+  surf?: number;
 }
 
 export class GeoBuilder {
@@ -40,11 +42,11 @@ export class GeoBuilder {
 
   /** Pomieszczenie / korytarz / schody: bryła wokół regionu, otwory w ścianach bocznych i czołowych. */
   shell(r: Region, H: number, wallC: RGB, edgeC: RGB, opt: ShellOpts = {}): void {
-    const o = r.a, u = r.u, n = r.n, L = r.len, w = r.hw, h = (t: number) => r.y0 + (r.y1 - r.y0) * t / L, top = (t: number) => Math.min(h(t) + H, 0);
+    const S0 = opt.surf ?? 0, o = r.a, u = r.u, n = r.n, L = r.len, w = r.hw, h = (t: number) => r.y0 + (r.y1 - r.y0) * t / L, top = (t: number) => Math.min(h(t) + H, S0);
     const floorC = mix(wallC, 1.25, [.05, .05, .05]), ceilC = mix(wallC, .6);
     // podłoga i sufit
     this.quad(V(o, u, n, 0, -w, h(0)), V(o, u, n, L, -w, h(L)), V(o, u, n, L, w, h(L)), V(o, u, n, 0, w, h(0)), floorC, [0, 1, 0]);
-    let tc = L; if (h(L) + H > 0 && h(0) + H < 0) tc = L * (-H - r.y0) / (r.y1 - r.y0); else if (h(0) + H >= 0) tc = 0;
+    let tc = L; if (h(L) + H > S0 && h(0) + H < S0) tc = L * (S0 - H - r.y0) / (r.y1 - r.y0); else if (h(0) + H >= S0) tc = 0;
     if (tc > 0) this.quad(V(o, u, n, 0, -w, h(0) + H), V(o, u, n, tc, -w, h(tc) + H), V(o, u, n, tc, w, h(tc) + H), V(o, u, n, 0, w, h(0) + H), ceilC, [0, -1, 0]);
     // ściany boczne z otworami
     for (const side of [-1, 1]) {

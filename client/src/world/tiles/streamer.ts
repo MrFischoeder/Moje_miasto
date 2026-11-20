@@ -55,7 +55,7 @@ export class TileStreamer {
     const t = this.ready.shift();
     if (t) {
       const k = tileKey(t.x, t.y); this.data.set(k, t); this.world.addTile(t);
-      const v = buildTileView(t, this.mats); this.views.set(k, v); this.group.add(v.group);
+      const v = buildTileView(t, this.mats, this.world.terrain ? this.world : null); this.views.set(k, v); this.group.add(v.group);
       this.stats.lastBuildMs = v.ms; this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, v.ms);
       const water = t.a.filter(a => a.k === 'water');
       if (water.length) this.ground.setWater(t.x, t.y, water.flatMap(a => [toXZ(a.o)]));

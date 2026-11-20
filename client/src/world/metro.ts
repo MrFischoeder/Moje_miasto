@@ -11,7 +11,7 @@ export function buildMetroObjects(m: MetroLayout, city: CityData): THREE.Object3
   for (const s of m.stations) s.halls.forEach(h => {
     const lc = hex(city.lines[h.l].c), wallC = mix(lc, .16, [.07, .08, .08]), edgeC = mix(lc, .9, [.08, .08, .08]);
     const u: [number, number] = [h.ux, h.uz], n: [number, number] = [-h.uz, h.ux], r = h.reg;
-    G.shell(r, h.H, wallC, edgeC, { left: h.side.left, right: h.side.right, start: h.start as [number, number], end: h.end as [number, number], lights: [-h.W / 3, h.W / 3] });
+    G.shell(r, h.H, wallC, edgeC, { surf: h.surf, left: h.side.left, right: h.side.right, start: h.start as [number, number], end: h.end as [number, number], lights: [-h.W / 3, h.W / 3] });
     const o = r.a, L2 = h.L * 2, tr = h.island ? [-(h.W - 2.6), h.W - 2.6] : [-1.9, 1.9], ed = h.island ? [-(h.W - 4.3), h.W - 4.3] : [-3.6, 3.6];
     for (const ts of tr) for (const g of [-.72, .72]) G.line(V(o, u, n, 0, ts + g, h.y + .02), V(o, u, n, L2, ts + g, h.y + .02), [.45, .5, .5]);
     for (const es of ed) G.line(V(o, u, n, 0, es, h.y + .03), V(o, u, n, L2, es, h.y + .03), [1, .85, .2]);
@@ -39,7 +39,7 @@ export function buildMetroObjects(m: MetroLayout, city: CityData): THREE.Object3
   // przesiadki
   for (const rp of m.ramps) {
     const r = rp.reg, h = m.stations[rp.s].halls[rp.hall], up = m.stations[rp.s].halls[rp.up];
-    const lc = hex(city.lines[h.l].c); G.shell(r, 3.2, mix(lc, .1, [.04, .04, .04]), mix(lc, .9), { start: 'open', end: 'open', steps: [.7, .75, .72] });
+    const lc = hex(city.lines[h.l].c); G.shell(r, 3.2, mix(lc, .1, [.04, .04, .04]), mix(lc, .9), { start: 'open', end: 'open', steps: [.7, .75, .72], surf: m.stations[rp.s].surf });
     const o = r.a, u = r.u, n = r.n, y = up.y + .04; // obrys otworu w posadzce
     for (const [a, b, c, d] of [[0, -1.8, 1.6, -1.8], [1.6, -1.8, 1.6, 1.8], [1.6, 1.8, 0, 1.8], [0, 1.8, 0, -1.8]]) G.line(V(o, u, n, a, b, y), V(o, u, n, c, d, y), [1, .85, .2]);
   }
@@ -48,17 +48,17 @@ export function buildMetroObjects(m: MetroLayout, city: CityData): THREE.Object3
     if (!s.halls[0]) continue;
     const wallC: RGB = [.09, .11, .1], edgeC: RGB = [.6, .95, .75];
     for (const e of s.exitGeoms) {
-      if (e.corr) G.shell(e.corr, 3.2, wallC, edgeC, { start: 'open', end: 'open', lights: [0] });
-      G.shell(e.stair, 3.2, wallC, edgeC, { start: 'open', end: 'open', steps: [.6, .8, .7], lights: [0] });
-      const P4 = e.P4, kc: RGB = [.49, 1, .69];
-      for (let i = 0; i < 4; i++) { const a = P4[i], b = P4[(i + 1) % 4]; G.line([a[0], 3, a[1]], [b[0], 3, b[1]], kc); G.line([a[0], 0, a[1]], [a[0], 3, a[1]], kc); }
-      const at = (i: number, y: number): V3 => [P4[i][0], y, P4[i][1]];
+      if (e.corr) G.shell(e.corr, 3.2, wallC, edgeC, { start: 'open', end: 'open', lights: [0], surf: s.surf });
+      G.shell(e.stair, 3.2, wallC, edgeC, { start: 'open', end: 'open', steps: [.6, .8, .7], lights: [0], surf: e.surfMin });
+      const P4 = e.P4, kc: RGB = [.49, 1, .69], g = e.ty;
+      for (let i = 0; i < 4; i++) { const a = P4[i], b = P4[(i + 1) % 4]; G.line([a[0], g + 3, a[1]], [b[0], g + 3, b[1]], kc); G.line([a[0], g, a[1]], [a[0], g + 3, a[1]], kc); }
+      const at = (i: number, y: number): V3 => [P4[i][0], g + y, P4[i][1]];
       G.quad(at(0, 3.02), at(1, 3.02), at(2, 3.02), at(3, 3.02), [.12, .35, .22], [0, 1, 0]);
       G.quad(at(0, 2.98), at(1, 2.98), at(2, 2.98), at(3, 2.98), [.5, .95, .7], [0, -1, 0]);
     }
     for (const q of s.rooms) {
-      G.shell(q.corr!, 3, wallC, [.45, .7, .6], { start: 'open', end: 'open', lights: [0] });
-      G.shell(q.room!, 3.6, [.07, .06, .04], [1, .75, .35], { start: [3, 2.6], lights: [-q.rw / 2, q.rw / 2] });
+      G.shell(q.corr!, 3, wallC, [.45, .7, .6], { start: 'open', end: 'open', lights: [0], surf: s.surf });
+      G.shell(q.room!, 3.6, [.07, .06, .04], [1, .75, .35], { start: [3, 2.6], lights: [-q.rw / 2, q.rw / 2], surf: s.surf });
     }
   }
   return G.build();

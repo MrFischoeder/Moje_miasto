@@ -1,7 +1,11 @@
 // Regiony chodzenia pod ziemią: pasy (początek, kierunek, długość, półszerokość, wysokość y0 -> y1).
 import { cellKey } from './grid';
 /** Powierzchnia: czy punkt jest zablokowany (budynek, woda poza mostem). */
-export interface Surface { blocked(x: number, z: number): boolean }
+export interface Surface {
+  blocked(x: number, z: number, y?: number): boolean;
+  /** wysokość powierzchni najbliższa y (grunt albo pomost mostu) */
+  surfaceAt(x: number, z: number, y: number): number;
+}
 
 export type RegionKind = 'hall' | 'tunnel' | 'ramp' | 'corr' | 'stair' | 'room';
 export interface RegionInfo { s?: number; l?: number; A?: string; B?: string; room?: boolean }
@@ -40,7 +44,7 @@ export class RegionIndex {
       const h = inReg(r, x, z); if (h == null) continue; const d = Math.abs(h - y); if (d > .95) continue;
       if ((r.slope && !slope) || ((r.slope === slope) && d < bd)) { best = { h, r }; bd = d; slope = r.slope; }
     }
-    if (!best && y > -1.2 && !surface.blocked(x, z)) best = { h: 0, r: null };
+    if (!best) { const g = surface.surfaceAt(x, z, y); if (y > g - 1.2 && !surface.blocked(x, z, y)) best = { h: g, r: null }; }
     return best;
   }
 }

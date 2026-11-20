@@ -138,6 +138,9 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
     }
   }
 
+  // --- ciągi mostów (kilka dróg OSM połączonych końcami): końce i położenie każdej drogi ---
+  const bridgeInfo = bridgeChains(raw, proj);
+
   // --- drogi i graf ---
   const roads: { w: RawWay; info: NonNullable<ReturnType<typeof roadInfo>> }[] = [];
   const use = new Map<number, number>();
@@ -157,9 +160,11 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
     if (ids) for (let i = 0; i < ids.length; i++) if (special.has(ids[i]) && !nodeDir.has(ids[i])) {
       const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; nodeDir.set(ids[i], Math.atan2(b[1] - a[1], b[0] - a[0]));
     }
+    const bi = br ? bridgeInfo.get(w.id) : undefined, arcs = bi ? arcLengths(pts) : null;
     for (const [tx, ty, i0, i1] of splitPolyline(pts)) {
       const tt = tile(tx, ty); if (!tt) continue;
       const j: number[] = [];
+      const bw = bi && arcs ? [r1(bi.a[0]), r1(bi.a[1]), r1(bi.b[0]), r1(bi.b[1]), r1(bi.s + bi.dir * arcs[i0]), bi.dir, r1(bi.total)] : undefined;
       if (ids) for (let i = i0; i <= i1; i++) {
         const id = ids[i], isG = i === i0 || i === i1 || (use.get(id) || 0) > 1 || special.get(id) === 'signals' || special.get(id) === 'crossing';
         if (!isG) continue; j.push(i - i0, id);
@@ -171,7 +176,7 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
       }
       tt.r.push({
         id: w.id, p: flat(pts.slice(i0, i1 + 1)), k: info.k, w: r1(info.w), ln: info.ln, ...(info.ow ? { ow: info.ow } : {}),
-        ...(t.name ? { n: t.name } : {}), ...(br ? { br } : {}), ...(t.tunnel && t.tunnel !== 'no' ? { tu: 1 as const } : {}), ...(sw ? { sw } : {}), j,
+        ...(t.name ? { n: t.name } : {}), ...(br ? { br } : {}), ...(bw ? { bw } : {}), ...(t.tunnel && t.tunnel !== 'no' ? { tu: 1 as const } : {}), ...(sw ? { sw } : {}), j,
       });
     }
   }
@@ -182,7 +187,12 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
     if (t.tunnel && t.tunnel !== 'no') continue;
     const pts = raw.wayCoords(w).map(([lo, la]) => proj(la, lo)); if (pts.length < 2) continue;
     const br = t.bridge && t.bridge !== 'no' ? Math.max(1, num(t.layer) ?? 1) : undefined;
-    for (const [tx, ty, i0, i1] of splitPolyline(pts)) { const tt = tile(tx, ty); if (tt) tt.l.push({ id: w.id, k, p: flat(pts.slice(i0, i1 + 1)), ...(br ? { br } : {}) }); }
+    const bi = br ? bridgeInfo.get(w.id) : undefined, arcs = bi ? arcLengths(pts) : null;
+    for (const [tx, ty, i0, i1] of splitPolyline(pts)) {
+      const tt = tile(tx, ty); if (!tt) continue;
+      const bw = bi && arcs ? [r1(bi.a[0]), r1(bi.a[1]), r1(bi.b[0]), r1(bi.b[1]), r1(bi.s + bi.dir * arcs[i0]), bi.dir, r1(bi.total)] : undefined;
+      tt.l.push({ id: w.id, k, p: flat(pts.slice(i0, i1 + 1)), ...(br ? { br } : {}), ...(bw ? { bw } : {}) });
+    }
   }
 
   // --- węzły specjalne ---
@@ -227,4 +237,44 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
     addPoi(w.id, t, [cx / pts.length, cz / pts.length], isBuilding(t) && buildingTiles.has(w.id) ? w.id : undefined);
   }
   return tiles;
+}
+
+const arcLengths = (p: XZ[]) => { const a = [0]; for (let i = 1; i < p.length; i++) a.push(a[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1])); return a; };
+
+interface BridgeInfo { a: XZ; b: XZ; s: number; dir: 1 | -1; total: number }
+
+/** Łączy drogi i tory z bridge=* w ciągi po wspólnych węzłach końcowych (most bywa podzielony w OSM na kilka dróg). */
+function bridgeChains(raw: RawOsm, proj: Proj): Map<number, BridgeInfo> {
+  const ways: { id: number; ids: number[]; pts: XZ[]; len: number; kind: string }[] = [];
+  for (const w of raw.ways.values()) {
+    const t = w.tags; if (!t || !t.bridge || t.bridge === 'no' || !(t.highway || t.railway) || !w.nodes || w.nodes.length < 2) continue;
+    const pts = raw.wayCoords(w).map(([lo, la]) => proj(la, lo)); if (pts.length !== w.nodes.length) continue;
+    ways.push({ id: w.id, ids: w.nodes, pts, len: arcLengths(pts)[pts.length - 1], kind: t.railway ? 'rail' : 'road' });
+  }
+  const ends = new Map<string, number[]>(), key = (k: string, id: number) => k + id;
+  ways.forEach((w, i) => { for (const id of [w.ids[0], w.ids[w.ids.length - 1]]) { const k = key(w.kind, id); let l = ends.get(k); if (!l) ends.set(k, l = []); l.push(i); } });
+  const out = new Map<number, BridgeInfo>(), done = new Set<number>();
+  ways.forEach((w0, i0) => {
+    if (done.has(i0)) return;
+    // idź do jednego końca ciągu, potem przejdź cały ciąg
+    let cur = i0, fromEnd = w0.ids[0], guard = 0;
+    for (;;) {
+      const nb = (ends.get(key(w0.kind, fromEnd)) || []).filter(j => j !== cur);
+      if (nb.length !== 1 || nb[0] === i0 || guard++ > 200) break;
+      const w = ways[nb[0]]; cur = nb[0]; fromEnd = w.ids[0] === fromEnd ? w.ids[w.ids.length - 1] : w.ids[0];
+    }
+    const chain: { i: number; dir: 1 | -1 }[] = []; let at = fromEnd, c = cur; guard = 0;
+    for (;;) {
+      const w = ways[c], dir: 1 | -1 = w.ids[0] === at ? 1 : -1; chain.push({ i: c, dir }); done.add(c);
+      at = dir === 1 ? w.ids[w.ids.length - 1] : w.ids[0];
+      const nb = (ends.get(key(w0.kind, at)) || []).filter(j => j !== c && !done.has(j));
+      if (nb.length !== 1 || guard++ > 200) break; c = nb[0];
+    }
+    const first = ways[chain[0].i], last = ways[chain[chain.length - 1].i];
+    const a = chain[0].dir === 1 ? first.pts[0] : first.pts[first.pts.length - 1];
+    const b = chain[chain.length - 1].dir === 1 ? last.pts[last.pts.length - 1] : last.pts[0];
+    const total = chain.reduce((s, x) => s + ways[x.i].len, 0); let s = 0;
+    for (const { i, dir } of chain) { const w = ways[i]; out.set(w.id, { a, b, s: dir === 1 ? s : s + w.len, dir, total }); s += w.len; }
+  });
+  return out;
 }

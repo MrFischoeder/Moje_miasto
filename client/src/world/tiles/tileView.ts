@@ -3,7 +3,8 @@
 // ZASADA: odcinki i trójkąty do 20 m (długie znikają blisko kamery na niektórych GPU).
 import * as THREE from 'three';
 import type { RGB } from '@miasto/shared/util/rng';
-import { toXZ } from '@miasto/shared/world/world';
+import { toXZ, type World } from '@miasto/shared/world/world';
+import { deckY } from '@miasto/shared/world/bridges';
 import type { XZ } from '@miasto/shared/world/collision';
 import { isVehicleRoad } from '@miasto/shared/tiles/build';
 import type { AreaKind, TileData, TileRoad } from '@miasto/shared/tiles/types';
@@ -92,12 +93,27 @@ class Lines {
 const area2 = (r: XZ[]) => { let a = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; a += p[0] * q[1] - q[0] * p[1]; } return a; };
 const v2 = (r: XZ[]) => r.map(([x, z]) => new THREE.Vector2(x, z));
 
-/** Wypełnienie wielokąta (z dziurami) na wysokości y. */
-function fillPoly(buf: Buf, outer: XZ[], holes: XZ[][], y: number, col: RGB): void {
+type Ground = ((x: number, z: number) => number) | null;
+
+/** Wypełnienie wielokąta (z dziurami) na wysokości y; z terenem trójkąty dzielone i kładzione na gruncie. */
+function fillPoly(buf: Buf, outer: XZ[], holes: XZ[][], y: number, col: RGB, g: Ground = null): void {
   const all = [...outer, ...holes.flat()];
   let tris: number[][];
   try { tris = THREE.ShapeUtils.triangulateShape(v2(outer), holes.map(v2)); } catch { return; }
-  for (const [a, b, c] of tris) buf.tri([all[a][0], y, all[a][1]], [all[b][0], y, all[b][1]], [all[c][0], y, all[c][1]], col, [0, 1, 0]);
+  const put = (a: XZ, b: XZ, c: XZ, depth: number): void => {
+    if (g) {
+      const ab = Math.hypot(a[0] - b[0], a[1] - b[1]), bc = Math.hypot(b[0] - c[0], b[1] - c[1]), ca = Math.hypot(c[0] - a[0], c[1] - a[1]), m = Math.max(ab, bc, ca);
+      if (m > 30 && depth < 12) { // podział najdłuższej krawędzi
+        if (m === ab) { const d: XZ = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; put(a, d, c, depth + 1); put(d, b, c, depth + 1); }
+        else if (m === bc) { const d: XZ = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2]; put(a, b, d, depth + 1); put(a, d, c, depth + 1); }
+        else { const d: XZ = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2]; put(a, b, d, depth + 1); put(d, b, c, depth + 1); }
+        return;
+      }
+    }
+    const Y = (p: XZ) => g ? g(p[0], p[1]) + y : y;
+    buf.tri([a[0], Y(a), a[1]], [b[0], Y(b), b[1]], [c[0], Y(c), c[1]], col, [0, 1, 0]);
+  };
+  for (const [a, b, c] of tris) put(all[a], all[b], all[c], 0);
 }
 
 /** Dzieli łamaną tak, by odcinki miały najwyżej max metrów. */
@@ -125,25 +141,29 @@ function offsets(p: XZ[]): XZ[] {
 }
 function norm2(x: number, z: number): XZ | null { const m = Math.hypot(x, z); return m < 1e-9 ? null : [x / m, z / m]; }
 
+/** Wysokości wierzchołków łamanej: liczba (stała) albo tablica. */
+type Ys = number | number[];
+const yAt = (ys: Ys, i: number, dy = 0) => (typeof ys === 'number' ? ys : ys[i]) + dy;
+
 /** Pas wzdłuż łamanej od przesunięcia s0 do s1 (w poprzek). */
-function strip(buf: Buf, p: XZ[], n: XZ[], s0: number, s1: number, y: number, col: RGB): void {
+function strip(buf: Buf, p: XZ[], n: XZ[], s0: number, s1: number, ys: Ys, col: RGB, dy = 0): void {
   for (let i = 0; i < p.length - 1; i++) {
-    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1];
-    buf.quad([A[0] + na[0] * s0, y, A[1] + na[1] * s0], [B[0] + nb[0] * s0, y, B[1] + nb[1] * s0], [B[0] + nb[0] * s1, y, B[1] + nb[1] * s1], [A[0] + na[0] * s1, y, A[1] + na[1] * s1], col, [0, 1, 0]);
+    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], ya = yAt(ys, i, dy), yb = yAt(ys, i + 1, dy);
+    buf.quad([A[0] + na[0] * s0, ya, A[1] + na[1] * s0], [B[0] + nb[0] * s0, yb, B[1] + nb[1] * s0], [B[0] + nb[0] * s1, yb, B[1] + nb[1] * s1], [A[0] + na[0] * s1, ya, A[1] + na[1] * s1], col, [0, 1, 0]);
   }
 }
-function offLine(L: Lines, p: XZ[], n: XZ[], s: number, y: number, col: RGB, dash?: [number, number], skip?: (x: number, z: number) => boolean): void {
+function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?: [number, number], skip?: (x: number, z: number) => boolean, dy = 0): void {
   let acc = 0;
   for (let i = 0; i < p.length - 1; i++) {
-    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]), ya = yAt(ys, i, dy), yb = yAt(ys, i + 1, dy);
     const a: XZ = [A[0] + na[0] * s, A[1] + na[1] * s], b: XZ = [B[0] + nb[0] * s, B[1] + nb[1] * s];
-    if (!dash) { if (!skip || (!skip(A[0], A[1]) && !skip(B[0], B[1]))) L.seg([a[0], y, a[1]], [b[0], y, b[1]], col); acc += len; continue; }
+    if (!dash) { if (!skip || (!skip(A[0], A[1]) && !skip(B[0], B[1]))) L.seg([a[0], ya, a[1]], [b[0], yb, b[1]], col); acc += len; continue; }
     const [on, off] = dash, per = on + off;
     for (let t = Math.ceil(acc / per) * per - acc; t < len; t += per) {
       const t1 = Math.min(len, t + on), f0 = t / len, f1 = t1 / len;
       const x0 = a[0] + (b[0] - a[0]) * f0, z0 = a[1] + (b[1] - a[1]) * f0, x1 = a[0] + (b[0] - a[0]) * f1, z1 = a[1] + (b[1] - a[1]) * f1;
       if (skip && (skip(x0, z0) || skip(x1, z1))) continue;
-      L.seg([x0, y, z0], [x1, y, z1], col);
+      L.seg([x0, ya + (yb - ya) * f0, z0], [x1, ya + (yb - ya) * f1, z1], col);
     }
     acc += len;
   }
@@ -151,8 +171,16 @@ function offLine(L: Lines, p: XZ[], n: XZ[], s: number, y: number, col: RGB, das
 
 export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void }
 
-export function buildTileView(t: TileData, M: TileMaterials): TileView {
-  const t0 = performance.now();
+export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null): TileView {
+  const t0 = performance.now(), g: Ground = world ? world.ground : null;
+  /** wysokość gruntu w wierzchołkach (+ uniesienie warstw płaskich nad siatką terenu) */
+  const LIFT = g ? .15 : 0, gys = (p: XZ[]): Ys => g ? p.map(q => g(q[0], q[1]) + LIFT) : 0;
+  /** pomost mostu: interpolacja terenu między końcami ciągu */
+  const deckYs = (p: XZ[], bw?: number[]): Ys => {
+    if (!g) return 0; const out: number[] = []; let arc = 0;
+    for (let i = 0; i < p.length; i++) { if (i) arc += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); out.push((bw ? deckY(bw, arc, g) : g(p[i][0], p[i][1])) + LIFT); }
+    return out;
+  };
   const B = new Buf(), BE = new Lines();
   const F: Buf[] = [new Buf(), new Buf(), new Buf(), new Buf(), new Buf()]; // 0 ziemia/park, 1 place/parkingi, 2 ścieżki, 3 jezdnie, 4 oznakowanie
   const FL: Lines[] = [new Lines(), new Lines(), new Lines(), new Lines(), new Lines()];
@@ -160,7 +188,7 @@ export function buildTileView(t: TileData, M: TileMaterials): TileView {
 
   // --- budynki: ściany, dach, krawędzie (dach, podstawa, narożniki > 25°) ---
   for (const b of t.b) {
-    const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), h = b.h, mh = b.mh;
+    const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
     const v = .05 + Math.min(h, 80) / 80 * .09, col: RGB = [v * .55, v * 1.1, v * .8];
     fillPoly(B, outer, holes, h, col);
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
@@ -183,6 +211,11 @@ export function buildTileView(t: TileData, M: TileMaterials): TileView {
   };
   for (const a of t.a) {
     const outer = toXZ(a.o), holes = (a.i || []).map(toXZ), st = AREA[a.k];
+    if (a.k === 'water' && g) { // z terenem: woda leży w dolinie, bez obniżania
+      fillPoly(F[0], outer, holes, LIFT, C.waterTop, g);
+      for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; if (!tileBox(p, q)) FL[1].seg([p[0], g(p[0], p[1]) + LIFT, p[1]], [q[0], g(q[0], q[1]) + LIFT, q[1]], C.waterEdge); }
+      continue;
+    }
     if (a.k === 'water') {
       fillPoly(S, outer, holes, WATER_Y, C.waterTop);
       for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) {
@@ -192,8 +225,9 @@ export function buildTileView(t: TileData, M: TileMaterials): TileView {
       }
       continue;
     }
-    fillPoly(F[st.order >= 2 ? 1 : 0], outer, holes, 0, st.fill);
-    if (st.edge) for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; if (!tileBox(p, q)) FL[1].seg([p[0], 0, p[1]], [q[0], 0, q[1]], st.edge); }
+    fillPoly(F[st.order >= 2 ? 1 : 0], outer, holes, LIFT, st.fill, g);
+    const Yg = (p: XZ) => g ? g(p[0], p[1]) + LIFT : 0;
+    if (st.edge) for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; if (!tileBox(p, q)) FL[1].seg([p[0], Yg(p), p[1]], [q[0], Yg(q), q[1]], st.edge); }
   }
 
   // --- drogi ---
@@ -201,31 +235,31 @@ export function buildTileView(t: TileData, M: TileMaterials): TileView {
   const roadW = new Map<number, number>(); // id węzła -> szerokość drogi
   const near = (r: number) => (x: number, z: number) => junctions.some(j => (j[0] - x) ** 2 + (j[1] - z) ** 2 < r * r);
   const drawRoad = (r: TileRoad) => {
-    const p = densify(toXZ(r.p)), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k);
+    const p = densify(toXZ(r.p)), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k), ys = r.br ? deckYs(p, r.bw) : gys(p);
     for (let i = 0; i < r.j.length; i += 2) roadW.set(r.j[i + 1], Math.max(roadW.get(r.j[i + 1]) || 0, r.w));
     if (r.br) {
       const ext = hw + (r.sw ? 2.5 : 0);
-      strip(S, p, n, -ext, ext, -.02, C.deck);
-      for (const s of [-ext - .2, ext + .2]) { offLine(SL, p, n, s, 1.05, C.railing); offLine(SL, p, n, s, .05, C.railing); }
+      strip(S, p, n, -ext, ext, ys, C.deck, -.02);
+      for (const s of [-ext - .2, ext + .2]) { offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1.05); offLine(SL, p, n, s, ys, C.railing, undefined, undefined, .05); }
     }
-    if (!veh) { strip(F[2], p, n, -hw, hw, 0, C.path); offLine(FL[2], p, n, -hw, 0, C.pathEdge); offLine(FL[2], p, n, hw, 0, C.pathEdge); return; }
-    strip(F[3], p, n, -hw, hw, 0, r.tu ? [.03, .04, .045] : C.road);
+    if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); offLine(FL[2], p, n, -hw, ys, C.pathEdge); offLine(FL[2], p, n, hw, ys, C.pathEdge); return; }
+    strip(F[3], p, n, -hw, hw, ys, r.tu ? [.03, .04, .045] : C.road);
     const skip = near(hw + 4);
-    offLine(FL[3], p, n, -hw, 0, C.roadEdge, undefined, near(hw * .8)); offLine(FL[3], p, n, hw, 0, C.roadEdge, undefined, near(hw * .8));
+    offLine(FL[3], p, n, -hw, ys, C.roadEdge, undefined, near(hw * .8)); offLine(FL[3], p, n, hw, ys, C.roadEdge, undefined, near(hw * .8));
     if (r.sw) for (const side of [-1, 1]) {
       if (!((side < 0 && r.sw & 1) || (side > 0 && r.sw & 2))) continue;
-      strip(F[2], p, n, side * hw, side * (hw + 2.5), 0, C.path); offLine(FL[2], p, n, side * (hw + 2.5), 0, C.pathEdge);
+      strip(F[2], p, n, side * hw, side * (hw + 2.5), ys, C.path); offLine(FL[2], p, n, side * (hw + 2.5), ys, C.pathEdge);
     }
     // pasy ruchu
     const ln = r.ln, lw = r.w / Math.max(1, ln);
     if (ln >= 2) {
-      if (r.ow) { for (let k = 1; k < ln; k++) offLine(FL[4], p, n, -hw + k * lw, 0, C.mark, [3, 6], skip); }
+      if (r.ow) { for (let k = 1; k < ln; k++) offLine(FL[4], p, n, -hw + k * lw, ys, C.mark, [3, 6], skip); }
       else {
         const fwd = Math.ceil(ln / 2), back = ln - fwd, cs = -hw + back * lw;
-        if (ln >= 4) { offLine(FL[4], p, n, cs - .15, 0, C.mark, undefined, skip); offLine(FL[4], p, n, cs + .15, 0, C.mark, undefined, skip); }
-        else offLine(FL[4], p, n, cs, 0, C.mark, [4, 4], skip);
-        for (let k = 1; k < back; k++) offLine(FL[4], p, n, -hw + k * lw, 0, C.mark, [3, 6], skip);
-        for (let k = 1; k < fwd; k++) offLine(FL[4], p, n, cs + k * lw, 0, C.mark, [3, 6], skip);
+        if (ln >= 4) { offLine(FL[4], p, n, cs - .15, ys, C.mark, undefined, skip); offLine(FL[4], p, n, cs + .15, ys, C.mark, undefined, skip); }
+        else offLine(FL[4], p, n, cs, ys, C.mark, [4, 4], skip);
+        for (let k = 1; k < back; k++) offLine(FL[4], p, n, -hw + k * lw, ys, C.mark, [3, 6], skip);
+        for (let k = 1; k < fwd; k++) offLine(FL[4], p, n, cs + k * lw, ys, C.mark, [3, 6], skip);
       }
     }
   };
@@ -234,31 +268,31 @@ export function buildTileView(t: TileData, M: TileMaterials): TileView {
 
   // --- tory ---
   for (const l of t.l) {
-    const p = densify(toXZ(l.p)), n = offsets(p), col = l.k === 'tram' ? C.rail2 : C.rail;
-    for (const s of [-.72, .72]) offLine(FL[4], p, n, s, .02, col);
-    if (l.k !== 'tram') offLine(FL[2], p, n, 0, .01, C.sleeper, [.25, 2.75]);
-    if (l.br) { strip(S, p, n, -2.2, 2.2, -.02, C.deck); for (const s of [-2.4, 2.4]) offLine(SL, p, n, s, 1, C.railing); }
+    const p = densify(toXZ(l.p)), n = offsets(p), col = l.k === 'tram' ? C.rail2 : C.rail, ys = l.br ? deckYs(p, l.bw) : gys(p);
+    for (const s of [-.72, .72]) offLine(FL[4], p, n, s, ys, col, undefined, undefined, .02);
+    if (l.k !== 'tram') offLine(FL[2], p, n, 0, ys, C.sleeper, [.25, 2.75], undefined, .01);
+    if (l.br) { strip(S, p, n, -2.2, 2.2, ys, C.deck, -.02); for (const s of [-2.4, 2.4]) offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1); }
   }
 
   // --- przejścia i sygnalizacja ---
   for (const nd of t.n) {
-    const d = nd.d ?? 0, ux = Math.cos(d), uz = Math.sin(d), nx = -uz, nz = ux;
+    const d = nd.d ?? 0, ux = Math.cos(d), uz = Math.sin(d), nx = -uz, nz = ux, gy = g ? g(nd.x, nd.z) + LIFT : 0;
     if (nd.k === 'crossing') {
       const w = (roadW.get(nd.id) || 7) / 2;
       for (let s = -w + .25; s < w - .2; s += 1) {
-        const a = (q: number, t2: number): number[] => [nd.x + nx * q + ux * t2, 0, nd.z + nz * q + uz * t2];
+        const a = (q: number, t2: number): number[] => [nd.x + nx * q + ux * t2, gy, nd.z + nz * q + uz * t2];
         F[4].quad(a(s, -1.5), a(s + .5, -1.5), a(s + .5, 1.5), a(s, 1.5), C.zebra, [0, 1, 0]);
       }
     } else if (nd.k === 'signals') {
       const w = (roadW.get(nd.id) || 8) / 2 + 1;
       for (const side of [-1, 1]) {
         const x = nd.x + nx * w * side, z = nd.z + nz * w * side;
-        SL.seg([x, 0, z], [x, 4.2, z], C.pole);
-        const light = (y: number, c: RGB) => S.quad([x - ux * .15, y, z - uz * .15], [x + ux * .15, y, z + uz * .15], [x + ux * .15, y + .3, z + uz * .15], [x - ux * .15, y + .3, z - uz * .15], c);
+        SL.seg([x, gy, z], [x, gy + 4.2, z], C.pole);
+        const light = (y0: number, c: RGB) => { const y = gy + y0; S.quad([x - ux * .15, y, z - uz * .15], [x + ux * .15, y, z + uz * .15], [x + ux * .15, y + .3, z + uz * .15], [x - ux * .15, y + .3, z - uz * .15], c); };
         light(3.9, [.9, .15, .1]); light(3.55, [.9, .7, .1]); light(3.2, [.15, .9, .35]);
       }
     } else if (nd.k === 'tram_stop') {
-      SL.seg([nd.x, 0, nd.z], [nd.x, 2.6, nd.z], C.rail2); SL.seg([nd.x - .4, 2.6, nd.z], [nd.x + .4, 2.6, nd.z], C.rail2);
+      SL.seg([nd.x, gy, nd.z], [nd.x, gy + 2.6, nd.z], C.rail2); SL.seg([nd.x - .4, gy + 2.6, nd.z], [nd.x + .4, gy + 2.6, nd.z], C.rail2);
     }
   }
 
