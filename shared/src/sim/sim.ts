@@ -2,6 +2,7 @@
 // więc ten sam kod działa w przeglądarce i na serwerze Node.js.
 import type { World } from '../world/world';
 import type { TransitSystem } from '../transit/system';
+import { Traffic } from '../traffic/traffic';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
 import { NO_INPUT, PLAYER_COLORS, SEATS, type Command, type Entity, type EntityKind, type InputCmd, type Mode, type PlayerState, type SaveState } from './types';
@@ -25,6 +26,24 @@ export class Simulation {
 
   /** komunikacja miejska (rozkłady); null = brak danych */
   transit: TransitSystem | null = null;
+  /** ruch uliczny wokół graczy (włączany przez serwer) */
+  traffic: Traffic | null = null;
+
+  /** Włącza ruch uliczny (auta NPC). */
+  enableTraffic(): Traffic {
+    return this.traffic = new Traffic({
+      world: this.world,
+      spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw),
+      despawn: id => { this.entities.delete(id); },
+      obstacles: () => { const out: Entity[] = []; for (const p of this.players.values()) { const e = this.controlled(p); if (!e.hide) out.push(e); } return out; },
+    });
+  }
+  /** Krok ruchu ulicznego: t = czas zegara [s], hour = godzina lokalna. */
+  stepTraffic(t: number, hour: number): void {
+    if (!this.traffic) return;
+    const pts: { x: number; z: number }[] = []; for (const p of this.players.values()) { const w = this.entity(p.walker); pts.push({ x: w.x, z: w.z }); }
+    this.traffic.step(SIM_DT, t, hour, pts);
+  }
 
   constructor(readonly world: World) {}
 
@@ -101,7 +120,13 @@ export class Simulation {
   /** Jeden krok sterowanego bytu gracza (serwer: jeden krok na jedno wejście klienta). */
   stepPlayer(pid: number, cmd: InputCmd): void {
     const p = this.players.get(pid), e = p && this.driven(p); if (!e) return;
+    const x = e.x, z = e.z, yaw = e.yaw;
     stepEntity(e, cmd, SIM_DT, this.world);
+    // zderzenie auta gracza z autem NPC (prosto: okręgi 3,2 m)
+    if (e.kind === 'car' && this.traffic) for (const c of this.traffic.cars.values()) {
+      const o = c.e; if (Math.abs(o.x - e.x) > 6 || Math.abs(o.z - e.z) > 6) continue;
+      if (Math.hypot(o.x - e.x, o.z - e.z) < 3.2) { e.x = x; e.z = z; e.yaw = yaw; e.speed *= -.3; c.v = 0; break; }
+    }
   }
 
   /** Koniec kroku świata: pieszy siedzący w pojeździe jedzie razem z nim (zainteresowanie, zapis). */
@@ -181,7 +206,7 @@ export class Simulation {
     const w = this.entity(p.walker); if (this.world.underground(w.x, w.z, w.y)) return false;
     let best: Entity | null = null, bd = ENTER_RADIUS ** 2;
     for (const e of this.entities.values()) {
-      if (e.kind === 'walker' || (e.driver != null && e.pass.length >= SEATS[e.kind])) continue;
+      if (e.kind === 'walker' || e.npc || (e.driver != null && e.pass.length >= SEATS[e.kind])) continue;
       const d = (e.x - w.x) ** 2 + (e.z - w.z) ** 2 + ((e.y - w.y) / 2) ** 2; if (d < bd) { bd = d; best = e; }
     }
     if (!best) return false;

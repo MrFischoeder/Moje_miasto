@@ -1,24 +1,31 @@
 # Raport: test obciążenia serwera (boty)
 
-Wygenerowany: 2026-11-20 18:44 UTC, `npm run bots` (12 s na scenariusz, po 3 s rozgrzewki).
+Wygenerowany: 2026-11-20 22:35 UTC, `npm run bots` (12 s na scenariusz, po 3 s rozgrzewki).
 Maszyna: linux, Node v22.23.5. Serwer w osobnym procesie, boty przez prawdziwe WebSockety na tym samym komputerze.
-Świat: Warszawa z terenem, bez kafelków OSM (zablokowane pobieranie), więc kolizje z budynkami nie obciążają kroku.
+Świat: Warszawa z terenem, kaflami OSM, rozkładami komunikacji i ruchem ulicznym (auta NPC wokół każdego gracza, do 70 w szczycie).
 
 Boty: 1/3 jeździ autem, 1/3 lata helikopterem, 1/3 chodzi; wejście 30 Hz jak prawdziwy klient.
 „Rozproszeni” = każdy przy innej stacji; „skupieni” = wszyscy przy Świętokrzyskiej (najgorszy przypadek dla zarządzania zainteresowaniem).
 
 | scenariusz | graczy | krok śr. [ms] | krok maks. [ms] | budżet kroku 33 ms | w dół [KB/s/gracza] | w górę [KB/s/gracza] | migawki/s | byty |
 |---|---|---|---|---|---|---|---|---|
-| rozproszeni | 8 | 0.26 | 1.5 | 0.8% | 0.6 | 0.4 | 15.1 | 14 |
-| rozproszeni | 16 | 0.30 | 1.5 | 0.9% | 0.8 | 0.4 | 15.1 | 27 |
-| rozproszeni | 32 | 0.51 | 14.1 | 1.5% | 1.3 | 0.4 | 15.1 | 54 |
-| rozproszeni | 64 | 0.85 | 10.7 | 2.5% | 2.4 | 0.4 | 15.0 | 107 |
-| skupieni | 8 | 0.17 | 1.6 | 0.5% | 3.7 | 0.4 | 15.0 | 14 |
-| skupieni | 16 | 0.31 | 0.8 | 0.9% | 6.8 | 0.4 | 15.1 | 27 |
-| skupieni | 32 | 0.66 | 2.7 | 2.0% | 13.6 | 0.4 | 15.1 | 54 |
-| skupieni | 64 | 1.90 | 12.7 | 5.7% | 26.3 | 0.4 | 15.0 | 107 |
+| rozproszeni | 8 | 1.25 | 14.1 | 3.7% | 2.5 | 0.4 | 15.0 | 94 |
+| rozproszeni | 16 | 1.73 | 11.0 | 5.2% | 2.1 | 0.4 | 15.0 | 93 |
+| rozproszeni | 32 | 2.67 | 13.0 | 8.0% | 3.0 | 0.4 | 15.0 | 148 |
+| rozproszeni | 64 | 4.74 | 13.3 | 14.2% | 4.2 | 0.4 | 15.0 | 216 |
+| skupieni | 8 | 0.43 | 2.9 | 1.3% | 6.6 | 0.4 | 15.0 | 33 |
+| skupieni | 16 | 0.57 | 2.8 | 1.7% | 7.9 | 0.4 | 15.1 | 46 |
+| skupieni | 32 | 1.06 | 4.2 | 3.2% | 12.9 | 0.4 | 15.0 | 72 |
+| skupieni | 64 | 2.68 | 10.4 | 8.0% | 21.4 | 0.4 | 15.1 | 131 |
 
 ## Wnioski
+
+**Ruch uliczny (od wersji z autami NPC):** to on dominuje teraz koszt kroku: przy 64 rozproszonych graczach każdy ma wokół
+siebie własny ruch (ok. 200 bytów razem), co daje ok. 4 ms średnio i do ~15 ms w szczytach (doładowanie kafli i grafu pasów).
+Graf pasów jest przyrostowy (dokładane / usuwane tylko zmienione kafle). Komunikacja miejska i samoloty nic nie kosztują
+serwera ani sieci: są funkcją rozkładu i zegara, liczoną u każdego klienta. Dalsze kroki dla ruchu: aktualizacja aut
+dalej od graczy rzadziej (co 2.–3. krok), wspólne obszary ruchu dla graczy blisko siebie, siatka przestrzenna przeszkód.
+
 
 **Do 64 graczy wystarczy jeden proces serwera.** Nawet w najgorszym przypadku (64 graczy w jednym miejscu) krok symulacji
 zajmuje średnio ok. 2 ms z budżetu 33 ms (30 Hz); szczyty do ok. 10 ms to prawdopodobnie odśmiecanie pamięci w Node

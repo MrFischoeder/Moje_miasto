@@ -42,6 +42,7 @@ async function init(o: LocalInit): Promise<void> {
     },
   }, { local: true, maxPlayers: 1 }, () => performance.now());
   if (o.transit) room.setTransit(o.transit);
+  room.enableTraffic();
   pid = room.join({ send, close: () => close() }, o.name);
   let last = performance.now(), acc = 0;
   setInterval(() => {

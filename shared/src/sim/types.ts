@@ -25,6 +25,8 @@ export interface Entity {
   pass: number[];
   /** ukryty (pieszy siedzący w pojeździe) */
   hide: boolean;
+  /** pojazd z kierowcą NPC (ruch uliczny) */
+  npc?: boolean;
   /** właściciel (pojazd przywoływany przez gracza) */
   owner: number | null;
 }

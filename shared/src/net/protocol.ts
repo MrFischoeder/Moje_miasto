@@ -44,7 +44,7 @@ export const NF = FIELDS.length;
 export type QState = Int32Array;
 
 export function quantize(e: Entity, out: QState = new Int32Array(NF + 1)): QState {
-  out[0] = KINDS.indexOf(e.kind) | (e.air ? 4 : 0) | (e.hide ? 8 : 0) | (Math.min(3, e.pass.length) << 4);
+  out[0] = KINDS.indexOf(e.kind) | (e.air ? 4 : 0) | (e.hide ? 8 : 0) | (Math.min(3, e.pass.length) << 4) | (e.npc ? 64 : 0);
   out[1] = qPos(e.x); out[2] = qPos(e.y); out[3] = qPos(e.z); out[4] = qAng(e.yaw); out[5] = qSmall(e.pitch);
   out[6] = qVel(e.speed); out[7] = qVel(e.vx); out[8] = qVel(e.vy); out[9] = qVel(e.vz); out[10] = qSmall(e.roll); out[11] = qSmall(e.tilt);
   out[12] = e.reg; out[13] = q8(e.lift); out[14] = e.driver ?? 0; out[15] = e.owner ?? 0;
@@ -54,7 +54,7 @@ const SIZE = [1, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2];
 
 /** Byt odtworzony po stronie klienta. */
 export function applyQ(e: Entity, q: QState): void {
-  e.kind = KINDS[q[0] & 3]; e.air = !!(q[0] & 4); e.hide = !!(q[0] & 8);
+  e.kind = KINDS[q[0] & 3]; e.air = !!(q[0] & 4); e.hide = !!(q[0] & 8); e.npc = !!(q[0] & 64);
   e.x = dPos(q[1]); e.y = dPos(q[2]); e.z = dPos(q[3]); e.yaw = dAng(q[4]); e.pitch = dSmall(q[5]);
   e.speed = q[6] / 100; e.vx = q[7] / 100; e.vy = q[8] / 100; e.vz = q[9] / 100; e.roll = dSmall(q[10]); e.tilt = dSmall(q[11]);
   e.reg = q[12]; e.lift = q[13] / 127; e.driver = q[14] || null; e.owner = q[15] || null;

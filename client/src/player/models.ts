@@ -10,8 +10,8 @@ function part(geo: THREE.BufferGeometry, x: number, y: number, z: number, fill: 
 
 export interface VehicleModel { root: THREE.Group; rotor?: THREE.Group; trotor?: THREE.Group }
 
-export function makeCar(): VehicleModel {
-  const car = new THREE.Group(), E = 0xffcc33, F = 0x1a1406;
+export function makeCar(edge = 0xffcc33): VehicleModel {
+  const car = new THREE.Group(), E = edge, F = new THREE.Color(edge).multiplyScalar(.1).getHex();
   car.add(part(new THREE.BoxGeometry(1.9, .7, 4.4), 0, .62, 0, F, E));
   car.add(part(new THREE.BoxGeometry(1.6, .6, 2.1), 0, 1.27, .25, F, E));
   for (const [x, z] of [[-.95, -1.4], [.95, -1.4], [-.95, 1.45], [.95, 1.45]]) { const w = new THREE.CylinderGeometry(.38, .38, .3, 10); w.rotateZ(Math.PI / 2); car.add(part(w, x, .38, z, 0x050505, 0xcfe9ff)); }

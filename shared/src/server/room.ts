@@ -2,7 +2,7 @@
 // zainteresowaniem (każdy dostaje byty wokół siebie), migawki z samymi zmianami, czat, kafelki.
 // Bez Node i DOM: ten sam kod działa w serwerze (WebSocket) i w Workerze (gra jednoosobowa).
 import { Simulation } from '../sim/sim';
-import { GameClock } from '../transit/clock';
+import { CITY_TZ, GameClock, localTime } from '../transit/clock';
 import { TransitSystem } from '../transit/system';
 import type { TransitData } from '../transit/timetable';
 import { SIM_HZ } from '../sim/loop';
@@ -52,6 +52,8 @@ export class Room {
   transit: TransitSystem | null = null;
   readonly clients = new Map<number, Client>();
   readonly opt: Required<RoomOptions>;
+  /** ruch uliczny wokół graczy */
+  enableTraffic(): void { this.sim.enableTraffic(); }
   private playersSig = '';
   private loadingTiles = new Set<string>();
   private q = new Map<number, QState>();
@@ -155,6 +157,7 @@ export class Room {
       while (c.inputs.length && c.credit >= 1) { const m = c.inputs.shift()!; c.credit--; c.ack = m.seq; this.sim.stepPlayer(c.player.id, m.cmd); }
     }
     this.sim.endStep();
+    if (this.sim.traffic) { const now = this.clock.now(), lt = localTime(now, CITY_TZ[this.world.key] ?? 'UTC'); this.sim.stepTraffic(now / 1000, lt.sec / 3600); }
     if (this.sim.tick % 15 === 0) this.streamTiles();
     this.sendPlayers();
     if (this.sim.tick % (SIM_HZ * 10) === 0) this.broadcast({ t: 'time', time: this.clock.now(), scale: this.clock.scale });

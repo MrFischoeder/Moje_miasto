@@ -45,6 +45,9 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpAngle = (a: number, b: number, t: number) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t; };
 const tilesBase = (key: string) => `${new URL(import.meta.env.BASE_URL, location.href).href}tiles/${key}/`;
 
+/** kolory aut z ruchu ulicznego */
+const NPC_COLORS = [0xd8e0e8, 0x8aa4c8, 0xc84a4a, 0x5a7a9a, 0xe0e0e0, 0x4a8a6a, 0xb0b0b0, 0x7a5ad0, 0xd0a040];
+
 export interface OnlineInfo { http: string; session: string; name: string }
 
 export class Game {
@@ -300,7 +303,7 @@ export class Game {
       let m = this.models.get(e.id);
       if (!m) {
         if (e.kind === 'walker') { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?'); }
-        else m = e.kind === 'car' ? makeCar() : makeHeli();
+        else m = e.kind === 'car' ? makeCar(e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : undefined) : makeHeli();
         this.models.set(e.id, m); this.world3d.add(m.root);
       }
       const pv = s.previous(e.id) ?? e, x = lerp(pv.x, e.x, alpha), y = lerp(pv.y, e.y, alpha), z = lerp(pv.z, e.z, alpha), yaw = lerpAngle(pv.yaw, e.yaw, alpha);

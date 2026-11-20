@@ -2,3 +2,4 @@
 export const EMBEDDED_TERRAIN: Record<string, string> = {};
 export const EMBEDDED_TILES: Record<string, Record<string, string>> = {};
 export const EMBEDDED_TRANSIT: Record<string, string> = {};
+export const EMBEDDED_AIR: Record<string, string> = {};

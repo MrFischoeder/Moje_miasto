@@ -2,6 +2,7 @@
 // Londyn: płaski i bez kafli (pliki byłyby za duże).
 import warszawa from '../../public/terrain/warszawa.bin.gz?url';
 import warszawaTransit from '../../public/transit/warszawa.json.gz?url';
+import warszawaAir from '../../public/air/warszawa.json?url';
 export const EMBEDDED_TERRAIN: Record<string, string> = { warszawa };
 const tiles = import.meta.glob('../../embedded/*/*.json.gz', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 /** miasto -> nazwa kafla (x_y) -> data URL */
@@ -12,3 +13,5 @@ for (const [path, url] of Object.entries(tiles)) {
 }
 /** rozkłady jazdy Warszawy */
 export const EMBEDDED_TRANSIT: Record<string, string> = { warszawa: warszawaTransit };
+/** lotniska Warszawy */
+export const EMBEDDED_AIR: Record<string, string> = { warszawa: warszawaAir };

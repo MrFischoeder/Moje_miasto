@@ -30,6 +30,22 @@ Bez serwera gra działa jednoosobowo: ten sam kod serwera uruchamia się wtedy w
 - Postęp (pozycja) zapisuje serwer w `server/data/players.json` po nicku.
 - Test obciążenia: `npm run bots` (8–64 botów), wyniki: [`docs/RAPORT-MULTIPLAYER.md`](docs/RAPORT-MULTIPLAYER.md).
 
+## Żywe miasto (etap 3)
+
+Komunikacja miejska wg prawdziwych rozkładów (GTFS), samoloty na prawdziwych pasach, ruch uliczny z kierowcami NPC.
+Opis i plan mieszkańców z cyklem dnia: [`docs/ARCHITEKTURA-SWIAT.md`](docs/ARCHITEKTURA-SWIAT.md).
+
+```bash
+curl -O https://mkuran.pl/gtfs/warsaw.zip -O https://mkuran.pl/gtfs/wkd.zip -O https://mkuran.pl/gtfs/polish_trains.zip
+python3 tools/gtfs-build.py --city warszawa --feed warsaw.zip --feed wkd.zip --feed polish_trains.zip
+curl -L -o london.zip https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/london/
+python3 tools/gtfs-build.py --city londyn --feed london.zip --bus-radius 8000
+python3 tools/airports.py --city warszawa --pbf Warsaw.osm.pbf
+```
+
+W grze: E przy stojącym autobusie, tramwaju, pociągu albo metrze = wsiadasz; E albo 1 na przystanku = wysiadasz.
+W menu (gra jednoosobowa): godzina gry (np. szczyt 7:30, noc 2:00) i tempo czasu (×1–×300).
+
 ## Uruchomienie dla programisty
 
 ```bash

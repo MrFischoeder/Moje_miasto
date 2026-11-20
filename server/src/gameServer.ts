@@ -34,6 +34,7 @@ export class GameServer {
     const room = new Room(id, world, tileLoader(city), { maxPlayers: this.opt.maxPlayers }, () => performance.now());
     const tr = loadTransit(city);
     if (tr) { const t = room.setTransit(tr); this.opt.log(`rozkłady ${CITIES[city].name}: ${t.tt.patterns.length} wzorców, metro w tunelach ${t.metro.ok}`); }
+    room.enableTraffic();
     room.onLeave = (p, pos) => { this.saved[`${city}:${p.name}`] = pos; this.persist(); };
     const s = { room, city, created: Date.now() }; this.sessions.set(id, s);
     this.opt.log(`sesja ${id} (${CITIES[city].name})`);

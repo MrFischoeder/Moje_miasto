@@ -4,6 +4,7 @@ import { AirTraffic, type AirData, type PlaneSize } from '@miasto/shared/air/fli
 import type { TransitSystem } from '@miasto/shared/transit/system';
 import type { World } from '@miasto/shared/world/world';
 import { disposeModel, makePlane, type VehicleModel } from '../player/models';
+import { EMBEDDED_AIR } from './embedded';
 
 export class AirView {
   readonly group = new THREE.Group();
@@ -31,7 +32,8 @@ const cache = new Map<string, Promise<AirData | null>>();
 export function loadAir(city: string): Promise<AirData | null> {
   let p = cache.get(city);
   if (!p) cache.set(city, p = (async () => {
-    try { const r = await fetch(`${import.meta.env.BASE_URL}air/${city}.json`); if (!r.ok) return null; const t = await r.text(); return t[0] === '{' ? JSON.parse(t) as AirData : null; } catch { return null; }
+    const emb = EMBEDDED_AIR[city]; if (!emb && location.protocol === 'file:') return null;
+    try { const r = await fetch(emb || `${import.meta.env.BASE_URL}air/${city}.json`); if (!r.ok) return null; const t = await r.text(); return t[0] === '{' ? JSON.parse(t) as AirData : null; } catch { return null; }
   })());
   return p;
 }
