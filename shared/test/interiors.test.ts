@@ -1,0 +1,116 @@
+// Wnętrza budynków: szablony, plany na prawdziwych budynkach z OSM, dostępność wszystkich pomieszczeń
+// fizyką chodzenia, determinizm (identyczne wnętrza u każdego), przeszukiwanie i napad na kasę.
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
+import { World } from '../src/world/world';
+import { Terrain } from '../src/world/terrain';
+import type { TileData } from '../src/tiles/types';
+import { layoutTemplate, TEMPLATES } from '../src/interiors/layout';
+import { buildLevel, makePlan } from '../src/interiors/plan';
+import { classify, windowSlots } from '../src/interiors/facade';
+import { unreachable } from '../src/interiors/reach';
+import { pip } from '../src/world/collision';
+import { ringXZ, toWorld } from '../src/interiors/geom';
+import { Simulation } from '../src/sim/sim';
+import { NO_INPUT } from '../src/sim/types';
+
+const ROOT = join(__dirname, '../..');
+const tile = (city: string, x: number, y: number): TileData => JSON.parse(gunzipSync(readFileSync(join(ROOT, `client/public/tiles/${city}/${x}_${y}.json.gz`))).toString());
+const terrain = (city: string) => { const b = gunzipSync(readFileSync(join(ROOT, `client/public/terrain/${city}.bin.gz`))); return Terrain.parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
+function worldAround(city: 'warszawa' | 'londyn', tx: number, ty: number): World {
+  const tiles: TileData[] = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { try { tiles.push(tile(city, tx + dx, ty + dy)); } catch { /* brak kafla */ } }
+  return new World(city, { tiles, terrain: terrain(city) });
+}
+const center = (o: number[]) => { let x = 0, z = 0; for (let i = 0; i < o.length; i += 2) { x += o[i]; z += o[i + 1]; } return [x / (o.length / 2), z / (o.length / 2)]; };
+
+describe('szablony wnętrz', () => {
+  it('9 szablonów: wejście i każde pomieszczenie osiągalne drzwiami (wiele ziaren i rozmiarów)', () => {
+    expect(Object.keys(TEMPLATES).length).toBe(9);
+    const sizes: Record<string, [number, number][]> = {
+      'pl-m2': [[11, 4], [10, 5]], 'pl-m3': [[11, 5.5], [12, 6]], 'pl-kamienica': [[13, 8], [15, 9.5]], 'uk-terraced': [[5, 10], [5.8, 12]],
+      'uk-newbuild': [[6.5, 7], [7.5, 8.5]], 'uk-council': [[8, 7], [9, 8]], 'pl-maly': [[7, 9], [10, 11]], 'uk-conv': [[12, 16], [15, 18]], 'dyskont': [[30, 40], [40, 45]],
+    };
+    for (const [id, list] of Object.entries(sizes)) for (const [W, D] of list) for (let s = 0; s < 6; s++) {
+      const t = TEMPLATES[id], lay = layoutTemplate(t, W, D, `test${s}`, .3, W - .3);
+      expect(lay.entry, `${id} ${W}x${D} #${s}: wejście`).not.toBeNull();
+      // graf drzwi (piętra łączą się przez schody)
+      const key = (r: { id: string; floor: number }) => r.floor + ':' + r.id, adj = new Map<string, string[]>();
+      const add = (a: string, b: string) => { adj.set(a, [...(adj.get(a) ?? []), b]); adj.set(b, [...(adj.get(b) ?? []), a]); };
+      for (const d of lay.doors) add(d.A.startsWith('^') ? (d.floor - 1) + ':' + d.A.slice(1) : d.floor + ':' + d.A, d.floor + ':' + d.B);
+      const seen = new Set([`0:${lay.entry!.room}`]), q = [...seen];
+      while (q.length) for (const n of adj.get(q.pop()!) ?? []) if (!seen.has(n)) { seen.add(n); q.push(n); }
+      for (const r of lay.rooms) expect(seen.has(key(r)), `${id} ${W}x${D} #${s}: ${key(r)}`).toBe(true);
+    }
+  });
+
+  it('okna wnętrza = okna fasady (ta sama funkcja), parametry z typologii', () => {
+    const t = tile('warszawa', 0, 0), b = t.b.find(q => classify(q, 'warszawa').typ === 'blok')!, c = classify(b, 'warszawa');
+    expect(c.raise).toBe(1); expect(c.spacing).toBeGreaterThan(2.8);
+    const s = windowSlots(12, c); expect(s.length).toBe(Math.floor((12 - .6) / c.spacing));
+    expect(s[0][0]).toBeCloseTo(12 - s[s.length - 1][1], 5); // symetrycznie na ścianie
+  });
+});
+
+describe('wnętrza na prawdziwych budynkach', () => {
+  for (const [city, tx, ty] of [['warszawa', 0, 0], ['londyn', 0, 0]] as const) {
+    it(`${city}: z ulicy dojście do każdego pomieszczenia parteru i dwóch pięter`, () => {
+      const w = worldAround(city, tx, ty), t = [...w.tiles.values()].find(q => q.x === tx && q.y === ty)!;
+      let tested = 0; const typs = new Set<string>();
+      for (const b of t.b) {
+        if (tested >= 14) break;
+        const [cx, cz] = center(b.o);
+        w.interiors.sync([{ x: cx, y: -99, z: cz }], 50);
+        const lv = w.interiors.live.get(b.id); if (!lv) { w.interiors.sync([]); continue; }
+        const p = lv.plan; tested++; typs.add(p.typ);
+        w.interiors.sync([{ x: cx, y: p.f0, z: cz }], 0); w.interiors.sync([{ x: cx, y: p.f0 + p.H, z: cz }], 0);
+        // drzwi zewnętrzne zaczynają się na ulicy (poza budynkiem)
+        for (const e of p.ext) { const [x, z] = toWorld(p.frame, e.x, -e.tOut + .1); expect(pip(p.outer, x, z), `${b.id}: wejście poza obrysem`).toBe(false); }
+        expect(unreachable(w, lv, [0, 1, 2].filter(k => k < p.levels)), `${p.typ} ${b.id}`).toEqual([]);
+        w.interiors.sync([]);
+      }
+      expect(tested).toBeGreaterThanOrEqual(10);
+      expect(typs.size).toBeGreaterThanOrEqual(2);
+      expect(w.interiors.live.size).toBe(0); expect(w.regions.dyn.size).toBe(0); // po odejściu wszystko zwolnione
+    }, 120_000);
+  }
+
+  it('determinizm: dwa niezależne światy (serwer, klient) składają identyczne piętro', () => {
+    const t = tile('warszawa', 0, 0), w1 = new World('warszawa', { tiles: [t] }), w2 = new World('warszawa', { tiles: [tile('warszawa', 0, 0)] });
+    let n = 0;
+    for (const b of t.b) {
+      const p1 = makePlan(b, t, w1); if (!p1) continue;
+      const p2 = makePlan(b, [...w2.tiles.values()][0], w2)!;
+      for (const k of [0, Math.min(2, p1.levels - 1)]) {
+        const a = buildLevel(p1, k), c = buildLevel(p2, k);
+        expect(JSON.stringify({ b: a.boxes, i: a.items, w: a.walks })).toBe(JSON.stringify({ b: c.boxes, i: c.items, w: c.walks }));
+      }
+      if (++n >= 8) break;
+    }
+    expect(n).toBe(8);
+  });
+});
+
+describe('przeszukiwanie', () => {
+  it('szafa daje łup raz (potem pusto), kasa w sklepie to napad: gwiazdki', () => {
+    const w = worldAround('warszawa', -3, 1);
+    const b = [...w.tiles.values()].flatMap(t => t.b).find(q => q.id === 238177212)!; // Al. Jerozolimskie 121/123, Żabka w parterze
+    const [cx, cz] = center(b.o);
+    const sim = new Simulation(w), p = sim.addPlayer('a'), wk = sim.entity(p.walker); sim.enableTraffic();
+    Object.assign(wk, { x: cx, z: cz, y: -99 }); for (let i = 0; i < 5; i++) sim.syncInteriors();
+    const lv = w.interiors.live.get(b.id)!; expect(lv).toBeTruthy();
+    const items = [...lv.levels.get(0)!.level.items];
+    const till = items.find(i => i.c === 'kasa')!, shelf = items.find(i => i.c && i.c !== 'kasa' && i.c !== 'polka' && i.c !== 'lodowka_sklep')!;
+    expect(till).toBeTruthy(); expect(shelf).toBeTruthy();
+    const stand = (it: typeof till) => { const [x, z] = toWorld(lv.plan.frame, (it.r.x0 + it.r.x1) / 2, it.r.y0 - .4); Object.assign(wk, { x, z, y: it.y }); };
+    const ev = () => sim.rules!.events.splice(0).map(e => e.text);
+    stand(shelf); sim.command(p.id, { type: 'enter' });
+    const e1 = ev(); expect(e1.length).toBeGreaterThan(0); expect(e1[0]).toContain(shelf.n);
+    sim.command(p.id, { type: 'enter' }); expect(ev()[0]).toContain('pusto');
+    const m0 = p.money; stand(till); sim.command(p.id, { type: 'enter' });
+    expect(p.money).toBeGreaterThan(m0); expect(p.wanted).toBe(2);
+    expect(ev().some(t => t.includes('Napad'))).toBe(true);
+    sim.stepPlayer(p.id, NO_INPUT); sim.endStep();
+  });
+});

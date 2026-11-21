@@ -6,7 +6,8 @@ export function locText(world: World, mode: Mode, e: Entity): string {
   const near = () => world.nearestStation(e.x, e.z).name, city = world.city;
   if (mode === 'car') return `Samochód · ${Math.round(Math.abs(e.speed) * 3.6)} km/h · najbliżej: ${near()}`;
   if (mode === 'heli') return `Helikopter · ${Math.round(e.y - world.ground(e.x, e.z))} m · ${Math.round(Math.hypot(e.vx, e.vz) * 3.6)} km/h · nad: ${near()}`;
-  const r = e.reg >= 0 ? world.regions.list[e.reg] : null; if (!r) return 'Ulica · najbliżej: ' + near();
+  const r = e.reg >= 0 ? world.regions.get(e.reg) : null; if (!r) return 'Ulica · najbliżej: ' + near();
+  if (r.info.nm) return r.info.nm;
   const d = Math.round(world.ground(e.x, e.z) - e.y) + ' m pod ziemią', sn = r.info.s != null ? world.stations[r.info.s].name : '';
   if (r.kind === 'hall') return `Peron ${sn} · ${city.lines[r.info.l!].n} · ${d}`;
   if (r.kind === 'tunnel') return `Tunel ${city.lines[r.info.l!].n}: ${r.info.A} ↔ ${r.info.B} · ${d}`;

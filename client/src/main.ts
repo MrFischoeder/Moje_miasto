@@ -72,7 +72,8 @@ const ui: GameUI = {
   slowFrame(g) {
     const e = g.controlled(); if (!e || !g.world) return;
     const ride = g.ridePose(), clock = g.clockText();
-    $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)); info(g);
+    const box = g.mode === 'walk' && !ride ? g.world.interiors.container(e.x, e.z, e.y) : null;
+    $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)) + (box ? ` · E: przeszukaj (${box.item.n})` : ''); info(g);
   },
   frame(g) {
     const st = g.session?.me;

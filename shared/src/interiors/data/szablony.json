@@ -1,0 +1,169 @@
+{
+  "_opis": "Szablony lokali. Układ lokalny szablonu: x wzdłuż ściany wejściowej, y w głąb (0 = strona wejścia). Węzeł: split x|y z częściami (size [min,max] w metrach albo flex: waga), room (pomieszczenie), void (pusto), pick (losowy wariant). key = te same wymiary na wszystkich piętrach.",
+  "typologie": {
+    "blok": { "core": 2.8, "flat": [4.0, 6.2], "opis": "Blok z wielkiej płyty: klatka schodowa na całą głębokość, 2 mieszkania na piętro, wysoki parter" },
+    "kamienica": { "core": 3.6, "flat": [7.0, 10.0], "opis": "Kamienica: szeroka klatka, duże mieszkania z amfiladą od frontu, wysokie sufity" },
+    "korytarz": { "core": 2.8, "corr": 1.6, "flat": [5.5, 8.0], "opis": "Budynek korytarzowy (apartamentowiec, council block, new-build): klatka na końcu, korytarz środkiem, hol wejściowy na parterze" },
+    "szereg": { "house": [4.5, 6.0], "opis": "Szeregowiec: wąskie domy z własnymi schodami, wejście z ulicy" }
+  },
+  "szablony": [
+    {
+      "id": "pl-m2", "name": "M-2 w bloku", "kind": "flat", "country": "PL", "area": [25, 40],
+      "entry": "przedpokoj",
+      "floors": [
+        { "split": "x", "parts": [
+          { "flex": 1, "node": { "room": "pokoj", "kind": "living", "name": "Pokój" } },
+          { "size": [2.4, 2.9], "node": { "split": "y", "parts": [
+            { "size": [1.8, 2.4], "node": { "room": "przedpokoj", "kind": "hall", "name": "Przedpokój" } },
+            { "flex": 1, "node": { "room": "lazienka", "kind": "bath", "name": "Łazienka" } } ] } },
+          { "size": [2.5, 3.3], "node": { "pick": [
+            { "room": "kuchnia", "kind": "kitchen", "name": "Kuchnia z oknem" },
+            { "split": "y", "parts": [
+              { "flex": 1, "node": { "room": "kuchnia", "kind": "kitchen", "name": "Kuchnia" } },
+              { "size": [1.4, 1.8], "node": { "room": "schowek", "kind": "storage", "name": "Schowek" } } ] } ] } } ] }
+      ],
+      "doors": [["przedpokoj", "pokoj"], ["przedpokoj", "lazienka"], ["przedpokoj", "kuchnia"], ["kuchnia", "schowek"]]
+    },
+    {
+      "id": "pl-m3", "name": "M-3 w bloku", "kind": "flat", "country": "PL", "area": [38, 55],
+      "entry": "przedpokoj",
+      "floors": [
+        { "split": "x", "parts": [
+          { "flex": 1.2, "node": { "room": "duzy", "kind": "living", "name": "Duży pokój" } },
+          { "size": [2.5, 3.1], "node": { "split": "y", "parts": [
+            { "flex": 1, "node": { "room": "przedpokoj", "kind": "hall", "name": "Przedpokój" } },
+            { "size": [1.8, 2.3], "node": { "pick": [
+              { "room": "lazienka", "kind": "bath", "name": "Łazienka z WC" },
+              { "split": "x", "parts": [
+                { "flex": 1, "node": { "room": "lazienka", "kind": "bath", "name": "Łazienka" } },
+                { "size": [1.0, 1.2], "node": { "room": "wc", "kind": "wc", "name": "WC" } } ] } ] } } ] } },
+          { "flex": 1, "node": { "split": "y", "parts": [
+            { "size": [2.4, 3.0], "node": { "room": "kuchnia", "kind": "kitchen", "name": "Kuchnia" } },
+            { "flex": 1, "node": { "room": "maly", "kind": "room", "name": "Mały pokój" } } ] } } ] }
+      ],
+      "doors": [["przedpokoj", "duzy"], ["przedpokoj", "lazienka"], ["przedpokoj", "wc"], ["przedpokoj", "kuchnia"], ["przedpokoj", "maly"]]
+    },
+    {
+      "id": "pl-kamienica", "name": "Mieszkanie w kamienicy", "kind": "flat", "country": "PL", "area": [70, 140],
+      "entry": "przedpokoj",
+      "floors": [
+        { "split": "x", "parts": [
+          { "size": [5.0, 6.2], "node": { "split": "y", "parts": [
+            { "flex": 1.3, "node": { "room": "salon", "kind": "living", "name": "Salon" } },
+            { "flex": 1, "node": { "room": "pokoj", "kind": "bedroom", "name": "Sypialnia" } },
+            { "flex": 0.8, "node": { "room": "gabinet", "kind": "study", "name": "Gabinet" } } ] } },
+          { "size": [2.2, 2.8], "node": { "split": "y", "parts": [
+            { "flex": 1, "node": { "room": "przedpokoj", "kind": "hall", "name": "Przedpokój" } },
+            { "size": [2.0, 2.6], "node": { "room": "lazienka", "kind": "bath", "name": "Łazienka" } } ] } },
+          { "flex": 1, "node": { "split": "y", "parts": [
+            { "size": [3.0, 4.0], "node": { "room": "kuchnia", "kind": "kitchen", "name": "Kuchnia" } },
+            { "size": [2.2, 2.8], "node": { "room": "sluzbowka", "kind": "maid", "name": "Służbówka" } },
+            { "flex": 1, "node": { "room": "dzieciecy", "kind": "room", "name": "Pokój dziecięcy" } } ] } } ] }
+      ],
+      "doors": [["przedpokoj", "salon"], ["salon", "pokoj", "open"], ["pokoj", "gabinet", "open"], ["przedpokoj", "lazienka"], ["przedpokoj", "kuchnia"], ["kuchnia", "sluzbowka"], ["przedpokoj", "dzieciecy"]]
+    },
+    {
+      "id": "uk-terraced", "name": "Terraced house", "kind": "house", "country": "UK", "area": [55, 110],
+      "entry": "hall",
+      "floors": [
+        { "split": "y", "parts": [
+          { "key": "main", "flex": 1, "node": { "split": "x", "parts": [
+            { "key": "hc", "size": [1.0, 1.15], "node": { "split": "y", "parts": [
+              { "key": "h1", "size": [1.2, 1.6], "node": { "room": "hall", "kind": "hall", "name": "Hall" } },
+              { "key": "st", "size": [3.4, 3.8], "node": { "room": "stairs", "kind": "stair", "name": "Schody", "stair": 1 } },
+              { "flex": 1, "node": { "room": "passage", "kind": "hall", "name": "Korytarz" } } ] } },
+            { "flex": 1, "node": { "split": "y", "parts": [
+              { "key": "fr", "size": [3.6, 4.4], "node": { "room": "front", "kind": "living", "name": "Front room" } },
+              { "flex": 1, "node": { "room": "back", "kind": "living", "name": "Back room" } } ] } } ] } },
+          { "key": "ext", "size": [2.8, 3.6], "node": { "room": "kitchen", "kind": "kitchen", "name": "Kitchen" } } ] },
+        { "split": "y", "parts": [
+          { "key": "main", "flex": 1, "node": { "split": "x", "parts": [
+            { "key": "hc", "size": [1.0, 1.15], "node": { "split": "y", "parts": [
+              { "key": "h1", "size": [1.2, 1.6], "node": { "void": true } },
+              { "key": "st", "size": [3.4, 3.8], "node": { "void": true, "well": true } },
+              { "flex": 1, "node": { "room": "landing", "kind": "hall", "name": "Podest" } } ] } },
+            { "flex": 1, "node": { "split": "y", "parts": [
+              { "key": "fr", "size": [3.6, 4.4], "node": { "room": "bed1", "kind": "bedroom", "name": "Front bedroom" } },
+              { "flex": 1, "node": { "room": "bed2", "kind": "bedroom", "name": "Back bedroom" } } ] } } ] } },
+          { "key": "ext", "size": [2.8, 3.6], "node": { "split": "x", "parts": [
+            { "flex": 1, "node": { "room": "bathroom", "kind": "bath", "name": "Bathroom" } },
+            { "size": [1.8, 2.4], "node": { "room": "box", "kind": "room", "name": "Box room" } } ] } } ] }
+      ],
+      "doors": [["hall", "front"], ["hall", "stairs", "open"], ["front", "back", "open"], ["back", "passage"], ["passage", "kitchen"], ["back", "kitchen"],
+        ["landing", "bed2"], ["bed2", "bed1"], ["landing", "bathroom"], ["bathroom", "box"], ["bed2", "box"]]
+    },
+    {
+      "id": "uk-newbuild", "name": "New-build flat (1 bed)", "kind": "flat", "country": "UK", "area": [38, 60],
+      "entry": "hall",
+      "floors": [
+        { "split": "y", "parts": [
+          { "size": [2.2, 2.8], "node": { "split": "x", "parts": [
+            { "size": [1.4, 1.8], "node": { "room": "hall", "kind": "hall", "name": "Hall" } },
+            { "flex": 1, "node": { "room": "bathroom", "kind": "bath", "name": "Bathroom" } },
+            { "size": [1.0, 1.4], "node": { "room": "cupboard", "kind": "storage", "name": "Cupboard" } } ] } },
+          { "flex": 1, "node": { "split": "x", "parts": [
+            { "flex": 1.4, "node": { "room": "living", "kind": "open", "name": "Kitchen / living" } },
+            { "flex": 1, "node": { "room": "bedroom", "kind": "bedroom", "name": "Bedroom" } } ] } } ] }
+      ],
+      "doors": [["hall", "living"], ["hall", "bathroom"], ["hall", "cupboard"], ["living", "bedroom"], ["hall", "bedroom"]]
+    },
+    {
+      "id": "uk-council", "name": "Council flat (2 bed)", "kind": "flat", "country": "UK", "area": [50, 80],
+      "entry": "hall",
+      "floors": [
+        { "split": "y", "parts": [
+          { "size": [2.4, 3.0], "node": { "split": "x", "parts": [
+            { "size": [2.6, 3.2], "node": { "room": "kitchen", "kind": "kitchen", "name": "Kitchen" } },
+            { "size": [1.0, 1.3], "node": { "room": "wc", "kind": "wc", "name": "WC" } },
+            { "size": [1.4, 1.8], "node": { "room": "hall", "kind": "hall", "name": "Hall" } },
+            { "flex": 1, "node": { "room": "bathroom", "kind": "bath", "name": "Bathroom" } } ] } },
+          { "flex": 1, "node": { "split": "x", "parts": [
+            { "flex": 1.3, "node": { "room": "lounge", "kind": "living", "name": "Lounge" } },
+            { "flex": 1, "node": { "room": "bed1", "kind": "bedroom", "name": "Bedroom 1" } },
+            { "flex": 0.8, "node": { "room": "bed2", "kind": "room", "name": "Bedroom 2" } } ] } } ] }
+      ],
+      "doors": [["hall", "kitchen"], ["hall", "wc"], ["hall", "bathroom"], ["hall", "lounge"], ["hall", "bed1"], ["lounge", "kitchen"], ["bed1", "bed2"]]
+    },
+    {
+      "id": "pl-maly", "name": "Sklep osiedlowy (mały convenience)", "kind": "shop", "country": "PL", "area": [40, 130],
+      "entry": "sala",
+      "floors": [
+        { "split": "y", "parts": [
+          { "flex": 1, "node": { "room": "sala", "kind": "sala", "name": "Sala sprzedaży",
+            "shop": { "aisle": 1.6, "gondola": 0.9, "wall": 0.5, "fridges": 1, "checkouts": 1, "front": 2.6 } } },
+          { "size": [2.4, 3.0], "node": { "split": "x", "parts": [
+            { "flex": 1, "node": { "room": "zaplecze", "kind": "storage", "name": "Zaplecze" } },
+            { "size": [1.4, 1.8], "node": { "room": "toaleta", "kind": "wc", "name": "Toaleta" } } ] } } ] }
+      ],
+      "doors": [["sala", "zaplecze"], ["zaplecze", "toaleta"]]
+    },
+    {
+      "id": "uk-conv", "name": "Convenience store (UK)", "kind": "shop", "country": "UK", "area": [120, 400],
+      "entry": "sala",
+      "floors": [
+        { "split": "y", "parts": [
+          { "flex": 1, "node": { "room": "sala", "kind": "sala", "name": "Shop floor",
+            "shop": { "aisle": 1.8, "gondola": 1.0, "wall": 0.55, "fridges": 1, "checkouts": 2, "selfcheck": 2, "front": 3.2 } } },
+          { "size": [3.0, 4.5], "node": { "split": "x", "parts": [
+            { "flex": 1, "node": { "room": "magazyn", "kind": "storage", "name": "Stockroom" } },
+            { "size": [2.4, 3.2], "node": { "room": "biuro", "kind": "office", "name": "Office" } },
+            { "size": [1.5, 2.0], "node": { "room": "toaleta", "kind": "wc", "name": "Staff WC" } } ] } } ] }
+      ],
+      "doors": [["sala", "magazyn"], ["magazyn", "biuro"], ["magazyn", "toaleta"]]
+    },
+    {
+      "id": "dyskont", "name": "Dyskont / supermarket", "kind": "shop", "country": "*", "area": [350, 2500],
+      "entry": "sala",
+      "floors": [
+        { "split": "x", "parts": [
+          { "flex": 1, "node": { "room": "sala", "kind": "sala", "name": "Sala sprzedaży",
+            "shop": { "aisle": 2.4, "gondola": 1.2, "wall": 0.8, "fridges": 1, "checkouts": 5, "front": 5.0, "bakery": 1 } } },
+          { "size": [6.0, 9.0], "node": { "split": "y", "parts": [
+            { "size": [3.0, 4.0], "node": { "room": "biuro", "kind": "office", "name": "Biuro kierownika" } },
+            { "size": [3.0, 4.0], "node": { "room": "socjalny", "kind": "staff", "name": "Pokój socjalny" } },
+            { "flex": 1, "node": { "room": "magazyn", "kind": "storage", "name": "Magazyn" } } ] } } ] }
+      ],
+      "doors": [["sala", "magazyn", "open"], ["magazyn", "biuro"], ["magazyn", "socjalny"], ["sala", "biuro"]]
+    }
+  ]
+}

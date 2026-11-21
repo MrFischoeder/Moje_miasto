@@ -25,6 +25,9 @@ import { Input } from '../input/input';
 import type { Action } from '../input/bindings';
 import { NetSession, type ChatLine } from '../net/netSession';
 import { WorkerTransport, WsTransport, type Transport, type WorkerIn } from '../net/transport';
+import { localTime } from '@miasto/shared/transit/clock';
+import { litFraction } from '@miasto/shared/interiors/facade';
+import { InteriorView } from '../world/interiorView';
 import type { LocalInit } from '../net/localServer.worker';
 import LocalServer from '../net/localServer.worker?worker&inline';
 
@@ -59,6 +62,8 @@ export class Game {
   readonly rig: CameraRig;
   session: NetSession | null = null;
   view: CityView | null = null;
+  interiors: InteriorView | null = null;
+  private lastInt = 0;
   /** komunikacja miejska wg rozkładów (liczona lokalnie z zegara sesji) */
   transit: TransitSystem | null = null;
   private transitView: TransitView | null = null;
@@ -163,6 +168,7 @@ export class Game {
     this.fromFile = !!raw; this.online = online;
     const view = this.view = new CityView(world, source, this.xray);
     this.world3d.add(view.group);
+    this.interiors = new InteriorView(world); this.world3d.add(this.interiors.group);
     if (transit) {
       this.transit = new TransitSystem(transit, world, s.clock);
       const lc: Record<string, string> = {}; for (const l of world.city.lines) lc[l.n] = l.c;
@@ -197,6 +203,7 @@ export class Game {
     if (this.transitView) { this.world3d.remove(this.transitView.group); this.transitView.dispose(); this.transitView = null; } this.transit = null;
     if (this.airView) { this.world3d.remove(this.airView.group); this.airView.dispose(); this.airView = null; }
     if (this.view) { this.world3d.remove(this.view.group); this.view.dispose(); this.view = null; }
+    if (this.interiors) { this.world3d.remove(this.interiors.group); this.interiors.dispose(); this.interiors = null; }
     this.labels.clear();
     for (const m of this.models.values()) { this.world3d.remove(m.root); disposeModel(m); } this.models.clear();
   }
@@ -293,6 +300,15 @@ export class Game {
     const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
     grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);
     fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + alt * 12) : mode === 'car' ? 900 : 650;
+    // wnętrza budynków wokół gracza (ten sam algorytm co na serwerze: przewidywanie ruchu się zgadza)
+    if (this.interiors) {
+      if (now - this.lastInt > 300) { this.lastInt = now; const me = s0Pos(this); w.interiors.sync(me ? [me] : []); }
+      this.interiors.update(P.x, P.z, this.view!.streamer.mats.windows);
+    }
+    if (now - this.lastSlow > 500) {
+      const tz = this.transit?.tz ?? (w.key === 'londyn' ? 'Europe/London' : 'Europe/Warsaw'), lt = localTime(this.session!.clock.now(), tz);
+      this.view!.streamer.mats.windows.uLit.value = litFraction(lt.sec / 3600);
+    }
     if (now - this.lastSlow > 500) { this.lastSlow = now; this.labels.update(w, P.x, P.z); this.view!.slowUpdate(P.x, P.z); this.ui.slowFrame(this); }
     this.ctx.renderer.render(this.ctx.scene, this.ctx.camera);
     this.ui.frame(this);
@@ -335,4 +351,10 @@ export class Game {
     }
     for (const [id, m] of this.models) if (!seen.has(id)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(id); this.walkPhase.delete(id); }
   }
+}
+
+/** Pozycja pieszego gracza (także w pojeździe) do synchronizacji wnętrz. */
+function s0Pos(g: Game): { x: number; y: number; z: number } | null {
+  const s = g.session, p = s?.player(); if (!s || !p) return null;
+  const e = g.controlled(); return e ? { x: e.x, y: e.y, z: e.z } : null;
 }

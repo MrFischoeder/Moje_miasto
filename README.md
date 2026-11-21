@@ -50,6 +50,10 @@ Przestępstwa i policja: E przy zatrzymanym aucie NPC = kradzież (★). Policja
 policjanci wysiadają i zatrzymują (grzywna). HUD: zdrowie, pieniądze (bilety po prawdziwych cenach), gwiazdki.
 Śmierć = odrodzenie przy szpitalu. Szczegóły w [`docs/ARCHITEKTURA-SWIAT.md`](docs/ARCHITEKTURA-SWIAT.md#zasady-gry-policja-zdrowie-pieniądze-sharedsrcgamerulests-sharedsrctrafficpolicets).
 
+Okna i wnętrza: okna na fasadach (nocą część się świeci), do budynków mieszkalnych i sklepów z OSM można wejść drzwiami od ulicy
+(klatki schodowe, mieszkania, sklepy sieciowe w prawdziwych miejscach). E przy szafie, lodówce, kasie = przeszukanie (kasa = napad).
+Opis i 9 szablonów: [`docs/ARCHITEKTURA-SWIAT.md`](docs/ARCHITEKTURA-SWIAT.md#wnętrza-budynków-sharedsrcinteriors), plany: `docs/wnetrza/plany.png`.
+
 ## Uruchomienie dla programisty
 
 ```bash

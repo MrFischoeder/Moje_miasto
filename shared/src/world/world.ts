@@ -10,6 +10,7 @@ import { RegionIndex, type Region, type Support, type Surface } from './regions'
 import { buildMetroLayout, type MetroLayout, type Station } from './metro/layout';
 import { Terrain } from './terrain';
 import { deckY } from './bridges';
+import { Interiors } from '../interiors/interiors';
 
 export interface Pose { x: number; y: number; z: number; yaw: number; pitch: number; reg: Region | null }
 
@@ -36,6 +37,8 @@ export class World implements Surface {
   /** pomosty: jezdnie mostów nad wodą */
   readonly decks = new PolyIndex();
   readonly regions = new RegionIndex();
+  /** wnętrza budynków (generowane przy graczach) */
+  readonly interiors: Interiors = new Interiors(this);
   readonly tiles = new Map<string, TileData>();
   readonly metro: MetroLayout;
   /** liczba stacji przesuniętych na pozycję z OSM (z pliku) */
@@ -74,10 +77,11 @@ export class World implements Surface {
     };
     for (const r of t.r) if (r.br) deck(toXZ(r.p), r.w / 2 + (r.sw ? 2.5 : .6), r.bw);
     for (const l of t.l) if (l.br) deck(toXZ(l.p), 2.4, l.bw);
+    this.interiors.addTile(t);
   }
   removeTile(k: string): void {
     if (!this.tiles.delete(k)) return;
-    this.buildings.removeTile(k); this.water.removeTile(k); this.decks.removeTile(k);
+    this.buildings.removeTile(k); this.water.removeTile(k); this.decks.removeTile(k); this.interiors.removeTile(k);
   }
 
   // ---------- zapytania fizyki ----------
@@ -94,7 +98,11 @@ export class World implements Surface {
     return best;
   }
   /** Podłoże dla pieszego (region podziemny albo powierzchnia). */
-  support(x: number, z: number, y: number): Support | null { return this.regions.support(x, z, y, this); }
+  support(x: number, z: number, y: number): Support | null {
+    const s = this.regions.support(x, z, y, this);
+    if (s && s.r && s.r.info.b != null && this.interiors.blocked(x, z, s.h)) return null; // mebel
+    return s;
+  }
   /** Najwyższa powierzchnia w punkcie: dach albo grunt (dla helikoptera i kamery). */
   roofTop(x: number, z: number): number { return this.buildings.top(x, z, this.ground(x, z)); }
   /** Czy punkt jest pod ziemią. */

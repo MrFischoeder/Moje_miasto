@@ -9,12 +9,16 @@ import type { XZ } from '@miasto/shared/world/collision';
 import { isVehicleRoad } from '@miasto/shared/tiles/build';
 import type { AreaKind, TileData, TileRoad } from '@miasto/shared/tiles/types';
 import { MAX_SEG } from '../geometry';
+import { classify } from '@miasto/shared/interiors/facade';
+import { installWindows, type WindowUniforms } from './windows';
 
 export const WATER_Y = -4;
 
 /** Materiały wspólne dla wszystkich kafelków (prześwietlenie zmienia je naraz). */
 export class TileMaterials {
   readonly build = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, transparent: true });
+  /** okna na ścianach (shader): odsetek zapalonych, otwory drzwi wejściowych */
+  readonly windows: WindowUniforms = installWindows(this.build);
   readonly edge = new THREE.LineBasicMaterial({ color: 0x7dffb0, transparent: true });
   /** warstwy płaskie na gruncie: nie zapisują głębi (grunt zasłania za nie), kolejność rysowania = renderOrder */
   readonly flat = new THREE.MeshBasicMaterial({ vertexColors: true, depthWrite: false, transparent: false, side: THREE.DoubleSide });
@@ -132,7 +136,7 @@ function offsets(p: XZ[]): XZ[] {
   for (let i = 0; i < p.length; i++) {
     const a = p[Math.max(0, i - 1)], b = p[Math.min(p.length - 1, i + 1)], c = p[i];
     const d0 = i > 0 ? norm2(c[0] - a[0], c[1] - a[1]) : null, d1 = i < p.length - 1 ? norm2(b[0] - c[0], b[1] - c[1]) : null;
-    const d = d0 && d1 ? norm2(d0[0] + d1[0], d0[1] + d1[1]) ?? d1 : (d0 || d1)!;
+    const d = (d0 && d1 ? norm2(d0[0] + d1[0], d0[1] + d1[1]) ?? d1 : d0 || d1) ?? [1, 0] as XZ; // zdublowane punkty drogi
     let nx = -d[1], nz = d[0];
     if (d0 && d1) { const cos = d0[0] * d[0] + d0[1] * d[1], k = 1 / Math.max(.5, cos); nx *= k; nz *= k; }
     out.push([nx, nz]);
@@ -187,16 +191,24 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   const S = new Buf(), SL = new Lines(); // pomosty, woda, nabrzeża
 
   // --- budynki: ściany, dach, krawędzie (dach, podstawa, narożniki > 25°) ---
+  const FA: number[] = [], FB: number[] = [], FC: number[] = [];
+  const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0); } };
   for (const b of t.b) {
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
-    const v = .05 + Math.min(h, 80) / 80 * .09, col: RGB = [v * .55, v * 1.1, v * .8];
-    fillPoly(B, outer, holes, h, col);
+    const v = .05 + Math.min(b.h, 80) / 80 * .09, col: RGB = [v * .55, v * 1.1, v * .8];
+    const fc = classify(b, t.city);
+    fillPoly(B, outer, holes, h, col); facPad();
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
       const ccw = area2(ring) > 0 !== isHole, n = ring.length;
       for (let i = 0; i < n; i++) {
         const a = ring[i], c = ring[(i + 1) % n], dx = c[0] - a[0], dz = c[1] - a[1], m = Math.hypot(dx, dz) || 1;
         const nrm = ccw ? [dz / m, 0, -dx / m] : [-dz / m, 0, dx / m];
+        const n0 = B.P.length / 3;
         B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], h, c[1]], [a[0], h, a[1]], col, nrm);
+        for (let k = n0; k < B.P.length / 3; k++) {
+          const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
+          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, fc.levelH); FB.push(fc.spacing, fc.ww, fc.wh, fc.raise); FC.push(fc.sill, fc.levels, fc.seed);
+        }
         BE.seg([a[0], h, a[1]], [c[0], h, c[1]], [1, 1, 1]); BE.seg([a[0], mh, a[1]], [c[0], mh, c[1]], [1, 1, 1]);
         const p = ring[(i + n - 1) % n], e0 = norm2(a[0] - p[0], a[1] - p[1]), e1 = norm2(dx, dz);
         if (e0 && e1 && e0[0] * e1[0] + e0[1] * e1[1] < Math.cos(25 * Math.PI / 180)) BE.seg([a[0], mh, a[1]], [a[0], h, a[1]], [1, 1, 1]);
@@ -299,7 +311,11 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   // --- złożenie ---
   const group = new THREE.Group(); group.name = `tile ${t.x}_${t.y}`;
   const add = (o: THREE.Object3D, order: number) => { o.renderOrder = order; group.add(o); };
-  if (!B.empty) add(new THREE.Mesh(B.geometry(), M.build), 0);
+  if (!B.empty) {
+    facPad(); const bg = B.geometry();
+    bg.setAttribute('aFacA', new THREE.Float32BufferAttribute(FA, 4)); bg.setAttribute('aFacB', new THREE.Float32BufferAttribute(FB, 4)); bg.setAttribute('aFacC', new THREE.Float32BufferAttribute(FC, 3));
+    add(new THREE.Mesh(bg, M.build), 0);
+  }
   if (!BE.empty) { const g = BE.geometry(); g.deleteAttribute('color'); add(new THREE.LineSegments(g, M.edge), 0); }
   F.forEach((f, i) => { if (!f.empty) add(new THREE.Mesh(f.geometry(), M.flat), 1 + i * 2); });
   FL.forEach((f, i) => { if (!f.empty) add(new THREE.LineSegments(f.geometry(), M.flatLine), 2 + i * 2); });

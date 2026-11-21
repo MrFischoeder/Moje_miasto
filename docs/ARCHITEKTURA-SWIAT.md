@@ -74,3 +74,43 @@ Wszystko liczy serwer (autorytatywnie); klient dostaje tylko swój stan (`me`: z
   Śmierć: utrata 100 zł / £50, po 4 s odrodzenie przy najbliższym szpitalu z OSM.
 - **Pieniądze:** start 500 zł / £500, prawdziwa cena biletu jednorazowego (Warszawa 4,40 zł, Londyn £1,75) pobierana przy wsiadaniu;
   bez pieniędzy jazda na gapę. Stan zapisywany na serwerze razem z pozycją.
+
+## Okna na budynkach (`shared/src/interiors/facade.ts`, `client/src/world/tiles/windows.ts`)
+
+- Typologia budynku z danych OSM (`building=*`, liczba kondygnacji, wysokość, kształt obrysu, miasto) wyznacza wysokość kondygnacji,
+  podniesiony parter (blok: 1 m, kamienica: 0,5 m) i siatkę okien: rozstaw, szerokość, wysokość, parapet (blok, kamienica, budynek
+  korytarzowy, szeregowiec, sklep, biurowiec, hale bez okien).
+- Okna rysuje shader ścian (bez dodatkowej geometrii): ramki w kolorze fosforu, szyby, wygaszanie siatki w oddali (bez migotania).
+- Nocą część okien świeci: odsetek zależy od godziny gry (wieczorem ok. 60%, w nocy ok. 6%), które okna to stałe ziarno budynku.
+- Ta sama funkcja `windowSlots` wycina okna we wnętrzach, więc okna z zewnątrz i od środka są w tych samych miejscach.
+
+## Wnętrza budynków (`shared/src/interiors/`)
+
+Pokaz 9 szablonów na prawdziwych budynkach: `docs/wnetrza/plany.png` (plany pięter), `docs/wnetrza/plany.html`.
+
+- **Dane, nie kod:** `data/szablony.json` (szablony lokali i parametry typologii), `data/meble.json` (meble wg rodzaju pomieszczenia),
+  `data/lupy.json` (tabele łupów), `data/sieci.json` (sieci sklepów: archetyp wnętrza, kolor akcentu).
+- **Szablon** to drzewo podziałów prostokąta: części o wymiarach z zakresów albo elastyczne, warianty (`pick`, np. kuchnia z oknem
+  albo ślepa), te same wymiary na wszystkich piętrach domu (`key`), odbicie lustrzane. Drzwi z listy szablonu, a gdy któreś
+  pomieszczenie zostaje odcięte, dokładane są brakujące drzwi; wejście tylko w dozwolonym odcinku ściany (np. przy podeście klatki).
+- **Szablony na start (9):** M-2 i M-3 w bloku, mieszkanie w kamienicy (amfilada, służbówka); terraced house (2 piętra, schody),
+  new-build flat (otwarta kuchnia), council flat (2 sypialnie); sklep osiedlowy (typ Żabki), convenience UK (typ Tesco Express),
+  dyskont/supermarket (typ Lidla, Biedronki).
+- **Typologie budynku** (plan w `plan.ts`): układ lokalny z frontem od ulicy (bliżej drogi, nie zasłonięty innym budynkiem),
+  największy prostokąt wpisany w obrys (z dziedzińcami), potem:
+  - *blok*: klatki schodowe na całą głębokość, 2 mieszkania na piętro, wysoki parter, schody dwubiegowe z podestem przy oknie;
+  - *kamienica*: szersza klatka, duże mieszkania, wysokie sufity;
+  - *budynek korytarzowy* (apartamentowiec, council block, new-build): klatki na końcach, korytarz środkiem, hol wejściowy;
+  - *szeregowiec*: dzielenie frontu na domy 4,5–6 m, każdy z własnym wejściem i schodami (płytkie domy: jeden poziom);
+  - *sklep*: prawdziwe punkty `shop=convenience|supermarket|discount` z OSM; sklep zajmuje parter (lokal przy punkcie albo cały budynek),
+    szablon z konfiguracji sieci, nazwa na szyldzie wg `BRANDING`.
+- **Ziarno:** id budynku z OSM + numer lokalu + piętro. Serwer i każdy klient składają identyczne wnętrza; przez sieć nic nie idzie.
+- **Leniwie, w prawdziwym miejscu:** plan powstaje, gdy gracz jest w promieniu 45 m; parter zawsze, piętra wokół gracza w budynku
+  (±1, trzymane ±2). Po odejściu (70 m) wszystko jest zwalniane. Budżet 4 ms na synchronizację (serwer co 1/3 s, klient co 0,3 s).
+- **Fizyka:** pomieszczenia, drzwi, biegi schodów to regiony chodzenia (jak hale metra), meble to przeszkody; ściany wynikają z braku
+  regionu. Z zewnątrz bryła budynku zostaje bez zmian; w ścianie budynku shader wycina otwór drzwi wejściowych.
+- **Przeszukiwanie (serwer):** E przy pojemniku (szafa, komoda, lodówka, biurko, sejf, kasa...) losuje łup z tabeli (ziarno pojemnika),
+  odnowienie po 15 min. Kasa w sklepie = napad (2 gwiazdki), sejf = włamanie, półka = kradzież sklepowa.
+- **Test dostępności** (`reach.ts`, testy jednostkowe): przeszukanie wszerz fizyką chodzenia od drzwi na ulicy; każde pomieszczenie
+  parteru i dwóch pięter ma być osiągalne. Lokal, do którego nie da się wejść z ulicy (np. front zasłonięty innym budynkiem), jest zamknięty.
+- **Jeszcze nie ma:** wind, piwnic, dachów, biur, domów jednorodzinnych w Warszawie, zamkniętych drzwi i wytrychów, mieszkańców we wnętrzach.

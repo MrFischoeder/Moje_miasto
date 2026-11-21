@@ -1,0 +1,172 @@
+{
+ "warszawa:pl-m3": {
+  "city": "warszawa",
+  "id": 30302703,
+  "typ": "blok",
+  "unit": "M-3 w bloku · lokal 1",
+  "label": "Złota 6",
+  "levels": 11,
+  "door": [
+   -61.10962396890486,
+   -373.84286955029785
+  ],
+  "n": [
+   0.9364426505922024,
+   -0.3508206980094679
+  ],
+  "floor0": 0
+ },
+ "warszawa:pl-kamienica": {
+  "city": "warszawa",
+  "id": 221747819,
+  "typ": "kamienica",
+  "unit": "Mieszkanie w kamienicy · lokal 3",
+  "label": "Kredytowa 3",
+  "levels": 5,
+  "door": [
+   -46.49434046110621,
+   -888.8200170896868
+  ],
+  "n": [
+   -0.9315438666327777,
+   0.3636289654838484
+  ],
+  "floor0": 0
+ },
+ "warszawa:pl-m2": {
+  "city": "warszawa",
+  "id": 118254286,
+  "typ": "blok",
+  "unit": "M-2 w bloku · lokal 1",
+  "label": "Żurawia 49",
+  "levels": 7,
+  "door": [
+   -77.42346989801588,
+   278.0543206362441
+  ],
+  "n": [
+   0.2945907094810461,
+   0.9556235209994854
+  ],
+  "floor0": 0
+ },
+ "warszawa:dyskont": {
+  "city": "warszawa",
+  "id": 30621990,
+  "typ": "sklep",
+  "unit": "Biedronka",
+  "label": "Rondo ONZ 1",
+  "levels": 40,
+  "door": [
+   -882.2618002399178,
+   -310.3802506997606
+  ],
+  "n": [
+   0.9459459459459469,
+   -0.32432432432432157
+  ],
+  "floor0": 0
+ },
+ "warszawa:pl-maly": {
+  "city": "warszawa",
+  "id": 238177212,
+  "typ": "blok",
+  "unit": "Żabka",
+  "label": "Aleje Jerozolimskie 121/123",
+  "levels": 7,
+  "door": [
+   -1380.1704930152164,
+   510.85476208996766
+  ],
+  "n": [
+   -0.3272688749334907,
+   -0.9449312586107876
+  ],
+  "floor0": 0
+ },
+ "londyn:uk-terraced": {
+  "city": "londyn",
+  "id": 96237024,
+  "typ": "szereg",
+  "unit": "Terraced house nr 1",
+  "label": "Charing Cross Road 6",
+  "levels": 3,
+  "door": [
+   5.853971139910423,
+   -308.2340215686899
+  ],
+  "n": [
+   -0.03331483023263794,
+   -0.9994449069791544
+  ],
+  "floor0": 0
+ },
+ "londyn:uk-newbuild": {
+  "city": "londyn",
+  "id": 150920325,
+  "typ": "korytarz",
+  "unit": "New-build flat (1 bed) · lokal 1",
+  "label": "Charing Cross Road 3-5",
+  "levels": 4,
+  "door": [
+   -55.44460819902133,
+   -267.86222780827217
+  ],
+  "n": [
+   -0.17200102348021093,
+   0.9850967708412
+  ],
+  "floor0": 0
+ },
+ "londyn:uk-council": {
+  "city": "londyn",
+  "id": 153661831,
+  "typ": "korytarz",
+  "unit": "Council flat (2 bed) · lokal 1",
+  "label": "",
+  "levels": 8,
+  "door": [
+   -347.9937336162832,
+   -81.8213150537845
+  ],
+  "n": [
+   -0.47527055329790396,
+   -0.879839701972981
+  ],
+  "floor0": 0
+ },
+ "londyn:uk-conv": {
+  "city": "londyn",
+  "id": 415467406,
+  "typ": "sklep",
+  "unit": "Tesco Express",
+  "label": "",
+  "levels": 3,
+  "door": [
+   -475.2573966921923,
+   -181.52565282439596
+  ],
+  "n": [
+   0.48485753078719634,
+   0.8745931481774498
+  ],
+  "floor0": 0
+ },
+ "londyn:dyskont": {
+  "city": "londyn",
+  "id": 242286702,
+  "typ": "sklep",
+  "unit": "Sainsbury's",
+  "label": "Wilton Road 104",
+  "levels": 3,
+  "door": [
+   -916.5156513385116,
+   1585.1310749479644
+  ],
+  "n": [
+   -0.7895951079112692,
+   0.6136281981481874
+  ],
+  "floor0": 0
+ }
+}

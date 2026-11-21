@@ -1,0 +1,74 @@
+{
+  "_opis": "Meble wg rodzaju pomieszczenia. w: szerokość wzdłuż ściany [min,max], d: głębokość, h: wysokość, p: szansa, c: tabela łupów (pojemnik do przeszukania), mid: na środku pokoju, n: ile sztuk [min,max].",
+  "hall": [
+    { "k": "szafa", "n": "Szafa w przedpokoju", "w": [1.0, 1.6], "d": 0.6, "h": 2.1, "p": 0.9, "c": "szafa_przedpokoj" },
+    { "k": "szafka", "n": "Szafka na buty", "w": [0.7, 0.9], "d": 0.35, "h": 1.0, "p": 0.6, "c": "buty" }
+  ],
+  "kitchen": [
+    { "k": "blat", "n": "Szafki kuchenne", "w": [1.6, 2.6], "d": 0.6, "h": 0.9, "p": 1, "c": "szafki_kuchenne" },
+    { "k": "kuchenka", "n": "Kuchenka", "w": [0.6, 0.6], "d": 0.6, "h": 0.9, "p": 1 },
+    { "k": "lodowka", "n": "Lodówka", "w": [0.6, 0.6], "d": 0.65, "h": 1.8, "p": 1, "c": "lodowka" },
+    { "k": "stol", "n": "Stół", "w": [0.8, 1.1], "d": 0.8, "h": 0.75, "p": 0.6, "mid": true }
+  ],
+  "open": [
+    { "k": "blat", "n": "Aneks kuchenny", "w": [2.0, 2.8], "d": 0.6, "h": 0.9, "p": 1, "c": "szafki_kuchenne" },
+    { "k": "lodowka", "n": "Lodówka", "w": [0.6, 0.6], "d": 0.65, "h": 1.8, "p": 1, "c": "lodowka" },
+    { "k": "kanapa", "n": "Kanapa", "w": [1.8, 2.2], "d": 0.9, "h": 0.8, "p": 1 },
+    { "k": "rtv", "n": "Szafka RTV", "w": [1.2, 1.6], "d": 0.45, "h": 0.5, "p": 0.8, "c": "rtv" },
+    { "k": "stol", "n": "Stół", "w": [0.8, 1.2], "d": 0.8, "h": 0.75, "p": 0.8, "mid": true }
+  ],
+  "bath": [
+    { "k": "wanna", "n": "Wanna", "w": [1.5, 1.7], "d": 0.7, "h": 0.55, "p": 0.8 },
+    { "k": "umywalka", "n": "Umywalka z szafką", "w": [0.6, 0.8], "d": 0.45, "h": 0.85, "p": 1, "c": "apteczka" },
+    { "k": "pralka", "n": "Pralka", "w": [0.6, 0.6], "d": 0.6, "h": 0.85, "p": 0.6 },
+    { "k": "sedes", "n": "Sedes", "w": [0.4, 0.4], "d": 0.65, "h": 0.45, "p": 0.8 }
+  ],
+  "wc": [
+    { "k": "sedes", "n": "Sedes", "w": [0.4, 0.4], "d": 0.65, "h": 0.45, "p": 1 }
+  ],
+  "living": [
+    { "k": "kanapa", "n": "Kanapa", "w": [1.8, 2.2], "d": 0.9, "h": 0.8, "p": 1 },
+    { "k": "meblosciana", "n": "Meblościanka", "w": [2.0, 3.0], "d": 0.45, "h": 1.9, "p": 0.7, "c": "meblosciana" },
+    { "k": "rtv", "n": "Szafka RTV", "w": [1.2, 1.6], "d": 0.45, "h": 0.5, "p": 0.8, "c": "rtv" },
+    { "k": "fotel", "n": "Fotel", "w": [0.8, 0.8], "d": 0.8, "h": 0.8, "p": 0.5 },
+    { "k": "stolik", "n": "Stolik", "w": [0.6, 1.0], "d": 0.6, "h": 0.45, "p": 0.7, "mid": true }
+  ],
+  "bedroom": [
+    { "k": "lozko", "n": "Łóżko", "w": [1.4, 1.6], "d": 2.0, "h": 0.5, "p": 1 },
+    { "k": "szafa", "n": "Szafa", "w": [1.2, 2.0], "d": 0.6, "h": 2.1, "p": 0.9, "c": "szafa" },
+    { "k": "komoda", "n": "Komoda", "w": [0.8, 1.2], "d": 0.5, "h": 0.9, "p": 0.7, "c": "komoda" },
+    { "k": "nocna", "n": "Szafka nocna", "w": [0.45, 0.45], "d": 0.4, "h": 0.5, "p": 0.6, "c": "nocna" }
+  ],
+  "room": [
+    { "k": "wersalka", "n": "Wersalka", "w": [1.9, 2.0], "d": 0.9, "h": 0.5, "p": 0.9 },
+    { "k": "biurko", "n": "Biurko", "w": [1.0, 1.4], "d": 0.6, "h": 0.75, "p": 0.8, "c": "biurko" },
+    { "k": "szafa", "n": "Szafa", "w": [1.0, 1.6], "d": 0.6, "h": 2.1, "p": 0.8, "c": "szafa" },
+    { "k": "regal", "n": "Regał", "w": [0.8, 1.2], "d": 0.35, "h": 1.9, "p": 0.6, "c": "regal" }
+  ],
+  "study": [
+    { "k": "biurko", "n": "Biurko", "w": [1.2, 1.6], "d": 0.7, "h": 0.75, "p": 1, "c": "biurko" },
+    { "k": "regal", "n": "Regał z książkami", "w": [1.0, 1.6], "d": 0.35, "h": 2.2, "p": 1, "c": "regal" },
+    { "k": "regal", "n": "Regał z książkami", "w": [1.0, 1.6], "d": 0.35, "h": 2.2, "p": 0.6, "c": "regal" },
+    { "k": "fotel", "n": "Fotel", "w": [0.8, 0.8], "d": 0.8, "h": 0.8, "p": 0.6 }
+  ],
+  "maid": [
+    { "k": "lozko1", "n": "Łóżko", "w": [0.9, 0.9], "d": 2.0, "h": 0.5, "p": 1 },
+    { "k": "komoda", "n": "Szafka", "w": [0.6, 0.8], "d": 0.45, "h": 0.9, "p": 0.8, "c": "komoda" }
+  ],
+  "storage": [
+    { "k": "regal_mag", "n": "Regał magazynowy", "w": [1.5, 2.4], "d": 0.6, "h": 2.2, "p": 1, "c": "magazyn", "n2": [1, 3] }
+  ],
+  "office": [
+    { "k": "biurko", "n": "Biurko", "w": [1.2, 1.4], "d": 0.7, "h": 0.75, "p": 1, "c": "biurko_sklep" },
+    { "k": "sejf", "n": "Sejf", "w": [0.6, 0.6], "d": 0.6, "h": 1.0, "p": 0.8, "c": "sejf" },
+    { "k": "szafa", "n": "Szafa na akta", "w": [0.9, 1.2], "d": 0.45, "h": 1.9, "p": 0.7, "c": "akta" }
+  ],
+  "staff": [
+    { "k": "stol", "n": "Stół", "w": [1.2, 1.6], "d": 0.8, "h": 0.75, "p": 1, "mid": true },
+    { "k": "lodowka", "n": "Lodówka", "w": [0.6, 0.6], "d": 0.65, "h": 1.8, "p": 0.9, "c": "lodowka" },
+    { "k": "szafki", "n": "Szafki pracownicze", "w": [1.2, 2.0], "d": 0.5, "h": 1.9, "p": 1, "c": "szafki_pracownicze" }
+  ],
+  "lobby": [
+    { "k": "skrzynki", "n": "Skrzynki pocztowe", "w": [1.0, 1.6], "d": 0.3, "h": 1.2, "p": 1, "c": "skrzynki" }
+  ]
+}

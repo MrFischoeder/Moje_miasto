@@ -148,7 +148,7 @@ export class Simulation {
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; return;
     }
     if (c.type === 'mode') this.setMode(p, c.mode);
-    else if (c.type === 'enter') { if (!this.board(p)) this.enterNearest(p); }
+    else if (c.type === 'enter') { if (!this.board(p) && !this.search(p)) this.enterNearest(p); }
     else if (c.type === 'goStation') {
       const s = this.world.stations[c.station]; if (!s) return;
       this.exitVehicle(p, false);
@@ -193,7 +193,23 @@ export class Simulation {
     for (const p of this.players.values()) if (p.vehicle != null) {
       const v = this.entity(p.vehicle), wk = this.entity(p.walker); wk.x = v.x; wk.y = v.y; wk.z = v.z;
     }
+    // wnętrza budynków wokół graczy (co 1/3 s)
+    if (this.tick % 10 === 0) this.syncInteriors();
     this.tick++;
+  }
+
+  /** Wnętrza wokół graczy: plany budynków, piętra, regiony chodzenia. */
+  syncInteriors(): void {
+    const pts: { x: number; y: number; z: number }[] = [];
+    for (const p of this.players.values()) { const w = this.entity(p.walker); pts.push({ x: w.x, y: w.y, z: w.z }); }
+    this.world.interiors.sync(pts);
+  }
+
+  /** Przeszukanie pojemnika (szafa, lodówka, kasa...) w zasięgu ręki. */
+  search(p: PlayerState): boolean {
+    if (!this.rules || p.vehicle != null) return false;
+    const w = this.entity(p.walker), c = this.world.interiors.container(w.x, w.z, w.y); if (!c) return false;
+    this.rules.search(p, c.item); return true;
   }
 
   // ---------- komunikacja miejska ----------

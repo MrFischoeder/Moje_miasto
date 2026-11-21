@@ -1,0 +1,27 @@
+{
+  "_opis": "Tabele łupów (kwoty w złotych; w Londynie przeliczane ×0,2 na funty). p: szansa, że w ogóle coś jest; money: [od, do]; items: [nazwa, szansa]; crime: gwiazdki i opis przestępstwa; odnowienie po respawn sekundach.",
+  "respawn": 900,
+  "tabele": {
+    "szafa_przedpokoj": { "p": 0.6, "money": [2, 40], "items": [["parasol", 0.3], ["rękawiczki", 0.2], ["klucze", 0.1]] },
+    "buty": { "p": 0.3, "money": [1, 10], "items": [["sznurówki", 0.3]] },
+    "szafki_kuchenne": { "p": 0.7, "money": [1, 30], "items": [["kawa", 0.3], ["konserwa", 0.3], ["słoik z drobnymi", 0.15]] },
+    "lodowka": { "p": 0.9, "money": [0, 0], "items": [["kanapka", 0.5], ["napój", 0.5], ["piwo", 0.3]] },
+    "apteczka": { "p": 0.6, "money": [0, 0], "items": [["bandaż", 0.5], ["tabletki przeciwbólowe", 0.5]], "heal": 25 },
+    "meblosciana": { "p": 0.7, "money": [10, 150], "items": [["zegarek", 0.08], ["album ze zdjęciami", 0.3], ["kieliszki", 0.3]] },
+    "rtv": { "p": 0.5, "money": [0, 20], "items": [["pilot", 0.6], ["konsola", 0.05]] },
+    "szafa": { "p": 0.7, "money": [5, 120], "items": [["kurtka", 0.4], ["biżuteria", 0.06]] },
+    "komoda": { "p": 0.7, "money": [5, 80], "items": [["perfumy", 0.2], ["biżuteria", 0.08]] },
+    "nocna": { "p": 0.6, "money": [2, 50], "items": [["książka", 0.4], ["telefon", 0.05]] },
+    "biurko": { "p": 0.7, "money": [2, 60], "items": [["długopis", 0.5], ["laptop", 0.04], ["pendrive", 0.15]] },
+    "regal": { "p": 0.4, "money": [0, 30], "items": [["książka", 0.6]] },
+    "magazyn": { "p": 0.8, "money": [0, 0], "items": [["zgrzewka wody", 0.4], ["karton chipsów", 0.3], ["papierosy", 0.15]] },
+    "biurko_sklep": { "p": 0.8, "money": [20, 200], "items": [["dokumenty", 0.5]] },
+    "sejf": { "p": 0.6, "money": [300, 2000], "items": [], "crime": [1, "Włamanie do sejfu"] },
+    "akta": { "p": 0.3, "money": [0, 0], "items": [["segregator", 0.6]] },
+    "szafki_pracownicze": { "p": 0.6, "money": [5, 60], "items": [["kanapka", 0.3], ["telefon", 0.04]] },
+    "skrzynki": { "p": 0.4, "money": [0, 0], "items": [["ulotka", 0.7], ["list", 0.3]] },
+    "kasa": { "p": 1, "money": [80, 450], "items": [], "crime": [2, "Napad na sklep"] },
+    "polka": { "p": 1, "money": [0, 0], "items": [["chipsy", 0.4], ["batonik", 0.4], ["woda", 0.4]], "crime": [1, "Kradzież sklepowa"] },
+    "lodowka_sklep": { "p": 1, "money": [0, 0], "items": [["napój", 0.7], ["piwo", 0.3]], "crime": [1, "Kradzież sklepowa"] }
+  }
+}

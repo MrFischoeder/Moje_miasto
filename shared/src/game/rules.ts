@@ -5,6 +5,12 @@ import type { World } from '../world/world';
 import type { Pedestrians } from '../traffic/peds';
 import type { Traffic } from '../traffic/traffic';
 import { Police } from '../traffic/police';
+import { rng } from '../util/rng';
+import type { Item } from '../interiors/plan';
+import LOOT from '../interiors/data/lupy.json';
+
+interface LootTable { p: number; money: number[]; items: (string | number)[][]; crime?: (string | number)[]; heal?: number }
+const TABLES = LOOT.tabele as unknown as Record<string, LootTable>;
 
 export interface GameEvent { pid: number; text: string; kind: 'crime' | 'arrest' | 'death' | 'info' }
 
@@ -33,6 +39,8 @@ export class Rules {
   readonly police: Police;
   readonly money: { cur: string; fare: number; fine: number; death: number };
   private t = 0;
+  /** przeszukane pojemniki: id -> [czas, ile razy] */
+  private searched = new Map<string, [number, number]>();
 
   constructor(private host: RulesHost) {
     this.money = MONEY[host.world.key] ?? MONEY.warszawa;
@@ -68,6 +76,24 @@ export class Rules {
   fare(p: PlayerState): void {
     if (p.money >= this.money.fare) { p.money = Math.round((p.money - this.money.fare) * 100) / 100; this.ev(p, `Bilet: ${this.money.fare.toFixed(2)} ${this.money.cur}`, 'info'); }
     else this.ev(p, 'Jedziesz na gapę (brak pieniędzy na bilet)', 'info');
+  }
+
+  /** Przeszukanie pojemnika: łup z tabeli (powtarzalny z ziarna), odnawianie po LOOT.respawn s. */
+  search(p: PlayerState, it: Item): void {
+    if (p.dead || !it.c || !it.id) return;
+    const tb = TABLES[it.c]; if (!tb) return;
+    const prev = this.searched.get(it.id);
+    if (prev && this.t - prev[0] < LOOT.respawn) { this.ev(p, `${it.n}: pusto (już przeszukane)`, 'info'); return; }
+    const n = prev ? prev[1] + 1 : 0; this.searched.set(it.id, [this.t, n]);
+    const R = rng(`lup${it.id}#${n}`), k = this.host.world.key === 'londyn' ? .2 : 1, got: string[] = [];
+    if (R() < tb.p) {
+      const m = Math.round((tb.money[0] + (tb.money[1] - tb.money[0]) * R()) * k);
+      if (m > 0) { p.money = Math.round((p.money + m) * 100) / 100; got.push(`+${m} ${this.money.cur}`); }
+      for (const [name, ch] of tb.items) if (R() < (ch as number)) got.push(name as string);
+      if (tb.heal && p.hp < 100) { p.hp = Math.min(100, p.hp + tb.heal); got.push(`+${tb.heal} zdrowia`); }
+    }
+    this.ev(p, `${it.n}: ${got.length ? got.join(', ') : 'nic'}`, got.length ? 'info' : 'info');
+    if (tb.crime) this.crime(p, tb.crime[0] as number, tb.crime[1] as string);
   }
 
   /** Zatrzymanie przez policję: grzywna, gwiazdki zerowane, wypuszczenie przy komisariacie. */

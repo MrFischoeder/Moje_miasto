@@ -8,3 +8,10 @@ Opis poleceń: README w katalogu głównym, sekcja „Dane miasta”.
 - `update-stations.ts` – prawdziwe pozycje stacji metra i wejść w `data/cities.json` (uruchamiać po `data/prep.py`)
 - `fetch-dem.ts` – Copernicus DEM -> `client/public/terrain/<miasto>.bin.gz`
 - `pbf-extract.py` – wycinek OSM PBF (BBBike / Geofabrik) -> paczki 1 km w `.cache/osm/<miasto>/` dla `fetch-osm --offline`
+
+## Wnętrza: pokaz szablonów
+
+```bash
+npx tsx tools/pokaz-wnetrz.ts > docs/wnetrza/pokaz.json      # prawdziwe budynki dla każdego szablonu
+npx tsx tools/plany-wnetrz.ts docs/wnetrza/pokaz.json docs/wnetrza/plany.html   # plany pięter (SVG)
+```

@@ -1,0 +1,43 @@
+{
+  "_opis": "Sieci sklepów: archetyp wnętrza (szablon) i kolor akcentu. Nazwy z OSM; szyld zgodnie z BRANDING (config/branding.ts). Bez logotypów.",
+  "domyslne": {
+    "PL": { "convenience": "pl-maly", "supermarket": "dyskont", "discount": "dyskont" },
+    "UK": { "convenience": "uk-conv", "supermarket": "dyskont", "discount": "dyskont" }
+  },
+  "sieci": {
+    "Żabka": { "arch": "pl-maly", "accent": "#5fd35f" },
+    "Carrefour Express": { "arch": "pl-maly", "accent": "#4a8cff" },
+    "Lewiatan": { "arch": "pl-maly", "accent": "#ff5a5a" },
+    "abc": { "arch": "pl-maly", "accent": "#ffb43f" },
+    "Odido": { "arch": "pl-maly", "accent": "#ff8a3d" },
+    "Społem": { "arch": "pl-maly", "accent": "#ff5a5a" },
+    "Delikatesy Centrum": { "arch": "pl-maly", "accent": "#5fd35f" },
+    "Stokrotka Express": { "arch": "pl-maly", "accent": "#5fd35f" },
+    "Groszek": { "arch": "pl-maly", "accent": "#5fd35f" },
+    "Top Market": { "arch": "pl-maly", "accent": "#ff5a5a" },
+    "Biedronka": { "arch": "dyskont", "accent": "#ff4a4a" },
+    "Lidl": { "arch": "dyskont", "accent": "#ffd23f" },
+    "Aldi": { "arch": "dyskont", "accent": "#4a8cff" },
+    "Stokrotka": { "arch": "dyskont", "accent": "#5fd35f" },
+    "Carrefour Market": { "arch": "dyskont", "accent": "#4a8cff" },
+    "Auchan": { "arch": "dyskont", "accent": "#ff4a4a" },
+    "Moje Auchan": { "arch": "pl-maly", "accent": "#ff4a4a" },
+    "Tesco Express": { "arch": "uk-conv", "accent": "#4a8cff" },
+    "Sainsbury's Local": { "arch": "uk-conv", "accent": "#ff8a3d" },
+    "Co-op Food": { "arch": "uk-conv", "accent": "#66e0ff" },
+    "Londis": { "arch": "uk-conv", "accent": "#ff5a5a" },
+    "Nisa Local": { "arch": "uk-conv", "accent": "#ff5a5a" },
+    "Nisa": { "arch": "uk-conv", "accent": "#ff5a5a" },
+    "Little Waitrose": { "arch": "uk-conv", "accent": "#9fe06a" },
+    "Costcutter": { "arch": "uk-conv", "accent": "#a07aff" },
+    "Marks & Spencer": { "arch": "uk-conv", "accent": "#9fe06a" },
+    "M&S Simply Food": { "arch": "uk-conv", "accent": "#9fe06a" },
+    "Premier": { "arch": "uk-conv", "accent": "#4a8cff" },
+    "Budgens": { "arch": "uk-conv", "accent": "#ff8a3d" },
+    "Best-one": { "arch": "uk-conv", "accent": "#4a8cff" },
+    "Shell Select": { "arch": "uk-conv", "accent": "#ffd23f" },
+    "Sainsbury's": { "arch": "dyskont", "accent": "#ff8a3d" },
+    "Tesco": { "arch": "dyskont", "accent": "#4a8cff" },
+    "Waitrose": { "arch": "dyskont", "accent": "#9fe06a" }
+  }
+}
