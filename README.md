@@ -6,7 +6,9 @@ Założenia i plan etapów: [`docs/PROMPT_CLAUDE_CODE.md`](docs/PROMPT_CLAUDE_CO
 ## Jak zagrać
 
 **Bez instalacji:** pobierz `moje-miasto.html` i otwórz go dwuklikiem w Chrome, Edge albo Firefoksie.
-Cała gra jest w tym jednym pliku i działa bez internetu. Świeży plik buduje się sam po każdym pushu:
+Cała gra jest w tym jednym pliku (ok. 32 MB) i działa bez internetu i bez serwera (tryb jednoosobowy):
+Warszawa ok. 4 km wokół Świętokrzyskiej i centrum Londynu ok. 3 km wokół Oxford Circus, z terenem, wnętrzami,
+rozkładami komunikacji i lotniskami; dalej od centrum świat jest pusty. Świeży plik buduje się sam po każdym pushu:
 GitHub → zakładka **Actions** → ostatni przebieg „Build” → **Artifacts** → `moje-miasto`.
 
 Lokalnie zbudujesz go poleceniem `npm run build:single` (wynik: `dist-single/moje-miasto.html`).
