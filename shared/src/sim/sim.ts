@@ -205,6 +205,16 @@ export class Simulation {
     this.world.interiors.sync(pts);
   }
 
+  /** Włącza / wyłącza wnętrza budynków; gracz stojący w środku wychodzi na ulicę obok. */
+  setInteriors(on: boolean): void {
+    if (!on) for (const p of this.players.values()) {
+      if (p.vehicle != null || p.ride) continue;
+      const w = this.entity(p.walker); if (this.world.regions.get(w.reg)?.info.b == null) continue;
+      const [x, z] = this.world.freeSpot(w.x, w.z, 0, true); this.place(p, x, z);
+    }
+    this.world.interiors.setEnabled(on);
+  }
+
   /** Przeszukanie pojemnika (szafa, lodówka, kasa...) w zasięgu ręki. */
   search(p: PlayerState): boolean {
     if (!this.rules || p.vehicle != null) return false;

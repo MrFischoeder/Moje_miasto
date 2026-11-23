@@ -114,6 +114,7 @@ export class Room {
     else if (m.t === 'save' && this.opt.local) this.sendJson(c.conn, { t: 'saved', data: this.sim.serialize() });
     else if (m.t === 'load' && this.opt.local) this.loadState(c, m.data);
     else if (m.t === 'setTime' && this.opt.local) this.setTime(m.sec, m.scale);
+    else if (m.t === 'setInteriors' && this.opt.local) this.sim.setInteriors(!!m.on);
   }
 
   private command(c: Client, cmd: Command): void {

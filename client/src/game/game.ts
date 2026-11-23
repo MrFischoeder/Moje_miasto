@@ -63,6 +63,8 @@ export class Game {
   session: NetSession | null = null;
   view: CityView | null = null;
   interiors: InteriorView | null = null;
+  /** ustawienie: wnętrza budynków (gra jednoosobowa; w sieciowej decyduje serwer) */
+  interiorsOn = true;
   private lastInt = 0;
   /** komunikacja miejska wg rozkładów (liczona lokalnie z zegara sesji) */
   transit: TransitSystem | null = null;
@@ -181,7 +183,15 @@ export class Game {
     await new Promise<void>(res => { const chk = () => s.player() ? res() : setTimeout(chk, 20); chk(); });
     this.viewSeq = -1; this.syncView();
     this.lastMode = 'walk'; this.rig.reset(); this.ui.onModeChanged('walk', this.rig.fp);
+    if (!this.interiorsOn && !online) { world.interiors.setEnabled(false); s.setInteriors(false); }
     this.ui.onCityLoaded(this);
+  }
+
+  /** Włącza / wyłącza wnętrza budynków (klient i lokalny serwer razem). Zwraca false w grze sieciowej. */
+  setInteriorsOn(on: boolean): boolean {
+    this.interiorsOn = on;
+    if (this.online || !this.session) return !this.online;
+    this.session.world.interiors.setEnabled(on); this.session.setInteriors(on); return true;
   }
 
   /** Pojazdy komunikacji w pobliżu (minimapa). */

@@ -175,6 +175,15 @@ const applyTime = () => {
 timeSel.onchange = applyTime; speedSel.onchange = applyTime;
 $('newW').onclick = () => create('warszawa'); $('newL').onclick = () => create('londyn');
 
+// wydajność: wnętrza budynków (zapamiętane w przeglądarce)
+const intChk = $<HTMLInputElement>('intChk');
+try { intChk.checked = localStorage.getItem('mm.wnetrza') !== '0'; } catch { /* brak dostępu do pamięci */ }
+game.interiorsOn = intChk.checked;
+intChk.onchange = () => {
+  try { localStorage.setItem('mm.wnetrza', intChk.checked ? '1' : '0'); } catch { /* brak dostępu */ }
+  if (!game.setInteriorsOn(intChk.checked)) $('status').textContent = 'W grze sieciowej o wnętrzach decyduje serwer.';
+};
+
 game.loadCity('warszawa' as CityKey, null); closeMenu();
 
 // uchwyt dla testów i konsoli

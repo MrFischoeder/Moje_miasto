@@ -72,6 +72,8 @@ export class NetSession {
   close(): void { this.tr.close(); }
   /** gra jednoosobowa: godzina (sekundy od północy) i tempo czasu */
   setTime(sec: number | null, scale: number): void { this.json({ t: 'setTime', sec, scale }); }
+  /** gra jednoosobowa: wnętrza budynków włączone / wyłączone */
+  setInteriors(on: boolean): void { this.json({ t: 'setInteriors', on }); }
 
   // ---------- odbiór ----------
   private receive(d: ArrayBuffer | string): void {

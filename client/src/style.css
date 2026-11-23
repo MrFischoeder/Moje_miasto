@@ -66,3 +66,4 @@ input:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #deadOv small{display:block;font-size:15px;letter-spacing:1px;color:#ffb0b0;margin-top:8px}
 body.dead #deadOv{display:grid}
 @media(max-width:600px){#stats{font-size:12px}#hpBar{width:70px}#evt{font-size:15px}}
+.chk{display:flex;gap:8px;align-items:center;cursor:pointer;font-size:14px}.chk input{accent-color:var(--ph);width:18px;height:18px}

@@ -20,6 +20,8 @@ export class Interiors {
   readonly live = new Map<number, Live>();
   /** rośnie przy każdej zmianie (widok klienta przebudowuje się po zmianie) */
   version = 0;
+  /** wnętrza włączone (ustawienie gry; wyłączone = budynki bez wnętrz, mniejsze obciążenie) */
+  enabled = true;
   /** czas składania ostatnich pięter [ms] (pomiar) */
   readonly stats = { plans: 0, levels: 0, planMs: 0, levelMs: 0, maxLevelMs: 0 };
   private plans = new Map<number, Plan | null>();
@@ -55,7 +57,15 @@ export class Interiors {
   }
 
   /** Aktualizacja wokół punktów (gracze). maxNew: ile nowych planów najwyżej na wywołanie. */
+  /** Włącza / wyłącza wnętrza; wyłączenie zwalnia wszystkie plany, regiony i meble. */
+  setEnabled(on: boolean): void {
+    if (this.enabled === on) return; this.enabled = on;
+    if (!on) for (const lv of [...this.live.values()]) this.drop(lv);
+    this.version++;
+  }
+
   sync(points: { x: number; y: number; z: number }[], maxNew = 6, budgetMs = 4): void {
+    if (!this.enabled) return;
     const start = now(), over = () => now() - start > budgetMs;
     const dist = (c: { a: number; b2: number; c: number; d: number }, x: number, z: number) => Math.hypot(Math.max(c.a - x, 0, x - c.b2), Math.max(c.c - z, 0, z - c.d));
     // zwalnianie

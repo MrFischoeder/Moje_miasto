@@ -114,3 +114,22 @@ describe('przeszukiwanie', () => {
     sim.stepPlayer(p.id, NO_INPUT); sim.endStep();
   });
 });
+
+describe('przełącznik wnętrz', () => {
+  it('wyłączenie zwalnia wnętrza, gracz z klatki wychodzi na ulicę i może chodzić; ponowne włączenie przywraca', () => {
+    const w = worldAround('warszawa', -3, 1);
+    const b = [...w.tiles.values()].flatMap(t => t.b).find(q => q.id === 238177212)!, [cx, cz] = center(b.o);
+    const sim = new Simulation(w), p = sim.addPlayer('a'), wk = sim.entity(p.walker);
+    Object.assign(wk, { x: cx, z: cz, y: -99 }); for (let i = 0; i < 5; i++) sim.syncInteriors();
+    const lv = w.interiors.live.get(b.id)!, c = lv.plan.cores.find(q => !q.sealed)!;
+    const [x, z] = toWorld(lv.plan.frame, (c.r.x0 + c.r.x1) / 2, c.r.y1 - 1), s = w.support(x, z, lv.plan.f0)!;
+    Object.assign(wk, { x, z, y: s.h, reg: s.r!.id });
+    sim.setInteriors(false);
+    expect(w.interiors.live.size).toBe(0); expect(w.regions.dyn.size).toBe(0);
+    expect(w.regions.get(wk.reg)?.info.b).toBeUndefined();
+    sim.syncInteriors(); expect(w.interiors.live.size).toBe(0);
+    const x0 = wk.x; for (let i = 0; i < 30; i++) sim.stepPlayer(p.id, { ...NO_INPUT, f: 1, yaw: 0 }); // idzie
+    expect(Math.hypot(wk.x - x0, 0) + Math.abs(wk.z - z) > .5 || wk.x !== x0).toBe(true);
+    sim.setInteriors(true); sim.syncInteriors(); expect(w.interiors.live.size).toBeGreaterThan(0);
+  });
+});

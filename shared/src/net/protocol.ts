@@ -125,6 +125,7 @@ export type ClientMsg =
   | { t: 'save' }
   | { t: 'load'; data: SaveState }
   /** gra jednoosobowa: ustawienie zegara (godzina lokalna w sekundach od północy, skala) */
-  | { t: 'setTime'; sec: number | null; scale: number };
+  | { t: 'setTime'; sec: number | null; scale: number }
+  | { t: 'setInteriors'; on: boolean };
 
 export const playerInfo = (p: PlayerState): PlayerInfo => ({ id: p.id, name: p.name, color: p.color, walker: p.walker, vehicle: p.vehicle, passenger: p.passenger, ride: p.ride, wanted: p.wanted, viewSeq: p.viewSeq, viewYaw: p.viewYaw, viewPitch: p.viewPitch });
