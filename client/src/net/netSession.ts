@@ -74,6 +74,10 @@ export class NetSession {
   setTime(sec: number | null, scale: number): void { this.json({ t: 'setTime', sec, scale }); }
   /** gra jednoosobowa: wnętrza budynków włączone / wyłączone */
   setInteriors(on: boolean): void { this.json({ t: 'setInteriors', on }); }
+  /** gra jednoosobowa: limity aut i pieszych NPC */
+  setTraffic(cars: number, peds: number): void { this.json({ t: 'setTraffic', cars, peds }); }
+  /** statystyki lokalnego serwera (gra jednoosobowa), co 2 s */
+  serverStats: { tickMs: number; tickMsMax: number; entities: number; cars: number; peds: number; police: number; interiors: number } | null = null;
 
   // ---------- odbiór ----------
   private receive(d: ArrayBuffer | string): void {
@@ -89,6 +93,7 @@ export class NetSession {
       else if (m.t === 'time') this.clock.set(m.time, m.scale);
       else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur });
       else if (m.t === 'event') this.onEvent(m.text, m.kind);
+      else if (m.t === 'stats') { const { t: _t, ...rest } = m; void _t; this.serverStats = rest; }
       else if (m.t === 'saved') { this.savedWait?.(m.data); this.savedWait = null; }
       else if (m.t === 'error') this.onError(m.text);
       return;

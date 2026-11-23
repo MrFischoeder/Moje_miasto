@@ -184,6 +184,44 @@ intChk.onchange = () => {
   if (!game.setInteriorsOn(intChk.checked)) $('status').textContent = 'W grze sieciowej o wnętrzach decyduje serwer.';
 };
 
+// wydajność: liczba aut i pieszych NPC (zapamiętana)
+const carRng = $<HTMLInputElement>('carRng'), pedRng = $<HTMLInputElement>('pedRng');
+const load = (k: string, d: number) => { try { const v = localStorage.getItem(k); return v == null ? d : +v; } catch { return d; } };
+const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* brak dostępu */ } };
+carRng.value = String(load('mm.auta', 70)); pedRng.value = String(load('mm.piesi', 50));
+const showRng = () => { $('carVal').textContent = carRng.value; $('pedVal').textContent = pedRng.value; };
+showRng(); game.carMax = +carRng.value; game.pedMax = +pedRng.value;
+const applyTraffic = () => {
+  showRng(); save('mm.auta', carRng.value); save('mm.piesi', pedRng.value);
+  if (!game.setTraffic(+carRng.value, +pedRng.value)) $('status').textContent = 'W grze sieciowej o ruchu decyduje serwer.';
+};
+carRng.oninput = showRng; pedRng.oninput = showRng; carRng.onchange = applyTraffic; pedRng.onchange = applyTraffic;
+
+// licznik wydajności (P)
+const perfChk = $<HTMLInputElement>('perfChk'), perfEl = $('perf');
+perfChk.checked = load('mm.licznik', 0) === 1; perfEl.hidden = !perfChk.checked;
+const setPerf = (on: boolean) => { perfChk.checked = on; perfEl.hidden = !on; save('mm.licznik', on ? '1' : '0'); game.perf.take(); };
+perfChk.onchange = () => setPerf(perfChk.checked);
+addEventListener('keydown', e => { if (e.code === 'KeyP' && !(document.activeElement instanceof HTMLInputElement)) setPerf(!perfChk.checked); });
+const ms = (v: number) => v.toFixed(1).padStart(5) + ' ms', k = (v: number) => v >= 1000 ? Math.round(v / 1000) + ' tys.' : String(v);
+setInterval(() => {
+  if (perfEl.hidden) return;
+  const r = game.perf.take(), s = game.session, d = game.drawInfo;
+  let cars = 0, peds = 0; if (s) for (const e of s.entities()) if (e.npc) { if (e.kind === 'car') cars++; else if (e.kind === 'walker') peds++; }
+  const lines = [
+    `FPS ${r.fps.toFixed(0).padStart(3)}   klatka śr. ${r.frameAvg.toFixed(1)} ms, najgorsza ${r.frameMax.toFixed(0)} ms`,
+    `CPU klatki ${r.cpuAvg.toFixed(1)} ms; reszta (GPU, przeglądarka) ok. ${Math.max(0, r.frameAvg - r.cpuAvg).toFixed(1)} ms`,
+    ...r.parts.filter(([, v]) => v >= .05).map(([n, v]) => `  ${n.padEnd(27)}${ms(v)}`),
+    `Rysowanie: ${d.calls} wywołań, ${k(d.tris)} trójkątów, ${k(d.lines)} linii`,
+    `Widoczne: ${cars} aut NPC, ${peds} pieszych NPC, ${game.transitVisible} pojazdów komunikacji`,
+    `Kafle: ${game.view ? [...game.view.streamer.loadedTiles()].length : 0}, budynki z wnętrzami: ${game.world?.interiors.live.size ?? 0}`,
+  ];
+  const st = s?.serverStats;
+  if (st) lines.push(`Symulacja (wątek gry): krok ${st.tickMs.toFixed(1)} ms, maks. ${st.tickMsMax.toFixed(0)} ms (budżet 33 ms)`, `  aut ${st.cars}, pieszych ${st.peds}, radiowozów ${st.police}, wnętrz ${st.interiors}`);
+  else if (game.online) lines.push('Symulacja: na serwerze sieciowym');
+  perfEl.textContent = lines.join('\n');
+}, 1000);
+
 game.loadCity('warszawa' as CityKey, null); closeMenu();
 
 // uchwyt dla testów i konsoli

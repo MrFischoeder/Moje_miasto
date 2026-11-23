@@ -95,6 +95,8 @@ export class Pedestrians {
   private down = new Map<number, { e: Entity; t: number }>();
   private R = rng('piesi');
   private tileCount = -1; private tick = 0;
+  /** najwięcej pieszych wokół gracza (ustawienie gry); natężenie wg godziny mnoży ten limit */
+  max = PED_MAX;
   constructor(private host: PedHost) {}
 
   /** Potrącenie: pieszy przewraca się i znika po 20 s. */
@@ -112,10 +114,12 @@ export class Pedestrians {
     }
     if (!this.graph.edges.length) return;
     for (const p of [...this.peds.values()]) if (!players.some(q => Math.hypot(q.x - p.e.x, q.z - p.e.z) < PED_DESPAWN)) this.remove(p);
-    const target = Math.round(PED_MAX * PED_DENSITY[Math.floor(hour) % 24]);
+    const target = Math.round(this.max * PED_DENSITY[Math.floor(hour) % 24]);
     for (const pl of players) {
-      let n = 0; for (const p of this.peds.values()) if (Math.abs(p.e.x - pl.x) < PED_DESPAWN && Math.abs(p.e.z - pl.z) < PED_DESPAWN) n++;
+      let n = 0, far: Ped | null = null, fd = 0;
+      for (const p of this.peds.values()) if (Math.abs(p.e.x - pl.x) < PED_DESPAWN && Math.abs(p.e.z - pl.z) < PED_DESPAWN) { n++; const d = Math.hypot(p.e.x - pl.x, p.e.z - pl.z); if (d > fd && p.flee <= 0) { fd = d; far = p; } }
       for (let k = 0; k < 3 && n < target; k++) if (this.trySpawn(pl)) n++;
+      if (n > target + (target ? 2 : 0) && far && players.length === 1) this.remove(far); // limit zmniejszony: najdalszy pieszy znika
     }
     const q = { x: 0, z: 0, yaw: 0 };
     for (const p of this.peds.values()) {

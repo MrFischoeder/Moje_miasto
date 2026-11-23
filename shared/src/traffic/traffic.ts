@@ -31,6 +31,8 @@ export class Traffic {
   private tileCount = -1; private tick = 0;
   private R = rng('ruch');
   private side: number;
+  /** najwięcej aut wokół gracza w szczycie (ustawienie gry); natężenie wg godziny mnoży ten limit */
+  maxPerPlayer = MAX_PER_PLAYER;
   constructor(private host: TrafficHost) { this.side = SIDE[host.world.key] ?? 1; }
 
   /** Faza świateł dla wjazdu na węzeł z kierunku heading w chwili t [s]: 0 zielone, 1 żółte, 2 czerwone. */
@@ -54,10 +56,12 @@ export class Traffic {
       const q = c.e; if (!players.some(p => Math.hypot(p.x - q.x, p.z - q.z) < DESPAWN_R)) this.remove(c);
     }
     // pojawianie się (najwyżej kilka na krok)
-    const target = Math.round(MAX_PER_PLAYER * DENSITY[Math.floor(hour) % 24]);
+    const target = Math.round(this.maxPerPlayer * DENSITY[Math.floor(hour) % 24]);
     for (const p of players) {
-      let n = 0; for (const c of this.cars.values()) if (Math.hypot(c.e.x - p.x, c.e.z - p.z) < DESPAWN_R) n++;
+      let n = 0, far: Car | null = null, fd = 0;
+      for (const c of this.cars.values()) { const d = Math.hypot(c.e.x - p.x, c.e.z - p.z); if (d < DESPAWN_R) { n++; if (d > fd) { fd = d; far = c; } } }
       for (let k = 0; k < 3 && n < target; k++) if (this.trySpawn(p)) n++;
+      if (n > target + (target ? 2 : 0) && far && players.length === 1) this.remove(far); // limit zmniejszony: najdalsze auto znika
     }
     // ruch (IDM)
     this.index();

@@ -205,6 +205,12 @@ export class Simulation {
     this.world.interiors.sync(pts);
   }
 
+  /** Limity ruchu (ustawienie gry): najwięcej aut i pieszych wokół gracza w szczycie. */
+  setTrafficLimits(cars: number, peds: number): void {
+    if (this.traffic && Number.isFinite(cars)) this.traffic.maxPerPlayer = Math.max(0, Math.min(200, Math.round(cars)));
+    if (this.peds && Number.isFinite(peds)) this.peds.max = Math.max(0, Math.min(150, Math.round(peds)));
+  }
+
   /** Włącza / wyłącza wnętrza budynków; gracz stojący w środku wychodzi na ulicę obok. */
   setInteriors(on: boolean): void {
     if (!on) for (const p of this.players.values()) {

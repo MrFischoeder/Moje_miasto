@@ -9,6 +9,7 @@
 <canvas id="c"></canvas>
 <div class="hud"><b id="cityName">MIASTO</b><span id="loc">—</span><span id="info"></span><div id="stats"><span id="hpBar"><i id="hpFill"></i></span><span id="money">—</span><span id="stars"></span></div></div>
 <div id="evt" aria-live="polite"></div>
+<pre id="perf" hidden></pre>
 <div id="deadOv">NIE ŻYJESZ<small>odrodzenie przy szpitalu…</small></div>
 <canvas id="mini" width="320" height="320"></canvas>
 <div id="joy"><div id="knob"></div></div>
@@ -64,8 +65,11 @@
       </select>
     </div>
     <h2>Wydajność</h2>
+    <div class="row"><label class="chk"><input type="checkbox" id="perfChk"> Licznik wydajności (klawisz P)</label></div>
     <div class="row"><label class="chk"><input type="checkbox" id="intChk" checked> Wnętrza budynków (mieszkania, klatki schodowe, sklepy)</label></div>
-    <p class="small">Wyłączenie: budynki bez wnętrz (nie da się wejść), mniejsze obciążenie. Działa od razu, zapamiętuje się w przeglądarce.</p>
+    <div class="row slider"><label for="carRng">Auta NPC wokół gracza (w szczycie)</label><input type="range" id="carRng" min="0" max="150" step="5" value="70"><b id="carVal">70</b></div>
+    <div class="row slider"><label for="pedRng">Piesi NPC wokół gracza (w szczycie)</label><input type="range" id="pedRng" min="0" max="100" step="5" value="50"><b id="pedVal">50</b></div>
+    <p class="small">Wnętrza wyłączone: budynki bez wnętrz (nie da się wejść), mniejsze obciążenie. Liczba aut i pieszych zmienia się wg pory dnia (to wartość w szczycie); 0 = brak. Wszystko działa od razu i zapamiętuje się w przeglądarce.</p>
     <p class="small">Komunikacja kursuje według prawdziwych rozkładów (ZTM Warszawa, Koleje Mazowieckie, WKD, PKP; TfL i autobusy Londynu). E przy stojącym pojeździe = wsiadasz, E albo 1 na przystanku = wysiadasz. Stań przed autem NPC, żeby się zatrzymało, i naciśnij E: wyrzucisz kierowcę i przejmiesz auto (inni gracze mogą się dosiąść).</p>
     <h2>Teleport na peron</h2>
     <div class="row">

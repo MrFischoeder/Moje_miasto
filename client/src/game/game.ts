@@ -28,6 +28,7 @@ import { WorkerTransport, WsTransport, type Transport, type WorkerIn } from '../
 import { localTime } from '@miasto/shared/transit/clock';
 import { litFraction } from '@miasto/shared/interiors/facade';
 import { InteriorView } from '../world/interiorView';
+import { PerfStats } from './perf';
 import type { LocalInit } from '../net/localServer.worker';
 import LocalServer from '../net/localServer.worker?worker&inline';
 
@@ -65,6 +66,12 @@ export class Game {
   interiors: InteriorView | null = null;
   /** ustawienie: wnętrza budynków (gra jednoosobowa; w sieciowej decyduje serwer) */
   interiorsOn = true;
+  /** ustawienia: najwięcej aut i pieszych NPC wokół gracza (gra jednoosobowa) */
+  carMax = 70; pedMax = 50;
+  /** licznik wydajności */
+  readonly perf = new PerfStats();
+  /** dane rysowania z ostatniej klatki */
+  readonly drawInfo = { calls: 0, tris: 0, lines: 0 };
   private lastInt = 0;
   /** komunikacja miejska wg rozkładów (liczona lokalnie z zegara sesji) */
   transit: TransitSystem | null = null;
@@ -184,7 +191,18 @@ export class Game {
     this.viewSeq = -1; this.syncView();
     this.lastMode = 'walk'; this.rig.reset(); this.ui.onModeChanged('walk', this.rig.fp);
     if (!this.interiorsOn && !online) { world.interiors.setEnabled(false); s.setInteriors(false); }
+    if (!online) s.setTraffic(this.carMax, this.pedMax);
     this.ui.onCityLoaded(this);
+  }
+
+  /** liczba widocznych pojazdów komunikacji (licznik wydajności) */
+  get transitVisible(): number { return this.transitView?.visible.length ?? 0; }
+
+  /** Limity ruchu NPC (gra jednoosobowa). Zwraca false w grze sieciowej. */
+  setTraffic(cars: number, peds: number): boolean {
+    this.carMax = cars; this.pedMax = peds;
+    if (this.online || !this.session) return !this.online;
+    this.session.setTraffic(cars, peds); return true;
   }
 
   /** Włącza / wyłącza wnętrza budynków (klient i lokalny serwer razem). Zwraca false w grze sieciowej. */
@@ -280,19 +298,19 @@ export class Game {
   private frame(now: number): void {
     requestAnimationFrame(t => this.frame(t));
     const s = this.session; if (!s || !s.player()) return;
-    const raw = (now - this.last) / 1000, dt = Math.min(.05, raw); this.last = now;
+    const raw = (now - this.last) / 1000, dt = Math.min(.05, raw); this.last = now; const T = this.perf; T.begin(now);
     const I = this.input;
     const f = I.axis('throttle'), st = I.axis('steer');
     s.sendInput({ f, s: st, run: I.button('run'), brake: I.button('handbrake'), lift: I.axis('lift'), yaw: this.viewYaw, pitch: this.viewPitch });
     const alpha = s.advance(Math.min(.25, raw)); // stały krok nadrabia wolne klatki
-    this.syncView();
+    this.syncView(); T.lap('symulacja (przewidywanie)');
     const m = this.sessionMode();
     if (m !== this.lastMode) { this.lastMode = m; this.rig.reset(); this.ui.onModeChanged(m, this.rig.fp); }
-    const me = this.controlled(); if (!me) return;
+    const me = this.controlled(); if (!me) { T.end(); return; }
     const pv = s.previous(me.id) ?? me, P = this.pose, ride = this.ridePose();
     if (ride) { P.x = ride.x; P.y = ride.y + 1.0; P.z = ride.z; P.yaw = ride.yaw; }
     else { P.x = lerp(pv.x, me.x, alpha); P.y = lerp(pv.y, me.y, alpha); P.z = lerp(pv.z, me.z, alpha); P.yaw = lerpAngle(pv.yaw, me.yaw, alpha); }
-    this.renderEntities(alpha, dt);
+    this.renderEntities(alpha, dt); T.lap('auta i postacie');
     const mode = this.lastMode, w = s.world, cam = this.rig, gr = w.ground(P.x, P.z), alt = P.y - gr, under = mode === 'walk' && P.y < gr - 1;
     if (mode === 'walk') {
       const bob = (f || st) ? Math.sin(now / 140) * .04 : 0;
@@ -303,25 +321,32 @@ export class Game {
       if (mode === 'car') cam.chase(V, 9, 2.2, 1.2, dt, now, top); else cam.chase(V, 17, 5, 2.5, dt, now, top);
     }
     const radius = mode === 'heli' ? Math.min(3000, 900 + alt * 10) : mode === 'car' ? 1200 : under ? 600 : 900;
-    this.view!.update(P.x, P.z, radius);
+    this.view!.update(P.x, P.z, radius); T.lap('kafle (doczytywanie)');
     this.transitView?.update(P.x, P.z, Math.min(radius, 1500), this.riding);
-    this.airView?.update(P.x, P.z);
+    this.airView?.update(P.x, P.z); T.lap('komunikacja i samoloty');
     const { grid, fog } = this.ctx;
     const gs = mode === 'heli' && alt > 120 ? 5 : 1, step = 10 * gs, gx = Math.round(P.x / step) * step, gz = Math.round(P.z / step) * step;
     grid.scale.set(gs, 1, gs); grid.position.set(gx, w.terrain ? 0 : .04, gz); this.drape.update(gx, gz, gs, w.terrain ? w.ground : null);
-    fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + alt * 12) : mode === 'car' ? 900 : 650;
+    T.lap('teren i siatka'); fog.near = under ? 30 : 60; fog.far = under ? 240 : mode === 'heli' ? Math.min(6000, 700 + alt * 12) : mode === 'car' ? 900 : 650;
     // wnętrza budynków wokół gracza (ten sam algorytm co na serwerze: przewidywanie ruchu się zgadza)
     if (this.interiors) {
       if (now - this.lastInt > 300) { this.lastInt = now; const me = s0Pos(this); w.interiors.sync(me ? [me] : []); }
       this.interiors.update(P.x, P.z, this.view!.streamer.mats.windows);
     }
+    T.lap('wnętrza');
     if (now - this.lastSlow > 500) {
       const tz = this.transit?.tz ?? (w.key === 'londyn' ? 'Europe/London' : 'Europe/Warsaw'), lt = localTime(this.session!.clock.now(), tz);
       this.view!.streamer.mats.windows.uLit.value = litFraction(lt.sec / 3600);
     }
-    if (now - this.lastSlow > 500) { this.lastSlow = now; this.labels.update(w, P.x, P.z); this.view!.slowUpdate(P.x, P.z); this.ui.slowFrame(this); }
-    this.ctx.renderer.render(this.ctx.scene, this.ctx.camera);
-    this.ui.frame(this);
+    if (now - this.lastSlow > 500) {
+      this.lastSlow = now; this.labels.update(w, P.x, P.z); T.lap('etykiety');
+      this.view!.slowUpdate(P.x, P.z); T.lap('kafle (doczytywanie)'); this.ui.slowFrame(this);
+    }
+    T.lap('interfejs');
+    const R = this.ctx.renderer; R.render(this.ctx.scene, this.ctx.camera); T.lap('rysowanie (wysłanie do GPU)');
+    this.drawInfo.calls = R.info.render.calls; this.drawInfo.tris = R.info.render.triangles; this.drawInfo.lines = R.info.render.lines;
+    this.ui.frame(this); T.lap('interfejs (minimapa)');
+    T.end();
   }
 
   /** Pojazdy i postacie innych graczy; własny byt interpolowany między krokami przewidywania. */

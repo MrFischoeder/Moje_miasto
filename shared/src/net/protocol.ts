@@ -114,6 +114,7 @@ export type ServerMsg =
   | { t: 'me'; hp: number; money: number; wanted: number; dead: boolean; cur: string }
   /** zdarzenie na środku ekranu */
   | { t: 'event'; text: string; kind: 'crime' | 'arrest' | 'death' | 'info' }
+  | { t: 'stats'; tickMs: number; tickMsMax: number; entities: number; cars: number; peds: number; police: number; interiors: number }
   | { t: 'players'; list: PlayerInfo[] }
   | { t: 'chat'; from: string; color: string; text: string; sys?: boolean }
   | { t: 'saved'; data: SaveState }
@@ -126,6 +127,7 @@ export type ClientMsg =
   | { t: 'load'; data: SaveState }
   /** gra jednoosobowa: ustawienie zegara (godzina lokalna w sekundach od północy, skala) */
   | { t: 'setTime'; sec: number | null; scale: number }
-  | { t: 'setInteriors'; on: boolean };
+  | { t: 'setInteriors'; on: boolean }
+  | { t: 'setTraffic'; cars: number; peds: number };
 
 export const playerInfo = (p: PlayerState): PlayerInfo => ({ id: p.id, name: p.name, color: p.color, walker: p.walker, vehicle: p.vehicle, passenger: p.passenger, ride: p.ride, wanted: p.wanted, viewSeq: p.viewSeq, viewYaw: p.viewYaw, viewPitch: p.viewPitch });

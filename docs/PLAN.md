@@ -13,8 +13,9 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
 ## Kolejka (od najbliższych)
 1. Etap wydajności:
    - [x] przełącznik wnętrz budynków (menu „Wydajność”, zapamiętany w przeglądarce)
-   - [ ] licznik wydajności (FPS, czasy części klatki, liczba rysowań i obiektów)
-   - [ ] suwaki: liczba aut, pieszych, zasięg ruchu; komunikacja: zasięg i liczba rysowanych pojazdów, rodzaje osobno
+   - [x] licznik wydajności (FPS, czasy części klatki, liczba rysowań i obiektów; klawisz P)
+   - [x] suwaki: liczba aut i pieszych NPC (w szczycie, 0 = brak)
+   - [ ] suwaki: zasięg ruchu; komunikacja: zasięg i liczba rysowanych pojazdów, rodzaje osobno
    - [ ] profile jakości (niski / średni / wysoki), rozdzielczość renderowania, zasięg widzenia
    - [ ] budowa kafli w osobnym wątku, instancje aut i pieszych, scalone warstwy, uproszczone dalsze kafle, minimapa z pamięci
 2. Przeanalizować https://github.com/donmutti/city (podobny kierunek gry) przed dalszymi decyzjami o silniku i stylu.
