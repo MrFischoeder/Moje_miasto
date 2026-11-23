@@ -12,12 +12,12 @@ import { MAX_DOORS } from './tiles/windows';
 const WALL = .06;
 /** Kolory ścian (wypełnienie) wg rodzaju pomieszczenia; krawędzie fosforowe. */
 const FILL: Record<string, RGB> = {
-  core: [.05, .07, .08], corridor: [.05, .07, .08], lobby: [.06, .08, .09], hall: [.06, .07, .06], kitchen: [.07, .08, .05],
-  bath: [.05, .08, .1], wc: [.05, .08, .1], living: [.07, .06, .05], bedroom: [.07, .05, .07], room: [.06, .06, .07], study: [.07, .06, .04],
-  maid: [.06, .06, .05], storage: [.05, .05, .05], office: [.05, .06, .07], staff: [.05, .06, .05], sala: [.08, .09, .09], open: [.07, .07, .05], stair: [.05, .07, .08],
+  core: [.78, .8, .76], corridor: [.82, .82, .78], lobby: [.86, .84, .78], hall: [.86, .82, .74], kitchen: [.9, .9, .82],
+  bath: [.78, .86, .9], wc: [.78, .86, .9], living: [.9, .84, .74], bedroom: [.84, .8, .88], room: [.82, .86, .8], study: [.86, .8, .7],
+  maid: [.84, .82, .76], storage: [.7, .7, .68], office: [.8, .84, .86], staff: [.82, .86, .8], sala: [.92, .92, .9], open: [.9, .88, .78], stair: [.78, .8, .76],
 };
-const FLOOR: Record<string, RGB> = { bath: [.08, .1, .12], wc: [.08, .1, .12], kitchen: [.09, .09, .07], sala: [.1, .11, .11] };
-const EDGE: RGB = [.49, 1, .69], EDGE_DIM: RGB = [.25, .55, .4], STEP: RGB = [.6, .85, .75];
+const FLOOR: Record<string, RGB> = { bath: [.7, .74, .78], wc: [.7, .74, .78], kitchen: [.72, .7, .66], sala: [.78, .78, .76], core: [.6, .6, .58], corridor: [.6, .6, .58], lobby: [.62, .6, .56] };
+const EDGE: RGB = [.25, .26, .28], EDGE_DIM: RGB = [.4, .4, .42], STEP: RGB = [.35, .35, .36];
 const ITEM: Record<string, RGB> = {
   szafa: [.75, .6, .4], szafka: [.75, .6, .4], blat: [.85, .85, .7], kuchenka: [.9, .9, .9], lodowka: [.85, .95, 1], stol: [.75, .6, .4],
   wanna: [.85, .95, 1], umywalka: [.85, .95, 1], pralka: [.85, .95, 1], sedes: [.85, .95, 1], kanapa: [.9, .5, .4], meblosciana: [.75, .6, .4],
@@ -63,10 +63,10 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
   const up: V3 = [0, 1, 0], down: V3 = [0, -1, 0];
 
   for (const bx of L.boxes) {
-    const r = bx.r, fill = mix(FILL[bx.kind] ?? FILL.room, 1.6), edge = bx.accent ? hex(bx.accent) : EDGE, top = bx.y + bx.h;
+    const r = bx.r, fill = FILL[bx.kind] ?? FILL.room, edge = bx.accent ? hex(bx.accent) : EDGE, top = bx.y + bx.h;
     const x0 = r.x0 + WALL, x1 = r.x1 - WALL, y0 = r.y0 + WALL, y1 = r.y1 - WALL;
-    if (bx.floor) G.quad(P(x0, y0, bx.y + .01), P(x1, y0, bx.y + .01), P(x1, y1, bx.y + .01), P(x0, y1, bx.y + .01), FLOOR[bx.kind] ?? mix(fill, .8), up);
-    if (bx.ceil) G.quad(P(x0, y0, top), P(x1, y0, top), P(x1, y1, top), P(x0, y1, top), mix(fill, .7), down);
+    if (bx.floor) G.quad(P(x0, y0, bx.y + .01), P(x1, y0, bx.y + .01), P(x1, y1, bx.y + .01), P(x0, y1, bx.y + .01), FLOOR[bx.kind] ?? [.62, .5, .38], up); // domyślnie drewniana podłoga
+    if (bx.ceil) G.quad(P(x0, y0, top), P(x1, y0, top), P(x1, y1, top), P(x0, y1, top), mix(fill, .95), down);
     // ściany: [bok, punkt początku, kierunek wzdłuż, normalna do środka, długość, współrzędna początku]
     const sides: [0 | 1 | 2 | 3, number, number, number, number][] = [[0, x0, y0, x1, y0], [1, x1, y0, x1, y1], [2, x0, y1, x1, y1], [3, x0, y0, x0, y1]];
     for (const [s, ax, ay, ex, ey] of sides) {
@@ -91,7 +91,7 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
       G.line(at(lo, bx.y), at(lo, top), edge);
       for (const h of holes) {
         const a = Math.max(lo, h.a), b = Math.min(hi, h.b), h0 = Math.max(bx.y, h.y0), h1 = Math.min(top, h.y1);
-        const c: RGB = h.kind === 'win' ? [.4, .8, 1] : edge;
+        const c: RGB = h.kind === 'win' ? [.95, .95, .92] : edge;
         G.line(at(a, h0), at(a, h1), c); G.line(at(b, h0), at(b, h1), c); G.line(at(a, h1), at(b, h1), c); if (h.kind === 'win') G.line(at(a, h0), at(b, h0), c);
       }
     }
@@ -100,7 +100,7 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
   for (const s of L.slabs) slab(G, P, s);
   // meble
   for (const it of L.items) {
-    const c = ITEM[it.k] ?? [.7, .7, .7], r = it.r, y = it.y, h = it.h, fill = mix(c, .28), e = it.c ? c : mix(c, .7);
+    const c = ITEM[it.k] ?? [.7, .7, .7], r = it.r, y = it.y, h = it.h, fill = mix(c, .85), e = mix(c, .45);
     const pts = [P(r.x0, r.y0, 0), P(r.x1, r.y0, 0), P(r.x1, r.y1, 0), P(r.x0, r.y1, 0)];
     const at = (i: number, hh: number): V3 => [pts[i][0], hh, pts[i][2]];
     G.quad(at(0, y + h), at(1, y + h), at(2, y + h), at(3, y + h), fill, up);
@@ -113,7 +113,7 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
   // ramki drzwi wejściowych na fasadzie (widoczne z ulicy)
   if (L.k === 0) for (const e of p.ext) {
     const a = P(e.x - e.w / 2, -.02, e.yIn), b = P(e.x + e.w / 2, -.02, e.yIn), h = e.yIn + 2.15;
-    G.line(a, [a[0], h, a[2]], [1, .85, .4]); G.line(b, [b[0], h, b[2]], [1, .85, .4]); G.line([a[0], h, a[2]], [b[0], h, b[2]], [1, .85, .4]);
+    G.line(a, [a[0], h, a[2]], [.35, .25, .15]); G.line(b, [b[0], h, b[2]], [.35, .25, .15]); G.line([a[0], h, a[2]], [b[0], h, b[2]], [.35, .25, .15]);
   }
   const objs = G.build(); for (const o of objs) o.name = `wnętrze ${p.id}/${L.k}`;
   return objs;
@@ -121,7 +121,7 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
 
 function slab(G: GeoBuilder, P: (x: number, y: number, h: number) => V3, s: Slab): void {
   const r = s.r, hAt = (x: number, y: number) => s.axis === 'x' ? s.ya + (s.yb - s.ya) * (x - r.x0) / (r.x1 - r.x0 || 1) : s.ya + (s.yb - s.ya) * (y - r.y0) / (r.y1 - r.y0 || 1);
-  const c: RGB = [.06, .08, .08];
+  const c: RGB = [.62, .62, .6];
   G.quad(P(r.x0, r.y0, hAt(r.x0, r.y0) + .01), P(r.x1, r.y0, hAt(r.x1, r.y0) + .01), P(r.x1, r.y1, hAt(r.x1, r.y1) + .01), P(r.x0, r.y1, hAt(r.x0, r.y1) + .01), c, [0, 1, 0]);
   G.quad(P(r.x0, r.y0, hAt(r.x0, r.y0) - .15), P(r.x1, r.y0, hAt(r.x1, r.y0) - .15), P(r.x1, r.y1, hAt(r.x1, r.y1) - .15), P(r.x0, r.y1, hAt(r.x0, r.y1) - .15), mix(c, .6), [0, -1, 0]);
   if (!s.steps) return;

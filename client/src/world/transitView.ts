@@ -41,7 +41,7 @@ export class TransitView {
   constructor(private sys: TransitSystem, lineColors: Record<string, string> = {}) {
     for (const [i, r] of sys.tt.data.routes.entries()) {
       const c = hex(lineColors[r.n] || (r.c && r.c !== '#FFFFFF' && r.c !== '#ffffff' ? r.c : DEFAULT_COL[r.t]));
-      this.colors.set(i, [[c[0] * .22 + .02, c[1] * .22 + .02, c[2] * .22 + .02], c]);
+      this.colors.set(i, [c, [c[0] * .35, c[1] * .35, c[2] * .35]]); // low-poly: pełny kolor linii, ciemniejsze krawędzie
     }
     const m = new THREE.Mesh(this.fill.geo, new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide }));
     const l = new THREE.LineSegments(this.lines.geo, new THREE.LineBasicMaterial({ vertexColors: true }));
@@ -65,7 +65,7 @@ export class TransitView {
       const front = this.sys.pose(a.p, a.st.s + L / 2);
       if (Math.abs(front.x - x) < 90 && Math.abs(front.z - z) < 90 && k !== 'ferry') {
         near.add(a.key); let sp = this.signs.get(a.key);
-        if (!sp) { sp = this.sign(this.sys.tt.data.routes[a.p.route].n, a.p.head, ec); this.signs.set(a.key, sp); this.group.add(sp); }
+        if (!sp) { sp = this.sign(this.sys.tt.data.routes[a.p.route].n, a.p.head, fc); this.signs.set(a.key, sp); this.group.add(sp); }
         sp.position.set(front.x, front.y + spec.h + spec.lift + .9, front.z);
       }
     }
@@ -78,15 +78,18 @@ export class TransitView {
     const dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2;
     const c = (p: typeof A, s: number, y: number): number[] => [p.x + nx * s, p.y + lift + y, p.z + nz * s];
     const q = [c(A, -1, 0), c(B, -1, 0), c(B, 1, 0), c(A, 1, 0), c(A, -1, h), c(B, -1, h), c(B, 1, h), c(A, 1, h)];
-    const F = this.fill, Ln = this.lines, tri = (i: number, j: number, k: number) => { for (const v of [q[i], q[j], q[k]]) F.push(v[0], v[1], v[2], fc); };
-    // ściany i dach (bez podłogi)
-    for (const [a, b, cc, d] of [[0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7], [4, 5, 6, 7]]) { tri(a, b, cc); tri(a, cc, d); }
+    const F = this.fill, Ln = this.lines, tri = (a: number[], b: number[], cc: number[], col: RGB) => { for (const v of [a, b, cc]) F.push(v[0], v[1], v[2], col); };
+    const shade = (k: number): RGB => [Math.min(1, fc[0] * k), Math.min(1, fc[1] * k), Math.min(1, fc[2] * k)];
+    // ściany i dach (bez podłogi); płaskie cieniowanie udawane jasnością ścian (bok, czoło, dach)
+    const faces: [number, number, number, number, number][] = [[0, 1, 5, 4, .82], [1, 2, 6, 5, .7], [2, 3, 7, 6, .95], [3, 0, 4, 7, .7], [4, 5, 6, 7, 1.15]];
+    for (const [a, b, cc, d, k] of faces) { const col = shade(k); tri(q[a], q[b], q[cc], col); tri(q[a], q[cc], q[d], col); }
+    // pas okien (ciemne szyby) po obu stronach, minimalnie odsunięty od ściany
+    const glass: RGB = [.14, .18, .24];
+    for (const sd of [-1.02, 1.02]) { const g0 = c(A, sd, h * .45), g1 = c(B, sd, h * .45), g2 = c(B, sd, h * .85), g3 = c(A, sd, h * .85); tri(g0, g1, g2, glass); tri(g0, g2, g3, glass); }
+    if (front) { const f0 = c(B, -.85, h * .4), f1 = c(B, .85, h * .4), f2 = c(B, .85, h * .88), f3 = c(B, -.85, h * .88), o = [(B.x - A.x) / L * .03, 0, (B.z - A.z) / L * .03];
+      const mv = (v: number[]) => [v[0] + o[0], v[1], v[2] + o[2]]; tri(mv(f0), mv(f1), mv(f2), glass); tri(mv(f0), mv(f2), mv(f3), glass); }
     const seg = (u: number[], v: number[], col: RGB) => { Ln.push(u[0], u[1], u[2], col); Ln.push(v[0], v[1], v[2], col); };
     for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) seg(q[a], q[b], ec);
-    // pas okien po obu stronach
-    const win: RGB = [ec[0] * .5 + .4, ec[1] * .5 + .4, ec[2] * .5 + .4];
-    for (const sd of [-1, 1]) { seg(c(A, sd, h * .45), c(B, sd, h * .45), win); seg(c(A, sd, h * .85), c(B, sd, h * .85), win); }
-    if (front) { const m = (p: number[], r: number[]) => [(p[0] + r[0]) / 2, (p[1] + r[1]) / 2, (p[2] + r[2]) / 2]; seg(m(q[1], q[5]), m(q[2], q[6]), [1, 1, .85]); }
   }
 
   private sign(num: string, head: string, col: RGB): THREE.Sprite {

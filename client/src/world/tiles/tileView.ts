@@ -11,6 +11,7 @@ import type { AreaKind, TileData, TileRoad } from '@miasto/shared/tiles/types';
 import { MAX_SEG } from '../geometry';
 import { classify } from '@miasto/shared/interiors/facade';
 import { installWindows, type WindowUniforms } from './windows';
+import { FACADE, PAL } from '../../render/palette';
 
 export const WATER_Y = -4;
 
@@ -21,47 +22,45 @@ export class TileMaterials {
   readonly windows: WindowUniforms = installWindows(this.build);
   readonly edge = new THREE.LineBasicMaterial({ color: 0x7dffb0, transparent: true });
   /** warstwy płaskie na gruncie: nie zapisują głębi (grunt zasłania za nie), kolejność rysowania = renderOrder */
-  readonly flat = new THREE.MeshBasicMaterial({ vertexColors: true, depthWrite: false, transparent: false, side: THREE.DoubleSide });
+  readonly flat = new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false, transparent: false, side: THREE.DoubleSide });
+  /** elementy wypukłe: chodniki z krawężnikami, torowiska (podsypka, podkłady, szyny) */
+  readonly raised = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   readonly flatLine = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false });
   /** pomosty i woda zapisują głębię (pod nimi nie ma gruntu) */
-  readonly solid = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  readonly solid = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   readonly line = new THREE.LineBasicMaterial({ vertexColors: true });
 
   setXray(on: boolean): void {
     this.build.opacity = on ? .25 : 1; this.edge.opacity = on ? .35 : 1;
-    for (const m of [this.flat, this.flatLine]) { m.transparent = on; m.opacity = on ? .25 : 1; m.needsUpdate = true; }
+    for (const m of [this.flat, this.flatLine, this.raised]) { m.transparent = on; m.opacity = on ? .25 : 1; m.needsUpdate = true; }
   }
-  dispose(): void { for (const m of [this.build, this.edge, this.flat, this.flatLine, this.solid, this.line]) m.dispose(); }
+  dispose(): void { for (const m of [this.build, this.edge, this.flat, this.flatLine, this.solid, this.line, this.raised]) m.dispose(); }
 }
 
-// kolory (ciemne wypełnienia, fosforowe krawędzie)
+// kolory low-poly (render/palette.ts)
 const C = {
-  road: [.075, .1, .11] as RGB, roadEdge: [.4, .6, .62] as RGB, mark: [.72, .8, .78] as RGB, center: [.85, .8, .55] as RGB,
-  path: [.055, .11, .085] as RGB, pathEdge: [.2, .4, .3] as RGB, curb: [.3, .45, .42] as RGB,
-  rail: [.5, .56, .62] as RGB, sleeper: [.22, .24, .26] as RGB, rail2: [.7, .6, .45] as RGB,
-  zebra: [.78, .82, .8] as RGB, pole: [.55, .6, .6] as RGB,
-  waterTop: [.015, .05, .11] as RGB, waterEdge: [.25, .55, .95] as RGB, bank: [.03, .06, .08] as RGB,
-  deck: [.075, .1, .11] as RGB, railing: [.5, .85, .95] as RGB,
+  road: PAL.asphalt, mark: PAL.marking, center: PAL.markingY, path: PAL.path, zebra: PAL.zebra, pole: PAL.pole,
+  waterTop: PAL.water, bank: PAL.bank, deck: PAL.deck, railing: PAL.railing,
 };
-const AREA: Record<AreaKind, { fill: RGB; edge: RGB | null; order: number }> = {
-  park: { fill: [.02, .085, .04], edge: [.08, .3, .14], order: 1 },
-  forest: { fill: [.015, .065, .03], edge: [.07, .25, .12], order: 1 },
-  cemetery: { fill: [.025, .06, .04], edge: [.1, .25, .16], order: 1 },
-  pitch: { fill: [.03, .1, .05], edge: [.2, .5, .3], order: 2 },
-  parking: { fill: [.04, .05, .055], edge: [.18, .25, .28], order: 2 },
-  square: { fill: [.05, .07, .065], edge: [.15, .25, .22], order: 2 },
-  water: { fill: C.waterTop, edge: C.waterEdge, order: 0 },
+const AREA: Record<AreaKind, { fill: RGB; order: number }> = {
+  park: { fill: PAL.park, order: 1 }, forest: { fill: PAL.forest, order: 1 }, cemetery: { fill: PAL.cemetery, order: 1 },
+  pitch: { fill: PAL.pitch, order: 2 }, parking: { fill: PAL.parking, order: 2 }, square: { fill: PAL.square, order: 2 }, water: { fill: PAL.water, order: 0 },
 };
+/** wysokość chodnika nad jezdnią (krawężnik) i torowisk [m] */
+const CURB = .15;
+const HOUSE = ['house', 'detached', 'semidetached_house', 'terrace', 'bungalow', 'farm'];
+const INDUSTRY = ['industrial', 'warehouse', 'service', 'garage', 'garages', 'hangar', 'manufacture', 'shed', 'roof', 'carport'];
+const SHOPS = ['retail', 'commercial', 'supermarket', 'kiosk'];
 
 class Buf {
   P: number[] = []; Cc: number[] = []; N: number[] = [];
   tri(a: number[], b: number[], c: number[], col: RGB, n?: number[]): void {
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const cr = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]];
     if (n) { // orientacja zgodna z normalną
-      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-      const cr = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]];
       if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0) [b, c] = [c, b];
       for (let i = 0; i < 3; i++) this.N.push(n[0], n[1], n[2]);
-    }
+    } else { const m = Math.hypot(cr[0], cr[1], cr[2]) || 1; for (let i = 0; i < 3; i++) this.N.push(cr[0] / m, cr[1] / m, cr[2] / m); } // płaskie cieniowanie
     this.P.push(...a, ...b, ...c); this.Cc.push(...col, ...col, ...col);
   }
   quad(a: number[], b: number[], c: number[], d: number[], col: RGB, n?: number[]): void { this.tri(a, b, c, col, n); this.tri(a, c, d, col, n); }
@@ -156,6 +155,28 @@ function strip(buf: Buf, p: XZ[], n: XZ[], s0: number, s1: number, ys: Ys, col: 
     buf.quad([A[0] + na[0] * s0, ya, A[1] + na[1] * s0], [B[0] + nb[0] * s0, yb, B[1] + nb[1] * s0], [B[0] + nb[0] * s1, yb, B[1] + nb[1] * s1], [A[0] + na[0] * s1, ya, A[1] + na[1] * s1], col, [0, 1, 0]);
   }
 }
+/** Pionowa ściana wzdłuż łamanej na przesunięciu s, od wysokości h0 do h1 nad ys (krawężnik, bok torowiska). */
+function wall(buf: Buf, p: XZ[], n: XZ[], s: number, ys: Ys, h0: number, h1: number, col: RGB): void {
+  for (let i = 0; i < p.length - 1; i++) {
+    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], ya = yAt(ys, i), yb = yAt(ys, i + 1);
+    const ax = A[0] + na[0] * s, az = A[1] + na[1] * s, bx = B[0] + nb[0] * s, bz = B[1] + nb[1] * s;
+    buf.quad([ax, ya + h0, az], [bx, yb + h0, bz], [bx, yb + h1, bz], [ax, ya + h1, az], col);
+  }
+}
+/** Podkłady kolejowe: poprzeczne płytki co step metrów, półszerokość hw, na wysokości h. */
+function sleepers(buf: Buf, p: XZ[], n: XZ[], ys: Ys, h: number, hw: number, step: number, col: RGB): void {
+  let acc = 0;
+  for (let i = 0; i < p.length - 1; i++) {
+    const A = p[i], B = p[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (L < 1e-6) continue;
+    const ux = (B[0] - A[0]) / L, uz = (B[1] - A[1]) / L, nx = -uz, nz = ux, ya = yAt(ys, i), yb = yAt(ys, i + 1);
+    for (let t = (step - acc % step) % step; t < L; t += step) {
+      const cx = A[0] + ux * t, cz = A[1] + uz * t, y = ya + (yb - ya) * t / L + h, w = .12;
+      buf.quad([cx - nx * hw - ux * w, y, cz - nz * hw - uz * w], [cx + nx * hw - ux * w, y, cz + nz * hw - uz * w], [cx + nx * hw + ux * w, y, cz + nz * hw + uz * w], [cx - nx * hw + ux * w, y, cz - nz * hw + uz * w], col, [0, 1, 0]);
+    }
+    acc += L;
+  }
+}
+
 function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?: [number, number], skip?: (x: number, z: number) => boolean, dy = 0): void {
   let acc = 0;
   for (let i = 0; i < p.length - 1; i++) {
@@ -189,15 +210,18 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   const F: Buf[] = [new Buf(), new Buf(), new Buf(), new Buf(), new Buf()]; // 0 ziemia/park, 1 place/parkingi, 2 ścieżki, 3 jezdnie, 4 oznakowanie
   const FL: Lines[] = [new Lines(), new Lines(), new Lines(), new Lines(), new Lines()];
   const S = new Buf(), SL = new Lines(); // pomosty, woda, nabrzeża
+  const RB = new Buf(); // elementy wypukłe: chodniki z krawężnikami, torowiska
 
   // --- budynki: ściany, dach, krawędzie (dach, podstawa, narożniki > 25°) ---
   const FA: number[] = [], FB: number[] = [], FC: number[] = [];
   const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0); } };
   for (const b of t.b) {
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
-    const v = .05 + Math.min(b.h, 80) / 80 * .09, col: RGB = [v * .55, v * 1.1, v * .8];
     const fc = classify(b, t.city);
-    fillPoly(B, outer, holes, h, col); facPad();
+    const cat = fc.typ ?? (b.t === 'office' ? 'office' : HOUSE.includes(b.t) ? 'house' : INDUSTRY.includes(b.t) ? 'industrial' : SHOPS.includes(b.t) ? 'sklep' : 'inne');
+    const pal = FACADE[cat] ?? FACADE.inne, base0 = pal[Math.floor(fc.seed * 9973) % pal.length], j = .94 + fc.seed * .1;
+    const col: RGB = [base0[0] * j, base0[1] * j, base0[2] * j], roof: RGB = [PAL.roof[0] * j, PAL.roof[1] * j, PAL.roof[2] * j];
+    fillPoly(B, outer, holes, h, roof); facPad();
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
       const ccw = area2(ring) > 0 !== isHole, n = ring.length;
       for (let i = 0; i < n; i++) {
@@ -209,9 +233,6 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
           FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, fc.levelH); FB.push(fc.spacing, fc.ww, fc.wh, fc.raise); FC.push(fc.sill, fc.levels, fc.seed);
         }
-        BE.seg([a[0], h, a[1]], [c[0], h, c[1]], [1, 1, 1]); BE.seg([a[0], mh, a[1]], [c[0], mh, c[1]], [1, 1, 1]);
-        const p = ring[(i + n - 1) % n], e0 = norm2(a[0] - p[0], a[1] - p[1]), e1 = norm2(dx, dz);
-        if (e0 && e1 && e0[0] * e1[0] + e0[1] * e1[1] < Math.cos(25 * Math.PI / 180)) BE.seg([a[0], mh, a[1]], [a[0], h, a[1]], [1, 1, 1]);
       }
     }
   }
@@ -225,7 +246,6 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
     const outer = toXZ(a.o), holes = (a.i || []).map(toXZ), st = AREA[a.k];
     if (a.k === 'water' && g) { // z terenem: woda leży w dolinie, bez obniżania
       fillPoly(F[0], outer, holes, LIFT, C.waterTop, g);
-      for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; if (!tileBox(p, q)) FL[1].seg([p[0], g(p[0], p[1]) + LIFT, p[1]], [q[0], g(q[0], q[1]) + LIFT, q[1]], C.waterEdge); }
       continue;
     }
     if (a.k === 'water') {
@@ -233,13 +253,10 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
       for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) {
         const p = ring[i], q = ring[(i + 1) % ring.length]; if (tileBox(p, q)) continue; // brzeg kafelka to nie nabrzeże
         S.quad([p[0], WATER_Y, p[1]], [q[0], WATER_Y, q[1]], [q[0], -.03, q[1]], [p[0], -.03, p[1]], C.bank);
-        SL.seg([p[0], WATER_Y + .02, p[1]], [q[0], WATER_Y + .02, q[1]], C.waterEdge); SL.seg([p[0], 0, p[1]], [q[0], 0, q[1]], [.15, .35, .5]);
       }
       continue;
     }
     fillPoly(F[st.order >= 2 ? 1 : 0], outer, holes, LIFT, st.fill, g);
-    const Yg = (p: XZ) => g ? g(p[0], p[1]) + LIFT : 0;
-    if (st.edge) for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; if (!tileBox(p, q)) FL[1].seg([p[0], Yg(p), p[1]], [q[0], Yg(q), q[1]], st.edge); }
   }
 
   // --- drogi ---
@@ -254,13 +271,13 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
       strip(S, p, n, -ext, ext, ys, C.deck, -.02);
       for (const s of [-ext - .2, ext + .2]) { offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1.05); offLine(SL, p, n, s, ys, C.railing, undefined, undefined, .05); }
     }
-    if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); offLine(FL[2], p, n, -hw, ys, C.pathEdge); offLine(FL[2], p, n, hw, ys, C.pathEdge); return; }
+    if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); return; }
     strip(F[3], p, n, -hw, hw, ys, r.tu ? [.03, .04, .045] : C.road);
     const skip = near(hw + 4);
-    offLine(FL[3], p, n, -hw, ys, C.roadEdge, undefined, near(hw * .8)); offLine(FL[3], p, n, hw, ys, C.roadEdge, undefined, near(hw * .8));
     if (r.sw) for (const side of [-1, 1]) {
       if (!((side < 0 && r.sw & 1) || (side > 0 && r.sw & 2))) continue;
-      strip(F[2], p, n, side * hw, side * (hw + 2.5), ys, C.path); offLine(FL[2], p, n, side * (hw + 2.5), ys, C.pathEdge);
+      // chodnik podniesiony o krawężnik: nawierzchnia, ściana krawężnika od jezdni, zewnętrzna krawędź
+      strip(RB, p, n, side * hw, side * (hw + 2.5), ys, PAL.sidewalk, CURB); wall(RB, p, n, side * hw, ys, 0, CURB, PAL.curb); wall(RB, p, n, side * (hw + 2.5), ys, 0, CURB, PAL.sidewalk);
     }
     // pasy ruchu
     const ln = r.ln, lw = r.w / Math.max(1, ln);
@@ -280,9 +297,12 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
 
   // --- tory ---
   for (const l of t.l) {
-    const p = densify(toXZ(l.p)), n = offsets(p), col = l.k === 'tram' ? C.rail2 : C.rail, ys = l.br ? deckYs(p, l.bw) : gys(p);
-    for (const s of [-.72, .72]) offLine(FL[4], p, n, s, ys, col, undefined, undefined, .02);
-    if (l.k !== 'tram') offLine(FL[2], p, n, 0, ys, C.sleeper, [.25, 2.75], undefined, .01);
+    const p = densify(toXZ(l.p)), n = offsets(p), ys = l.br ? deckYs(p, l.bw) : gys(p), tram = l.k === 'tram';
+    // torowisko wyżej niż jezdnia i chodnik: podsypka (tramwaj: trawiaste), podkłady, szyny
+    const bw = tram ? 1.35 : 1.6, bh = tram ? .12 : .18;
+    strip(RB, p, n, -bw, bw, ys, tram ? PAL.tramBed : PAL.ballast, bh); for (const sd of [-bw, bw]) wall(RB, p, n, sd, ys, 0, bh, tram ? PAL.curb : PAL.ballast);
+    if (!tram) sleepers(RB, p, n, ys, bh + .02, 1.25, .9, PAL.sleeper);
+    for (const s0 of [-.72, .72]) { strip(RB, p, n, s0 - .035, s0 + .035, ys, PAL.rail, bh + .14); for (const sd of [s0 - .035, s0 + .035]) wall(RB, p, n, sd, ys, bh, bh + .14, PAL.rail); }
     if (l.br) { strip(S, p, n, -2.2, 2.2, ys, C.deck, -.02); for (const s of [-2.4, 2.4]) offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1); }
   }
 
@@ -304,7 +324,7 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
         light(3.9, [.9, .15, .1]); light(3.55, [.9, .7, .1]); light(3.2, [.15, .9, .35]);
       }
     } else if (nd.k === 'tram_stop') {
-      SL.seg([nd.x, gy, nd.z], [nd.x, gy + 2.6, nd.z], C.rail2); SL.seg([nd.x - .4, gy + 2.6, nd.z], [nd.x + .4, gy + 2.6, nd.z], C.rail2);
+      SL.seg([nd.x, gy, nd.z], [nd.x, gy + 2.6, nd.z], C.pole); SL.seg([nd.x - .4, gy + 2.6, nd.z], [nd.x + .4, gy + 2.6, nd.z], C.pole);
     }
   }
 
@@ -320,6 +340,7 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   F.forEach((f, i) => { if (!f.empty) add(new THREE.Mesh(f.geometry(), M.flat), 1 + i * 2); });
   FL.forEach((f, i) => { if (!f.empty) add(new THREE.LineSegments(f.geometry(), M.flatLine), 2 + i * 2); });
   if (!S.empty) add(new THREE.Mesh(S.geometry(), M.solid), 0);
+  if (!RB.empty) add(new THREE.Mesh(RB.geometry(), M.raised), 0);
   if (!SL.empty) add(new THREE.LineSegments(SL.geometry(), M.line), 0);
   const ms = performance.now() - t0;
   return {

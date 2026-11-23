@@ -18,8 +18,16 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
    - [ ] suwaki: zasięg ruchu; komunikacja: zasięg i liczba rysowanych pojazdów, rodzaje osobno
    - [ ] profile jakości (niski / średni / wysoki), rozdzielczość renderowania, zasięg widzenia
    - [ ] budowa kafli w osobnym wątku, instancje aut i pieszych, scalone warstwy, uproszczone dalsze kafle, minimapa z pamięci
-2. Przeanalizować https://github.com/donmutti/city (podobny kierunek gry) przed dalszymi decyzjami o silniku i stylu.
-3. Bramy przejazdowe na podwórka (OSM `tunnel=building_passage`, `covered=yes`, `entrance=*`, `barrier=gate`),
+2. Styl low-poly (rozpoczęty):
+   - [x] oświetlenie słońcem i niebem wg pory dnia, kolory ziemi, terenów, wody
+   - [x] budynki: kolory elewacji wg typu, dachy, okna z ramami (nocą zapalone), bez linii krawędzi
+   - [x] ulice: asfalt, chodniki podniesione o krawężnik (15 cm), torowiska wyżej niż jezdnia (podsypka, podkłady, szyny; tramwaj na trawie)
+   - [x] auta, radiowóz, helikopter, samoloty, postacie (skóra, koszula, spodnie), pojazdy komunikacji
+   - [x] wnętrza: jasne ściany i podłogi
+   - [ ] drzewa i zieleń, latarnie, ławki, przystanki; kształty dachów; metro i wejścia (wciąż stary styl)
+   - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd); mapy wysokościowe (LiDAR)
+3. Przeanalizować https://github.com/donmutti/city (podobny kierunek gry) przed dalszymi decyzjami o silniku i stylu.
+4. Bramy przejazdowe na podwórka (OSM `tunnel=building_passage`, `covered=yes`, `entrance=*`, `barrier=gate`),
    uzupełnianie brakujących przejazdów do zamkniętych podwórek, wejścia do klatek od podwórka; test dojazdu w potoku danych.
-4. Wdrożenie na VPS (po otrzymaniu danych serwera).
-5. Dalej wg specyfikacji: LiDAR, zieleń, landmarki, szkoły, telefon, gospodarka, ludzie i pojazdy, NPC, walka, nieruchomości.
+5. Wdrożenie na VPS (po otrzymaniu danych serwera).
+6. Dalej wg specyfikacji: LiDAR, zieleń, landmarki, szkoły, telefon, gospodarka, ludzie i pojazdy, NPC, walka, nieruchomości.

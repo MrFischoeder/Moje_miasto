@@ -29,6 +29,7 @@ import { localTime } from '@miasto/shared/transit/clock';
 import { litFraction } from '@miasto/shared/interiors/facade';
 import { InteriorView } from '../world/interiorView';
 import { PerfStats } from './perf';
+import { applyDaylight } from '../render/scene';
 import type { LocalInit } from '../net/localServer.worker';
 import LocalServer from '../net/localServer.worker?worker&inline';
 
@@ -51,9 +52,9 @@ const lerpAngle = (a: number, b: number, t: number) => { let d = b - a; while (d
 const tilesBase = (key: string) => `${new URL(import.meta.env.BASE_URL, location.href).href}tiles/${key}/`;
 
 /** kolory pieszych NPC (stonowane, żeby gracze się wyróżniali) */
-const PED_COLORS = ['#9fb4c8', '#c8b49f', '#a8c8a0', '#c8a0b4', '#b0b0b0', '#d0c090', '#90a8d0', '#c89090'];
+const PED_COLORS = ['#3a5a8a', '#8a3030', '#d8d0c0', '#2e6a4a', '#c88a30', '#5a5a64', '#7a4a8a', '#e0e0e0', '#2a2a30', '#b05a5a'];
 /** kolory aut z ruchu ulicznego */
-const NPC_COLORS = [0xd8e0e8, 0x8aa4c8, 0xc84a4a, 0x5a7a9a, 0xe0e0e0, 0x4a8a6a, 0xb0b0b0, 0x7a5ad0, 0xd0a040];
+const NPC_COLORS = [0xf0f0f0, 0xb8bcc0, 0x2a2c30, 0x6a7078, 0xa82020, 0x1e3a78, 0x3a5a8a, 0x2e5a3a, 0xd8d0c0, 0x8a2a2a, 0x4a4a50, 0xc8a040];
 
 export interface OnlineInfo { http: string; session: string; name: string }
 
@@ -337,6 +338,7 @@ export class Game {
     if (now - this.lastSlow > 500) {
       const tz = this.transit?.tz ?? (w.key === 'londyn' ? 'Europe/London' : 'Europe/Warsaw'), lt = localTime(this.session!.clock.now(), tz);
       this.view!.streamer.mats.windows.uLit.value = litFraction(lt.sec / 3600);
+      applyDaylight(this.ctx, lt.sec / 3600, under);
     }
     if (now - this.lastSlow > 500) {
       this.lastSlow = now; this.labels.update(w, P.x, P.z); T.lap('etykiety');
@@ -358,9 +360,9 @@ export class Game {
       let m = this.models.get(e.id);
       if (!m) {
         if (e.kind === 'walker') {
-          if (e.police) m = makeOfficer();
-          else if (e.npc) m = makeAvatar(PED_COLORS[e.id % PED_COLORS.length], '');
-          else { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?'); }
+          if (e.police) m = makeOfficer(e.id);
+          else if (e.npc) m = makeAvatar(PED_COLORS[e.id % PED_COLORS.length], '', e.id);
+          else { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?', e.id); }
         }
         else m = e.kind === 'car' ? (e.police ? makePoliceCar() : makeCar(e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : undefined)) : makeHeli();
         this.models.set(e.id, m); this.world3d.add(m.root);

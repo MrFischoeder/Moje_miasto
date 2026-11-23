@@ -1,5 +1,5 @@
 // Okna na ścianach budynków liczone w shaderze (bez dodatkowej geometrii): siatka okien z typologii
-// budynku (shared/interiors/facade.ts), ramki w kolorze fosforu, szyby, zapalone okna nocą.
+// budynku (shared/interiors/facade.ts), jasne ramy, szyby, zapalone okna nocą (styl low-poly).
 // Do tego wycięcia w ścianach przy drzwiach wejściowych budynków z wygenerowanym wnętrzem.
 import * as THREE from 'three';
 
@@ -43,10 +43,11 @@ if (vFacA.z > 0.5 && vFacB.x > 0.5) {
     float off = (L - n * sp) * 0.5, lu = (vFacA.x - off) / sp, ci = floor(lu);
     float lv = vFacA.y - vFacB.w, k = floor(lv / vFacA.w), ly = lv - k * vFacA.w;
     float fwu = max(fwidth(vFacA.x), 1e-4), fwv = max(fwidth(vFacA.y), 1e-4);
-    float fade = 1.0 - smoothstep(0.06, 0.3, max(fwu, fwv));
+    float fade = 1.0 - smoothstep(0.035, 0.12, max(fwu, fwv));
     if (k >= 0.0 && k < vFacC.y) {
       float cover = vFacB.y * vFacB.z / (sp * vFacA.w);
-      totalEmissiveRadiance += vec3(1.0, 0.8, 0.45) * 0.55 * uLit * cover * (1.0 - fade);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.22, 0.3), cover * 0.6 * (1.0 - fade));
+      totalEmissiveRadiance += vec3(1.0, 0.8, 0.45) * 1.3 * uLit * cover * (1.0 - fade);
       if (ci >= 0.0 && ci < n && fade > 0.0) {
         float ex = vFacB.y * 0.5 - abs(fract(lu) - 0.5) * sp, ey = min(ly - vFacC.x, vFacC.x + vFacB.z - ly);
         float dIn = min(ex / fwu, ey / fwv);
@@ -54,9 +55,9 @@ if (vFacA.z > 0.5 && vFacB.x > 0.5) {
         vec3 hp = fract(vec3(ci, k, floor(vFacC.z * 997.0 + 0.5)) * 0.1031); hp += dot(hp, hp.zyx + 31.32);
         float hsh = fract((hp.x + hp.y) * hp.z);
         float lit = step(hsh, uLit);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.01, 0.025, 0.035), inside * fade);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.22, 0.3), inside * fade);   // szyba
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.93, 0.9), frame * fade);    // rama
         totalEmissiveRadiance += vec3(1.0, 0.8, 0.45) * 0.85 * lit * inside * fade;
-        totalEmissiveRadiance += vec3(0.49, 1.0, 0.69) * 0.4 * frame * fade;
       }
     }
   }

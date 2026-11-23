@@ -3,6 +3,7 @@
 // dokładną (co ~30 m) w promieniu widoczności, zgrubną (co 250 m) dalej.
 // Całość to jeden mesh przebudowywany po zmianie komórek.
 import * as THREE from 'three';
+import { PAL } from '../render/palette';
 import { clipRing } from '@miasto/shared/tiles/clip';
 import { TILE_SIZE, tileKey } from '@miasto/shared/tiles/types';
 import type { XZ } from '@miasto/shared/world/collision';
@@ -10,7 +11,7 @@ import type { XZ } from '@miasto/shared/world/collision';
 type Ground = (x: number, z: number) => number;
 
 export class GroundGrid {
-  readonly mat: THREE.MeshBasicMaterial;
+  readonly mat: THREE.MeshLambertMaterial;
   readonly mesh: THREE.Mesh;
   private cells = new Map<string, { lod: number; pos: Float32Array; lines: Float32Array }>();
   /** linie terenu (co ~60 m w komórkach wokół gracza) */
@@ -22,9 +23,9 @@ export class GroundGrid {
 
   constructor(private x0: number, private y0: number, private x1: number, private y1: number, kioskHoles: XZ[][], xray: boolean,
     private ground: Ground | null = null, step = 30) {
-    this.mat = new THREE.MeshBasicMaterial({ color: 0x020604, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
+    this.mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(...PAL.ground), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.mat); this.mesh.position.y = -.03; this.mesh.frustumCulled = false;
-    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x14402a })); this.lines.frustumCulled = false;
+    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x14402a })); this.lines.frustumCulled = false; this.lines.visible = false; // low-poly: bez linii terenu
     this.fine = ground ? Math.max(2, Math.round(TILE_SIZE / step)) : 5;
     for (const h of kioskHoles) for (const k of this.cellsOf(h)) { let l = this.holes.get(k); if (!l) this.holes.set(k, l = []); l.push(h); }
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) this.buildCell(x, y, this.coarse);
@@ -98,7 +99,7 @@ export class GroundGrid {
     if (!this.dirty) return; this.dirty = false;
     let n = 0; for (const c of this.cells.values()) n += c.pos.length;
     const pos = new Float32Array(n); let o = 0; for (const c of this.cells.values()) { pos.set(c.pos, o); o += c.pos.length; }
-    this.mesh.geometry.dispose(); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); this.mesh.geometry = g;
+    this.mesh.geometry.dispose(); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals(); this.mesh.geometry = g;
     let m = 0; for (const c of this.cells.values()) m += c.lines.length;
     const lp = new Float32Array(m); o = 0; for (const c of this.cells.values()) { lp.set(c.lines, o); o += c.lines.length; }
     this.lines.geometry.dispose(); const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(lp, 3)); this.lines.geometry = lg;

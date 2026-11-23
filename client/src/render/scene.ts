@@ -1,5 +1,6 @@
 // Scena, kamera, światła, mgła i siatka gruntu.
 import * as THREE from 'three';
+import { daylight, skyColor } from './palette';
 
 // Prototyp działał na three.js r128 bez zarządzania kolorami; wyłączamy je,
 // żeby kolory wierzchołków i materiałów wyglądały identycznie.
@@ -8,22 +9,24 @@ THREE.ColorManagement.enabled = false;
 export interface SceneCtx {
   renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera;
   grid: THREE.LineSegments; fog: THREE.Fog;
+  hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight;
 }
 
 export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x030806);
-  const fog = new THREE.Fog(0x030806, 40, 650); scene.fog = fog;
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9fc6e6);
+  const fog = new THREE.Fog(0x9fc6e6, 40, 650); scene.fog = fog;
   const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 6000); camera.rotation.order = 'YXZ';
   // Od r155 światła są fizyczne; mnożnik π odtwarza jasność dawnych świateł z r128.
-  scene.add(new THREE.HemisphereLight(0x9fffd0, 0x0a1a12, 0.9 * Math.PI));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.5 * Math.PI); sun.position.set(0.4, 1, 0.3); scene.add(sun);
-  const grid = makeGrid(); scene.add(grid);
+  // low-poly: światło nieba i ziemi + słońce (płaskie cieniowanie ścian); natężenie wg pory dnia (applyDaylight)
+  const hemi = new THREE.HemisphereLight(0xdfeeff, 0x6a6458, 0.75 * Math.PI); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 0.8 * Math.PI); sun.position.set(0.45, 1, 0.25); scene.add(sun);
+  const grid = makeGrid(); grid.visible = false; scene.add(grid);
   const resize = () => { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
   addEventListener('resize', resize); resize();
-  return { renderer, scene, camera, grid, fog };
+  return { renderer, scene, camera, grid, fog, hemi, sun };
 }
 
 /** Siatka gruntu: własne odcinki po 20 m (zamiast GridHelper), przesuwana za graczem. */
@@ -49,4 +52,13 @@ export class GridDrape {
     for (let i = 0; i < a.length; i += 3) a[i + 1] = ground ? ground(ox + this.base[i] * scale, oz + this.base[i + 2] * scale) + .12 : 0;
     pos.needsUpdate = true;
   }
+}
+
+/** Pora dnia: barwa nieba i mgły, natężenie i kierunek słońca, światło otoczenia (noc nie jest całkiem czarna). */
+export function applyDaylight(ctx: SceneCtx, hour: number, underground = false): void {
+  const d = daylight(hour), sky = skyColor(hour);
+  if (underground) sky.setRGB(.05, .06, .07);
+  (ctx.scene.background as THREE.Color).copy(sky); ctx.fog.color.copy(sky);
+  ctx.hemi.intensity = (.14 + .44 * d) * Math.PI; ctx.sun.intensity = .62 * d * Math.PI;
+  const a = ((hour - 6) / 12) * Math.PI; ctx.sun.position.set(Math.cos(a) * .8, Math.max(.15, Math.sin(a)), .35);
 }
