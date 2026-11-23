@@ -7,6 +7,7 @@ import { toXZ } from '@miasto/shared/world/world';
 import type { GroundGrid } from '../ground';
 import type { TileSource } from './source';
 import type { StopPoint } from './props';
+import { MAX_LAMPS } from '../lampLight';
 import { buildTileView, TileMaterials, type TileView } from './tileView';
 
 export interface StreamStats { indexed: number; loaded: number; visible: number; pending: number; lastBuildMs: number; maxBuildMs: number }
@@ -81,6 +82,19 @@ export class TileStreamer {
   get buildingCount(): number { let n = 0; for (const t of this.data.values()) n += t.b.length; return n; }
 
   setXray(on: boolean): void { this.mats.setXray(on); }
+
+  /** Najbliższe latarnie (do światła na terenie); night: 0 dzień .. 1 noc. */
+  updateLamps(x: number, z: number, night: number): void {
+    const U = this.mats.lamps, cand: [number, number, number, number][] = [];
+    U.uLampNight.value = night; if (night < .01) { U.uLampN.value = 0; return; }
+    for (const [k, v] of this.views) {
+      const [i, j] = k.split('_').map(Number); if (Math.abs((i + .5) * TILE_SIZE - x) > 500 || Math.abs((j + .5) * TILE_SIZE - z) > 500) continue;
+      const L = v.lamps; for (let q = 0; q < L.length; q += 3) { const d = Math.hypot(L[q] - x, L[q + 2] - z); if (d < 220) cand.push([d, L[q], L[q + 1], L[q + 2]]); }
+    }
+    cand.sort((a, b) => a[0] - b[0]);
+    const n = Math.min(MAX_LAMPS, cand.length); for (let q = 0; q < n; q++) U.uLamps.value[q].set(cand[q][1], cand[q][2], cand[q][3], 16);
+    U.uLampN.value = n;
+  }
   dispose(): void {
     this.disposed = true;
     for (const v of this.views.values()) v.dispose(); this.views.clear(); this.mats.dispose();

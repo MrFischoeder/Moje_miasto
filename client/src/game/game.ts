@@ -358,6 +358,7 @@ export class Game {
       this.view!.streamer.mats.windows.uLit.value = litFraction(lt.sec / 3600);
       applyDaylight(this.ctx, lt.sec / 3600, under);
       this.view!.streamer.mats.props.setNight(1 - daylight(lt.sec / 3600));
+      this.view!.streamer.updateLamps(P.x, P.z, under ? 0 : 1 - daylight(lt.sec / 3600));
     }
     if (now - this.lastSlow > 500) {
       this.lastSlow = now; this.labels.update(w, P.x, P.z); T.lap('etykiety');

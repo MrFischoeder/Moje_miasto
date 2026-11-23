@@ -1,7 +1,11 @@
-// Tabliczki z nazwami ulic na skrzyżowaniach i szyldy sklepów/usług: sprite z canvasu, tylko w pobliżu gracza.
+// Tabliczki z nazwami ulic na ścianach narożnych budynków przy skrzyżowaniach (jak w mieście) i szyldy sklepów/usług.
+// Tworzone tylko w pobliżu gracza; tekstura jednej nazwy jest wspólna dla wszystkich jej tabliczek.
 import * as THREE from 'three';
 import { signText } from '@miasto/shared/config/branding';
 import type { TileData } from '@miasto/shared/tiles/types';
+import type { World } from '@miasto/shared/world/world';
+import { pip } from '@miasto/shared/world/collision';
+import { CELL } from '@miasto/shared/world/grid';
 
 const FONT = '"Chakra Petch", sans-serif';
 
@@ -14,7 +18,44 @@ function sprite(lines: string[], bg: string, fg: string, accent: string, w: numb
   sp.scale.set(w, w * H / 512, 1); return sp;
 }
 
-interface Sign { x: number; z: number; y: number; make(): THREE.Object3D }
+interface Sign { x: number; z: number; y: number; make(): THREE.Object3D; shared?: boolean }
+
+/** Tabliczka: biała, czarny napis, czerwony pasek (styl miejskiej informacji); materiał wspólny dla nazwy. */
+const PLATES = new Map<string, THREE.MeshLambertMaterial>();
+const PLATE_GEO = new THREE.PlaneGeometry(1.3, .34);
+function plateMat(name: string, city: string): THREE.MeshLambertMaterial {
+  let m = PLATES.get(name); if (m) return m;
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 134; const x = cv.getContext('2d')!;
+  x.fillStyle = '#f2f1ec'; x.fillRect(0, 0, 512, 134); x.fillStyle = '#c8102e'; x.fillRect(0, 118, 512, 16); x.strokeStyle = '#1a1a1a'; x.lineWidth = 4; x.strokeRect(2, 2, 508, 130);
+  const pre = city === 'warszawa' && !/^(al\.|aleja|aleje|plac|pl\.|rondo|most|skwer|bulwar|wybrzeże|trakt|osiedle)/i.test(name) ? 'ul. ' : '';
+  x.fillStyle = '#141414'; x.textBaseline = 'middle'; x.textAlign = 'center';
+  let fs = 62; const text = pre + name; x.font = `700 ${fs}px ${FONT}`; while (x.measureText(text).width > 470 && fs > 22) { fs -= 2; x.font = `700 ${fs}px ${FONT}`; }
+  x.fillText(text, 256, 60);
+  const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
+  m = new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  if (PLATES.size > 300) { const [k, old] = PLATES.entries().next().value!; old.map?.dispose(); old.dispose(); PLATES.delete(k); }
+  PLATES.set(name, m); return m;
+}
+
+/** Ściana budynku przy punkcie (x, z), równoległa do kierunku (dx, dz): punkt na ścianie najbliżej skrzyżowania (jx, jz) i normalna na zewnątrz. */
+function wallNear(world: World, x: number, z: number, dx: number, dz: number, jx: number, jz: number): { x: number; z: number; nx: number; nz: number } | null {
+  const l = world.buildings.grid.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL)); if (!l) return null;
+  let best: { x: number; z: number; nx: number; nz: number } | null = null, bd = 9;
+  for (const p of l) {
+    if (p.a > x + 10 || p.b < x - 10 || p.c > z + 10 || p.d < z - 10) continue;
+    const P = p.poly;
+    for (let i = 0; i < P.length; i++) {
+      const [ax, az] = P[i], [bx, bz] = P[(i + 1) % P.length], ex = bx - ax, ez = bz - az, L = Math.hypot(ex, ez); if (L < 2.2) continue;
+      if (Math.abs((ex * dx + ez * dz) / L) < .85) continue; // ściana równoległa do ulicy
+      const u = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / (L * L))), d = Math.hypot(ax + ex * u - x, az + ez * u - z); if (d >= bd) continue;
+      // punkt bliżej skrzyżowania, 0,8 m od narożnika
+      const uj = Math.max(.8 / L, Math.min(1 - .8 / L, ((jx - ax) * ex + (jz - az) * ez) / (L * L))), px = ax + ex * uj, pz = az + ez * uj;
+      let nx = -ez / L, nz = ex / L; if (pip(P, px + nx * .3, pz + nz * .3)) { nx = -nx; nz = -nz; }
+      bd = d; best = { x: px, z: pz, nx, nz };
+    }
+  }
+  return best;
+}
 
 export class Signs {
   readonly group = new THREE.Group();
@@ -22,16 +63,35 @@ export class Signs {
   private live = new Map<number, THREE.Object3D>();
 
   /** Przebudowa listy po zmianie kafelków (tylko dane, bez sprite'ów). */
-  rebuild(tiles: Iterable<TileData>, ground: (x: number, z: number) => number = () => 0): void {
+  rebuild(tiles: Iterable<TileData>, ground: (x: number, z: number) => number = () => 0, world: World | null = null): void {
     this.list = [];
     for (const t of tiles) {
-      // skrzyżowania: węzeł wspólny dla dróg o różnych nazwach
-      const names = new Map<number, Set<string>>();
-      for (const r of t.r) if (r.n) for (let i = 0; i < r.j.length; i += 2) { const id = r.j[i + 1]; let s = names.get(id); if (!s) names.set(id, s = new Set()); s.add(r.n); }
+      // skrzyżowania ulic o różnych nazwach: tabliczki na ścianach narożnych budynków, równolegle do każdej z ulic
+      const legs = new Map<number, { name: string; dx: number; dz: number; hw: number }[]>();
+      for (const r of t.r) if (r.n && !r.tu) for (let i = 0; i < r.j.length; i += 2) {
+        const vi = r.j[i], id = r.j[i + 1], p = r.p, nv = p.length / 2;
+        for (const o of [vi - 1, vi + 1]) if (o >= 0 && o < nv) {
+          const dx = p[o * 2] - p[vi * 2], dz = p[o * 2 + 1] - p[vi * 2 + 1], L = Math.hypot(dx, dz); if (L < .5) continue;
+          let l = legs.get(id); if (!l) legs.set(id, l = []); l.push({ name: r.n, dx: dx / L, dz: dz / L, hw: r.w / 2 });
+        }
+      }
       for (const g of t.g) {
-        const s = names.get(g.id); if (!g.jn || !s || s.size < 2) continue;
-        const lines = [...s].slice(0, 3);
-        this.list.push({ x: g.x, z: g.z, y: ground(g.x, g.z), make: () => { const o = new THREE.Group(); const sp = sprite(lines, 'rgba(8,30,60,.9)', '#e8f4ff', '#7dc4ff', 4.5); sp.position.y = 3.6; o.add(sp); return o; } });
+        const l = legs.get(g.id); if (!g.jn || !l || new Set(l.map(q => q.name)).size < 2 || !world) continue;
+        const done = new Set<string>(), seen: [number, number][] = [];
+        for (const leg of l) {
+          if (done.has(leg.name)) continue;
+          const other = Math.max(...l.filter(q => q.name !== leg.name).map(q => q.hw));
+          let n = 0;
+          for (const sd of [1, -1]) {
+            const px = g.x + leg.dx * (other + 6) - leg.dz * sd * (leg.hw + 4), pz = g.z + leg.dz * (other + 6) + leg.dx * sd * (leg.hw + 4);
+            const w = wallNear(world, px, pz, leg.dx, leg.dz, g.x, g.z); if (!w || seen.some(([a, b]) => Math.hypot(a - w.x, b - w.z) < 2)) continue;
+            seen.push([w.x, w.z]); n++;
+            const name = leg.name, city = t.city, yaw = Math.atan2(w.nx, w.nz);
+            this.list.push({ x: w.x + w.nx * .06, z: w.z + w.nz * .06, y: ground(w.x + w.nx, w.z + w.nz) + 2.8, shared: true,
+              make: () => { const m = new THREE.Mesh(PLATE_GEO, plateMat(name, city)); m.rotation.y = yaw; return m; } });
+          }
+          if (n) done.add(leg.name);
+        }
       }
       for (const p of t.poi) {
         const text = signText(p), sub = p.a;
@@ -52,7 +112,7 @@ export class Signs {
 
   clear(): void { for (const [i, o] of this.live) this.drop(i, o); }
   private drop(i: number, o: THREE.Object3D): void {
-    o.traverse(c => { if (c instanceof THREE.Sprite) { c.material.map?.dispose(); c.material.dispose(); } });
+    o.traverse(c => { if (c instanceof THREE.Sprite) { c.material.map?.dispose(); c.material.dispose(); } }); // tabliczki: materiał wspólny, zostaje
     this.group.remove(o); this.live.delete(i);
   }
 }

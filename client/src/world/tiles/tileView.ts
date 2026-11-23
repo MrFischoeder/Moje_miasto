@@ -13,6 +13,7 @@ import { classify } from '@miasto/shared/interiors/facade';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { buildProps, PropMaterials, type StopPoint } from './props';
+import { installLamps, lampUniforms, MAX_LAMPS, type LampUniforms } from '../lampLight';
 
 export const WATER_Y = -4;
 
@@ -23,6 +24,9 @@ export class TileMaterials {
   readonly windows: WindowUniforms = installWindows(this.build);
   /** drzewa, latarnie, ławki, wiaty */
   readonly props = new PropMaterials();
+  /** światło latarni (najbliższe latarnie, natężenie nocą) */
+  readonly lamps: LampUniforms = lampUniforms();
+  constructor() { for (const m of [this.build, this.flat, this.raised, this.solid]) installLamps(m, this.lamps); }
   readonly edge = new THREE.LineBasicMaterial({ color: 0x7dffb0, transparent: true });
   /** warstwy płaskie na gruncie: nie zapisują głębi (grunt zasłania za nie), kolejność rysowania = renderOrder */
   readonly flat = new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false, transparent: false, side: THREE.DoubleSide });
@@ -199,7 +203,7 @@ function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?:
   }
 }
 
-export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void }
+export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void; /** oprawy latarni: x, y, z, ... */ lamps: number[] }
 
 export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null, phys: World | null = world, stops: StopPoint[] = []): TileView {
   const t0 = performance.now(), g: Ground = world ? world.ground : null;
@@ -349,10 +353,10 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   if (!S.empty) add(new THREE.Mesh(S.geometry(), M.solid), 0);
   if (!RB.empty) add(new THREE.Mesh(RB.geometry(), M.raised), 0);
   if (!SL.empty) add(new THREE.LineSegments(SL.geometry(), M.line), 0);
-  for (const o of buildProps(t, M.props, phys, g, stops)) add(o, 0);
+  const props = buildProps(t, M.props, phys, g, stops); for (const o of props.objs) add(o, 0);
   const ms = performance.now() - t0;
   return {
-    group, buildings: t.b.length, ms,
+    group, buildings: t.b.length, ms, lamps: props.lamps,
     // obiekty (instancje) mają wspólne geometrie: zwalniamy tylko bufory instancji
     dispose: () => group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); else { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); } }),
   };

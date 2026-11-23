@@ -26,6 +26,8 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
    - [x] wnętrza: jasne ściany i podłogi
    - [x] drzewa (parki, lasy, cmentarze, szpalery wzdłuż ulic; liściaste, iglaste, topole), latarnie (OSM + co ~32 m, świecą nocą),
          ławki przy alejkach w parkach, wiaty przystanków z rozkładów; metro i pawilony w nowym stylu
+   - [x] tabliczki z nazwami ulic na ścianach narożnych budynków przy skrzyżowaniach (zamiast napisów w powietrzu)
+   - [x] światło latarni na terenie, jezdniach, chodnikach i ścianach (najbliższe 40 latarni, nocą)
    - [ ] kształty dachów, drzewa z OSM (`natural=tree`, szpalery) po ponownym pobraniu danych, kosze, słupki, znaki
    - [ ] budowa kafli (z obiektami) w osobnym wątku: dziś do ok. 95 ms na kafel
    - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd)

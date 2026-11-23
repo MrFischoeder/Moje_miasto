@@ -7,6 +7,7 @@ import { GroundGrid } from './ground';
 import { Signs } from './signs';
 import type { TileSource } from './tiles/source';
 import { TileStreamer } from './tiles/streamer';
+import { installLamps } from './lampLight';
 
 export class CityView {
   readonly group = new THREE.Group();
@@ -24,7 +25,8 @@ export class CityView {
     this.ground = new GroundGrid(f(a - 800), f(c - 800), f(b + 800), f(d + 800), world.metro.holes, xray, world.terrain ? world.ground : null, world.terrain?.step, (x, y) => !!world.terrain?.hasFine(x, y));
     this.group.add(this.ground.mesh, this.ground.lines);
     this.streamer = new TileStreamer(world, source, this.ground);
-    this.streamer.onChange = () => this.signs.rebuild(this.streamer.loadedTiles(), world.ground);
+    installLamps(this.ground.mat, this.streamer.mats.lamps); // światło latarni także na gruncie
+    this.streamer.onChange = () => this.signs.rebuild(this.streamer.loadedTiles(), world.ground, world);
     this.group.add(this.streamer.group, this.signs.group);
     this.setXray(xray);
   }

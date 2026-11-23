@@ -86,7 +86,7 @@ const LEAF = [new THREE.Color(.24, .42, .16), new THREE.Color(.3, .48, .18), new
 const NEEDLE = [new THREE.Color(.12, .28, .16), new THREE.Color(.16, .32, .18), new THREE.Color(.1, .24, .14)];
 
 /** Obiekty jednego kafla. ground: wysokość terenu (null = płasko); stops: przystanki w kaflu. */
-export function buildProps(t: TileData, M: PropMaterials, world: World | null, ground: ((x: number, z: number) => number) | null, stops: StopPoint[]): THREE.Object3D[] {
+export function buildProps(t: TileData, M: PropMaterials, world: World | null, ground: ((x: number, z: number) => number) | null, stops: StopPoint[]): { objs: THREE.Object3D[]; lamps: number[] } {
   const R = rng(`obiekty${t.x}_${t.y}`), Y = (x: number, z: number) => ground ? ground(x, z) : 0;
   const trunk = new Inst(G.trunk, M.wood), crown = new Inst(G.crown, M.leaves), cone = new Inst(G.cone, M.leaves);
   const pole = new Inst(G.pole, M.metal), head = new Inst(G.lampHead, M.lamp), bench = new Inst(G.bench, M.bench);
@@ -146,8 +146,11 @@ export function buildProps(t: TileData, M: PropMaterials, world: World | null, g
     }
   }
   // 3) latarnie: punkty z OSM (ramię w stronę najbliższej jezdni) + uzupełnienie co ~32 m na ulicach miejskich
-  const lamps: XZ[] = [];
-  const lampAt = (x: number, z: number, yaw: number) => { const y = Y(x, z) + .15; pole.add(x, y, z, yaw, 1, 1, 1); head.add(x, y, z, yaw, 1, 1, 1); lamps.push([x, z]); };
+  const lamps: XZ[] = [], lampPos: number[] = [];
+  const lampAt = (x: number, z: number, yaw: number) => {
+    const y = Y(x, z) + .15; pole.add(x, y, z, yaw, 1, 1, 1); head.add(x, y, z, yaw, 1, 1, 1); lamps.push([x, z]);
+    lampPos.push(x + Math.sin(yaw) * 1.45, y + 6.8, z + Math.cos(yaw) * 1.45); // oprawa na końcu ramienia
+  };
   for (const n of t.n) if (n.k === 'lamp' && inTile(n.x, n.z)) {
     let best: [number, number] | null = null, bd = 30;
     for (const r of t.r) { if (!isVehicleRoad(r.k)) continue; const p = r.p; for (let i = 0; i + 3 < p.length; i += 2) {
@@ -191,5 +194,5 @@ export function buildProps(t: TileData, M: PropMaterials, world: World | null, g
   }
   const out: THREE.Object3D[] = [];
   for (const i of [trunk, crown, cone, pole, head, bench, shelter, glass]) { const m = i.mesh(); if (m) out.push(m); }
-  return out;
+  return { objs: out, lamps: lampPos };
 }
