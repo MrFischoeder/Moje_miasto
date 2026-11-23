@@ -100,6 +100,8 @@ const area2 = (r: XZ[]) => { let a = 0; for (let i = 0; i < r.length; i++) { con
 const v2 = (r: XZ[]) => r.map(([x, z]) => new THREE.Vector2(x, z));
 
 type Ground = ((x: number, z: number) => number) | null;
+/** najdłuższa krawędź trójkąta terenu kładzionego na gruncie [m] (mniej przy dokładnym terenie) */
+let FILL_MAX = 30;
 
 /** Wypełnienie wielokąta (z dziurami) na wysokości y; z terenem trójkąty dzielone i kładzione na gruncie. */
 function fillPoly(buf: Buf, outer: XZ[], holes: XZ[][], y: number, col: RGB, g: Ground = null): void {
@@ -109,7 +111,7 @@ function fillPoly(buf: Buf, outer: XZ[], holes: XZ[][], y: number, col: RGB, g: 
   const put = (a: XZ, b: XZ, c: XZ, depth: number): void => {
     if (g) {
       const ab = Math.hypot(a[0] - b[0], a[1] - b[1]), bc = Math.hypot(b[0] - c[0], b[1] - c[1]), ca = Math.hypot(c[0] - a[0], c[1] - a[1]), m = Math.max(ab, bc, ca);
-      if (m > 30 && depth < 12) { // podział najdłuższej krawędzi
+      if (m > FILL_MAX && depth < 16) { // podział najdłuższej krawędzi
         if (m === ab) { const d: XZ = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; put(a, d, c, depth + 1); put(d, b, c, depth + 1); }
         else if (m === bc) { const d: XZ = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2]; put(a, b, d, depth + 1); put(a, d, c, depth + 1); }
         else { const d: XZ = [(c[0] + a[0]) / 2, (c[1] + a[1]) / 2]; put(a, b, d, depth + 1); put(d, b, c, depth + 1); }
@@ -201,6 +203,8 @@ export interface TileView { group: THREE.Group; buildings: number; ms: number; d
 
 export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null, phys: World | null = world, stops: StopPoint[] = []): TileView {
   const t0 = performance.now(), g: Ground = world ? world.ground : null;
+  // dokładny teren (NMT): drogi i tereny próbkowane gęściej, żeby leżały na gruncie
+  const fine = !!world?.terrain?.hasFine(t.x, t.y), SEG = fine ? 4 : MAX_SEG; FILL_MAX = fine ? 6 : 30;
   /** wysokość gruntu w wierzchołkach (+ uniesienie warstw płaskich nad siatką terenu) */
   const LIFT = g ? .15 : 0, gys = (p: XZ[]): Ys => g ? p.map(q => g(q[0], q[1]) + LIFT) : 0;
   /** pomost mostu: interpolacja terenu między końcami ciągu */
@@ -267,7 +271,7 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   const roadW = new Map<number, number>(); // id węzła -> szerokość drogi
   const near = (r: number) => (x: number, z: number) => junctions.some(j => (j[0] - x) ** 2 + (j[1] - z) ** 2 < r * r);
   const drawRoad = (r: TileRoad) => {
-    const p = densify(toXZ(r.p)), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k), ys = r.br ? deckYs(p, r.bw) : gys(p);
+    const p = densify(toXZ(r.p), SEG), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k), ys = r.br ? deckYs(p, r.bw) : gys(p);
     for (let i = 0; i < r.j.length; i += 2) roadW.set(r.j[i + 1], Math.max(roadW.get(r.j[i + 1]) || 0, r.w));
     if (r.br) {
       const ext = hw + (r.sw ? 2.5 : 0);
@@ -300,7 +304,7 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
 
   // --- tory ---
   for (const l of t.l) {
-    const p = densify(toXZ(l.p)), n = offsets(p), ys = l.br ? deckYs(p, l.bw) : gys(p), tram = l.k === 'tram';
+    const p = densify(toXZ(l.p), SEG), n = offsets(p), ys = l.br ? deckYs(p, l.bw) : gys(p), tram = l.k === 'tram';
     // torowisko wyżej niż jezdnia i chodnik: podsypka (tramwaj: trawiaste), podkłady, szyny
     const bw = tram ? 1.35 : 1.6, bh = tram ? .12 : .18;
     strip(RB, p, n, -bw, bw, ys, tram ? PAL.tramBed : PAL.ballast, bh); for (const sd of [-bw, bw]) wall(RB, p, n, sd, ys, 0, bh, tram ? PAL.curb : PAL.ballast);

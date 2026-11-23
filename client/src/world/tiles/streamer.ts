@@ -58,6 +58,7 @@ export class TileStreamer {
     const t = this.ready.shift();
     if (t) {
       const k = tileKey(t.x, t.y); this.data.set(k, t); this.world.addTile(t);
+      if (t.dem) this.ground.refresh(t.x, t.y); // dokładny teren: siatka gruntu od nowa
       const v = buildTileView(t, this.mats, this.world.terrain ? this.world : null, this.world, this.stopsFor(t.x, t.y)); this.views.set(k, v); this.group.add(v.group);
       this.stats.lastBuildMs = v.ms; this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, v.ms);
       const water = t.a.filter(a => a.k === 'water');

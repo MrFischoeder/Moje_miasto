@@ -4,6 +4,7 @@ import { World, type OsmPoint } from '@miasto/shared/world/world';
 import { Terrain } from '@miasto/shared/world/terrain';
 import { SIM_DT } from '@miasto/shared/sim/loop';
 import { tileKey, type TileData } from '@miasto/shared/tiles/types';
+import { DemHttp, gunzipWeb } from '../world/demLoad';
 import type { CityKey } from '@miasto/shared/data/cities';
 import type { WorkerIn } from './transport';
 import type { TransitData } from '@miasto/shared/transit/timetable';
@@ -14,6 +15,8 @@ export interface LocalInit {
   terrain: ArrayBuffer | null;
   /** kafelki z pliku OSM albo adres katalogu kafelków */
   tiles: TileData[] | null; tilesBase: string | null; osmPoints: OsmPoint[] | null;
+  /** dokładny teren (public/terrain/<miasto>/) albo null */
+  demBase?: string | null;
   /** rozkłady jazdy (już wczytane przez grę) */
   transit: TransitData | null;
 }
@@ -33,12 +36,13 @@ async function init(o: LocalInit): Promise<void> {
   if (o.tiles) avail = new Set(o.tiles.map(t => tileKey(t.x, t.y)));
   else if (o.tilesBase) try { const r = await fetch(o.tilesBase + 'index.json'); if (r.ok) { const ix = await r.json(); for (const [x, y] of ix.tiles) avail.add(tileKey(x, y)); } } catch { /* brak kafelków */ }
   const mem = new Map((o.tiles || []).map(t => [tileKey(t.x, t.y), t]));
+  const dem = o.demBase ? new DemHttp(o.demBase, gunzipWeb) : null;
   room = new Room('local', world, {
     has: (x, y) => avail.has(tileKey(x, y)),
     load: async (x, y) => {
       const m = mem.get(tileKey(x, y)); if (m) return m;
-      const r = await fetch(`${o.tilesBase}${tileKey(x, y)}.json.gz`); if (!r.ok) return null;
-      return JSON.parse(new TextDecoder().decode(await gunzip(await r.arrayBuffer()))) as TileData;
+      const [r, d] = await Promise.all([fetch(`${o.tilesBase}${tileKey(x, y)}.json.gz`), dem?.load(x, y) ?? null]); if (!r.ok) return null;
+      const t = JSON.parse(new TextDecoder().decode(await gunzip(await r.arrayBuffer()))) as TileData; if (d) t.dem = d; return t;
     },
   }, { local: true, maxPlayers: 1 }, () => performance.now());
   if (o.transit) room.setTransit(o.transit);

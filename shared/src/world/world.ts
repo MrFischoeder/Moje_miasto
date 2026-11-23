@@ -65,6 +65,7 @@ export class World implements Surface {
   // ---------- kafelki ----------
   addTile(t: TileData): void {
     const k = tileKey(t.x, t.y); if (this.tiles.has(k)) return; this.tiles.set(k, t);
+    if (t.dem && this.terrain) this.terrain.addFine(t.dem); // dokładny teren przed budynkami i mostami
     for (const b of t.b) if (b.mh < 2) { const o = toXZ(b.o); this.buildings.add(o, this.baseOf(o) + b.h, b.i?.map(toXZ), k); }
     for (const a of t.a) if (a.k === 'water') this.water.add(toXZ(a.o), 0, a.i?.map(toXZ), k);
     const deck = (pts: XZ[], hw: number, bw: number[] | undefined) => {
@@ -81,6 +82,7 @@ export class World implements Surface {
   }
   removeTile(k: string): void {
     if (!this.tiles.delete(k)) return;
+    this.terrain?.removeFine(k);
     this.buildings.removeTile(k); this.water.removeTile(k); this.decks.removeTile(k); this.interiors.removeTile(k);
   }
 

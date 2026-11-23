@@ -9,6 +9,8 @@ import { TILE_SIZE, tileKey } from '@miasto/shared/tiles/types';
 import type { XZ } from '@miasto/shared/world/collision';
 
 type Ground = (x: number, z: number) => number;
+/** podział komórki 500 m z dokładnym terenem (NMT) blisko gracza: co 5 m */
+const DEM_CELLS = 100;
 
 export class GroundGrid {
   readonly mat: THREE.MeshLambertMaterial;
@@ -22,7 +24,7 @@ export class GroundGrid {
   private fine: number;
 
   constructor(private x0: number, private y0: number, private x1: number, private y1: number, kioskHoles: XZ[][], xray: boolean,
-    private ground: Ground | null = null, step = 30) {
+    private ground: Ground | null = null, step = 30, private hasDem: (x: number, y: number) => boolean = () => false) {
     this.mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(...PAL.ground), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.mat); this.mesh.position.y = -.03; this.mesh.frustumCulled = false;
     this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x14402a })); this.lines.frustumCulled = false; this.lines.visible = false; // low-poly: bez linii terenu
@@ -81,6 +83,12 @@ export class GroundGrid {
     this.cells.set(k, { lod: n, pos: new Float32Array(out), lines: new Float32Array(ln) }); this.dirty = true;
   }
 
+  /** Komórka po wczytaniu dokładnego terenu: przebudowa (z najbliższą aktualizacją wybierze gęstość). */
+  refresh(x: number, y: number): void {
+    const c = this.cells.get(tileKey(x, y)); if (!c || !this.ground) return;
+    this.buildCell(x, y, c.lod); this.last = [NaN, 0, 0];
+  }
+
   /** Szczegółowość komórek wokół gracza (tylko z terenem). */
   private last: [number, number, number] = [NaN, 0, 0];
   update(px: number, pz: number, radius: number): void {
@@ -89,7 +97,7 @@ export class GroundGrid {
     if (this.ground && moved) for (const [k, c] of this.cells) {
       const [x, y] = k.split('_').map(Number);
       const dx = Math.max(0, Math.abs((x + .5) * TILE_SIZE - px) - TILE_SIZE / 2), dz = Math.max(0, Math.abs((y + .5) * TILE_SIZE - pz) - TILE_SIZE / 2);
-      const want = Math.hypot(dx, dz) <= radius ? this.fine : this.coarse;
+      const d = Math.hypot(dx, dz), want = d <= Math.min(radius, 700) && this.hasDem(x, y) ? DEM_CELLS : d <= radius ? this.fine : this.coarse;
       if (c.lod !== want) this.buildCell(x, y, want);
     }
     this.flush();

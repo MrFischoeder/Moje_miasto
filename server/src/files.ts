@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import type { CityKey } from '@miasto/shared/data/cities';
-import { Terrain } from '@miasto/shared/world/terrain';
+import { DemTile, Terrain } from '@miasto/shared/world/terrain';
 import { tileKey, type TileData, type TileIndex } from '@miasto/shared/tiles/types';
 import type { TileLoader } from '@miasto/shared/server/room';
 import type { TransitData } from '@miasto/shared/transit/timetable';
@@ -22,7 +22,12 @@ export function tileLoader(city: CityKey): TileLoader | null {
   const idx = JSON.parse(readFileSync(ix, 'utf8')) as TileIndex, have = new Set(idx.tiles.map(([x, y]) => tileKey(x, y)));
   return {
     has: (x, y) => have.has(tileKey(x, y)),
-    load: async (x, y) => JSON.parse(gunzipSync(await readFile(join(dir, `${tileKey(x, y)}.json.gz`))).toString('utf8')) as TileData,
+    load: async (x, y) => {
+      const t = JSON.parse(gunzipSync(await readFile(join(dir, `${tileKey(x, y)}.json.gz`))).toString('utf8')) as TileData;
+      const df = join(PUB, 'terrain', city, `${tileKey(x, y)}.bin.gz`); // dokładny teren (tools/nmt-import.ts)
+      if (existsSync(df)) { const b = gunzipSync(await readFile(df)); t.dem = DemTile.parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); }
+      return t;
+    },
   };
 }
 

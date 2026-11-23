@@ -28,7 +28,9 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
          ławki przy alejkach w parkach, wiaty przystanków z rozkładów; metro i pawilony w nowym stylu
    - [ ] kształty dachów, drzewa z OSM (`natural=tree`, szpalery) po ponownym pobraniu danych, kosze, słupki, znaki
    - [ ] budowa kafli (z obiektami) w osobnym wątku: dziś do ok. 95 ms na kafel
-   - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd); mapy wysokościowe (LiDAR)
+   - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd)
+   - [x] teren z NMT 1 m (GUGiK): import, kafle terenu 2 m, wczytywanie w grze i na serwerach, gęstsza siatka gruntu i dróg
+   - [ ] wgrać prawdziwe arkusze NMT Warszawy (dane od użytkownika) i sprawdzić w znanych punktach
 3. Przeanalizować https://github.com/donmutti/city (podobny kierunek gry) przed dalszymi decyzjami o silniku i stylu.
 4. Bramy przejazdowe na podwórka (OSM `tunnel=building_passage`, `covered=yes`, `entrance=*`, `barrier=gate`),
    uzupełnianie brakujących przejazdów do zamkniętych podwórek, wejścia do klatek od podwórka; test dojazdu w potoku danych.

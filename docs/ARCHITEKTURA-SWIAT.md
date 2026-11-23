@@ -114,3 +114,15 @@ Pokaz 9 szablonów na prawdziwych budynkach: `docs/wnetrza/plany.png` (plany pi�
 - **Test dostępności** (`reach.ts`, testy jednostkowe): przeszukanie wszerz fizyką chodzenia od drzwi na ulicy; każde pomieszczenie
   parteru i dwóch pięter ma być osiągalne. Lokal, do którego nie da się wejść z ulicy (np. front zasłonięty innym budynkiem), jest zamknięty.
 - **Jeszcze nie ma:** wind, piwnic, dachów, biur, domów jednorodzinnych w Warszawie, zamkniętych drzwi i wytrychów, mieszkańców we wnętrzach.
+
+## Teren (`shared/src/world/terrain.ts`, `tools/nmt-import.ts`)
+
+- **Model zgrubny:** Copernicus GLO-30 (siatka 30 m, model powierzchni wygładzony z budynków i drzew), cały obszar miasta naraz.
+- **Model dokładny:** NMT z GUGiK (LiDAR, siatka 1 m, PL-1992) przeliczony na kafle 500 m zgodne z kaflami mapy, krok 2 m,
+  wysokości w centymetrach (format MMT2). Kafel terenu wczytuje się razem z kaflem mapy (gra, lokalny serwer w wątku, serwer
+  sieciowy), zanim powstaną budynki i mosty, więc fizyka i obraz zgadzają się u wszystkich. Gdzie brak kafla: model zgrubny.
+- **Obraz:** siatka gruntu blisko gracza co 5 m tam, gdzie jest NMT (dalej rzadziej); drogi, chodniki, torowiska i tereny
+  próbkowane co 4–6 m, żeby leżały na gruncie.
+- **Układ PL-1992** (`shared/src/data/pl1992.ts`): odwzorowanie Gaussa–Krügera na GRS80; w Warszawie błąd przeliczenia < 1 mm.
+- Do zrobienia po wgraniu danych: kontrola wysokości w znanych punktach (np. skarpa przy Zamku i Wiśle), dopasowanie wysokości
+  budynków do NMPT (model pokrycia), dokładny teren w wersji jednoplikowej.

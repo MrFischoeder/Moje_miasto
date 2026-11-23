@@ -85,6 +85,8 @@ export interface TilePoi {
 
 export interface TileData {
   v: number; city: string; x: number; y: number; size: number;
+  /** teren w wysokiej rozdzielczości dla tego kafla (dołączany przy wczytaniu, nie w pliku JSON) */
+  dem?: import('../world/terrain').DemTile;
   b: TileBuilding[];
   r: TileRoad[];
   a: TileArea[];

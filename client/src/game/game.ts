@@ -53,6 +53,8 @@ export interface GameUI {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpAngle = (a: number, b: number, t: number) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t; };
 const tilesBase = (key: string) => `${new URL(import.meta.env.BASE_URL, location.href).href}tiles/${key}/`;
+/** dokładny teren (NMT) w kaflach: public/terrain/<miasto>/ */
+const demBase = (key: string) => `${new URL(import.meta.env.BASE_URL, location.href).href}terrain/${key}/`;
 
 /** kolory pieszych NPC (stonowane, żeby gracze się wyróżniali) */
 const PED_COLORS = ['#3a5a8a', '#8a3030', '#d8d0c0', '#2e6a4a', '#c88a30', '#5a5a64', '#7a4a8a', '#e0e0e0', '#2a2a30', '#b05a5a'];
@@ -158,7 +160,7 @@ export class Game {
       source = new MemoryTileSource(tiles, key);
     } else {
       world = new World(key, { terrain });
-      source = location.protocol === 'file:' ? new NoTiles() : new HttpTileSource(tilesBase(key));
+      source = location.protocol === 'file:' ? new NoTiles() : new HttpTileSource(tilesBase(key), demBase(key));
     }
     let tr: Transport;
     if (online) {
@@ -167,7 +169,7 @@ export class Game {
     } else {
       const w = new LocalServer(), init: LocalInit = {
         city: key, name: this.playerName, terrain: terrain ? terrain.encode() : null,
-        tiles: fileTiles, tilesBase: raw || location.protocol === 'file:' ? null : tilesBase(key), osmPoints: raw ? raw.taggedNodes() : null, transit,
+        tiles: fileTiles, tilesBase: raw || location.protocol === 'file:' ? null : tilesBase(key), demBase: raw || location.protocol === 'file:' ? null : demBase(key), osmPoints: raw ? raw.taggedNodes() : null, transit,
       };
       tr = new WorkerTransport(w);
       const m: WorkerIn = { t: 'init', init }; w.postMessage(m);
