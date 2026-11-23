@@ -24,7 +24,10 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
    - [x] ulice: asfalt, chodniki podniesione o krawężnik (15 cm), torowiska wyżej niż jezdnia (podsypka, podkłady, szyny; tramwaj na trawie)
    - [x] auta, radiowóz, helikopter, samoloty, postacie (skóra, koszula, spodnie), pojazdy komunikacji
    - [x] wnętrza: jasne ściany i podłogi
-   - [ ] drzewa i zieleń, latarnie, ławki, przystanki; kształty dachów; metro i wejścia (wciąż stary styl)
+   - [x] drzewa (parki, lasy, cmentarze, szpalery wzdłuż ulic; liściaste, iglaste, topole), latarnie (OSM + co ~32 m, świecą nocą),
+         ławki przy alejkach w parkach, wiaty przystanków z rozkładów; metro i pawilony w nowym stylu
+   - [ ] kształty dachów, drzewa z OSM (`natural=tree`, szpalery) po ponownym pobraniu danych, kosze, słupki, znaki
+   - [ ] budowa kafli (z obiektami) w osobnym wątku: dziś do ok. 95 ms na kafel
    - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd); mapy wysokościowe (LiDAR)
 3. Przeanalizować https://github.com/donmutti/city (podobny kierunek gry) przed dalszymi decyzjami o silniku i stylu.
 4. Bramy przejazdowe na podwórka (OSM `tunnel=building_passage`, `covered=yes`, `entrance=*`, `barrier=gate`),

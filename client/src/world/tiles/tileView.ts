@@ -12,6 +12,7 @@ import { MAX_SEG } from '../geometry';
 import { classify } from '@miasto/shared/interiors/facade';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
+import { buildProps, PropMaterials, type StopPoint } from './props';
 
 export const WATER_Y = -4;
 
@@ -20,6 +21,8 @@ export class TileMaterials {
   readonly build = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, transparent: true });
   /** okna na ścianach (shader): odsetek zapalonych, otwory drzwi wejściowych */
   readonly windows: WindowUniforms = installWindows(this.build);
+  /** drzewa, latarnie, ławki, wiaty */
+  readonly props = new PropMaterials();
   readonly edge = new THREE.LineBasicMaterial({ color: 0x7dffb0, transparent: true });
   /** warstwy płaskie na gruncie: nie zapisują głębi (grunt zasłania za nie), kolejność rysowania = renderOrder */
   readonly flat = new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false, transparent: false, side: THREE.DoubleSide });
@@ -34,7 +37,7 @@ export class TileMaterials {
     this.build.opacity = on ? .25 : 1; this.edge.opacity = on ? .35 : 1;
     for (const m of [this.flat, this.flatLine, this.raised]) { m.transparent = on; m.opacity = on ? .25 : 1; m.needsUpdate = true; }
   }
-  dispose(): void { for (const m of [this.build, this.edge, this.flat, this.flatLine, this.solid, this.line, this.raised]) m.dispose(); }
+  dispose(): void { for (const m of [this.build, this.edge, this.flat, this.flatLine, this.solid, this.line, this.raised]) m.dispose(); this.props.dispose(); }
 }
 
 // kolory low-poly (render/palette.ts)
@@ -196,7 +199,7 @@ function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?:
 
 export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void }
 
-export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null): TileView {
+export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null, phys: World | null = world, stops: StopPoint[] = []): TileView {
   const t0 = performance.now(), g: Ground = world ? world.ground : null;
   /** wysokość gruntu w wierzchołkach (+ uniesienie warstw płaskich nad siatką terenu) */
   const LIFT = g ? .15 : 0, gys = (p: XZ[]): Ys => g ? p.map(q => g(q[0], q[1]) + LIFT) : 0;
@@ -342,9 +345,11 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
   if (!S.empty) add(new THREE.Mesh(S.geometry(), M.solid), 0);
   if (!RB.empty) add(new THREE.Mesh(RB.geometry(), M.raised), 0);
   if (!SL.empty) add(new THREE.LineSegments(SL.geometry(), M.line), 0);
+  for (const o of buildProps(t, M.props, phys, g, stops)) add(o, 0);
   const ms = performance.now() - t0;
   return {
     group, buildings: t.b.length, ms,
-    dispose: () => group.traverse(o => { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); }),
+    // obiekty (instancje) mają wspólne geometrie: zwalniamy tylko bufory instancji
+    dispose: () => group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); else { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); } }),
   };
 }

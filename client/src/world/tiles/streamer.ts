@@ -6,6 +6,7 @@ import type { World } from '@miasto/shared/world/world';
 import { toXZ } from '@miasto/shared/world/world';
 import type { GroundGrid } from '../ground';
 import type { TileSource } from './source';
+import type { StopPoint } from './props';
 import { buildTileView, TileMaterials, type TileView } from './tileView';
 
 export interface StreamStats { indexed: number; loaded: number; visible: number; pending: number; lastBuildMs: number; maxBuildMs: number }
@@ -24,6 +25,8 @@ export class TileStreamer {
   /** wywoływane po dołożeniu / usunięciu kafelka (np. odświeżenie podpisów) */
   onChange: () => void = () => {};
 
+  /** przystanki komunikacji w kaflu (wiaty); ustawiane po wczytaniu rozkładów */
+  stopsFor: (x: number, y: number) => StopPoint[] = () => [];
   constructor(private world: World, private source: TileSource, private ground: GroundGrid, private maxParallel = 3) {}
 
   async init(): Promise<number> {
@@ -55,7 +58,7 @@ export class TileStreamer {
     const t = this.ready.shift();
     if (t) {
       const k = tileKey(t.x, t.y); this.data.set(k, t); this.world.addTile(t);
-      const v = buildTileView(t, this.mats, this.world.terrain ? this.world : null); this.views.set(k, v); this.group.add(v.group);
+      const v = buildTileView(t, this.mats, this.world.terrain ? this.world : null, this.world, this.stopsFor(t.x, t.y)); this.views.set(k, v); this.group.add(v.group);
       this.stats.lastBuildMs = v.ms; this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, v.ms);
       const water = t.a.filter(a => a.k === 'water');
       if (water.length) this.ground.setWater(t.x, t.y, water.flatMap(a => [toXZ(a.o)]));

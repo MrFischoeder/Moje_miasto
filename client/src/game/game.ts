@@ -30,6 +30,9 @@ import { litFraction } from '@miasto/shared/interiors/facade';
 import { InteriorView } from '../world/interiorView';
 import { PerfStats } from './perf';
 import { applyDaylight } from '../render/scene';
+import { daylight } from '../render/palette';
+import type { StopPoint } from '../world/tiles/props';
+import { TILE_SIZE } from '@miasto/shared/tiles/types';
 import type { LocalInit } from '../net/localServer.worker';
 import LocalServer from '../net/localServer.worker?worker&inline';
 
@@ -183,6 +186,19 @@ export class Game {
       this.transit = new TransitSystem(transit, world, s.clock);
       const lc: Record<string, string> = {}; for (const l of world.city.lines) lc[l.n] = l.c;
       this.transitView = new TransitView(this.transit, lc); this.world3d.add(this.transitView.group);
+      // wiaty przystanków autobusowych i tramwajowych: słupek z rozkładu, tyłem do chodnika (od toru jazdy)
+      const byTile = new Map<string, StopPoint[]>(), seen = new Set<number>(), sys = this.transit;
+      for (const p of sys.tt.patterns) {
+        if (p.kind !== 'bus' && p.kind !== 'tram') continue;
+        p.stops.forEach((si, j) => {
+          if (seen.has(si)) return; const st = sys.tt.data.stops[si]; if (!st) return; seen.add(si);
+          const q = sys.pose(p, p.stopS[j]), sx = st[1], sz = st[2], d = Math.hypot(sx - q.x, sz - q.z);
+          const yaw = d > .5 && d < 25 ? Math.atan2(sx - q.x, sz - q.z) : q.yaw + Math.PI / 2;
+          const k = Math.floor(sx / TILE_SIZE) + '_' + Math.floor(sz / TILE_SIZE); let l = byTile.get(k); if (!l) byTile.set(k, l = []);
+          l.push({ x: sx, z: sz, yaw, kind: p.kind as 'bus' | 'tram' });
+        });
+      }
+      view.streamer.stopsFor = (x, y) => byTile.get(x + '_' + y) ?? [];
       const transitSys = this.transit;
       loadAir(key).then(d => { if (d && this.transit === transitSys) { this.airView = new AirView(d, world, transitSys); this.world3d.add(this.airView.group); } });
     }
@@ -339,6 +355,7 @@ export class Game {
       const tz = this.transit?.tz ?? (w.key === 'londyn' ? 'Europe/London' : 'Europe/Warsaw'), lt = localTime(this.session!.clock.now(), tz);
       this.view!.streamer.mats.windows.uLit.value = litFraction(lt.sec / 3600);
       applyDaylight(this.ctx, lt.sec / 3600, under);
+      this.view!.streamer.mats.props.setNight(1 - daylight(lt.sec / 3600));
     }
     if (now - this.lastSlow > 500) {
       this.lastSlow = now; this.labels.update(w, P.x, P.z); T.lap('etykiety');
