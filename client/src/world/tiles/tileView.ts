@@ -312,10 +312,12 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   const WIN: number[] = [];
   // własne modele landmarków: budynki w ich obrysie zastępuje model
   const models = MODELS[t.city] ?? [];
+  // mosty nie zastępują budynków (ich prostokąty bywają duże i obejmują sąsiednie bloki)
+  const bldModels = models.filter(m => !m.model.startsWith('most') && !['grunwaldzki', 'zwierzyniecki', 'tumski', 'piaskowy', 'pokoju', 'pomorski'].includes(m.model));
   const byModel = (b: TileBuilding) => {
-    if (!models.length) return false;
+    if (!bldModels.length) return false;
     const [x, z] = centroidFlat(b.o);
-    return models.some(m => m.id === b.id || insideFlat(m.ring, x, z) || (() => { for (let i = 0; i < b.o.length; i += 2) if (!insideFlat(m.ring, b.o[i], b.o[i + 1])) return false; return true; })());
+    return bldModels.some(m => m.id === b.id || insideFlat(m.ring, x, z) || (() => { for (let i = 0; i < b.o.length; i += 2) if (!insideFlat(m.ring, b.o[i], b.o[i + 1])) return false; return true; })());
   };
   // kościoły: obrysy świątyń; części w ich obrębie (wieże, nawy) dostają okna kościelne i cegłę
   const churchRings = t.b.filter(b => !b.part && CHURCH.includes(b.t)).map(b => toXZ(b.o));

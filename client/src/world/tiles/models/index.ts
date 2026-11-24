@@ -9,7 +9,12 @@ import { buildArsenal, buildImieniaJezus, buildMagdalena, buildMuzeum, buildPala
 import { buildDworzec, buildElzbieta, buildHala, buildHalaTargowa, buildIglica, buildKatedra, buildKolegiata, buildNFM, buildOpera, buildPiasek, buildSkyTower, buildUniwersytet } from './wroclaw';
 
 export interface LandmarkModel { model: string; name: string; id: number; frame: Frame; ring: number[] }
-export const MODELS: Record<string, LandmarkModel[]> = { wroclaw: (wroclaw as unknown as { models: LandmarkModel[] }).models };
+/**
+ * Szablony mostów z obrysów OSM (man_made=bridge): pomijane, gdy prostokąt jest nierealnie szeroki – obrys obejmuje
+ * wtedy cały węzeł drogowy albo kilka estakad (jezdnie i tak rysują się z danych dróg). Mosty podwieszane do 70 m.
+ */
+const sane = (m: LandmarkModel) => !m.model.startsWith('most:') || m.frame.D <= (m.model === 'most:cable-stayed' ? 70 : 45);
+export const MODELS: Record<string, LandmarkModel[]> = { wroclaw: (wroclaw as unknown as { models: LandmarkModel[] }).models.filter(sane) };
 export const BUILDERS: Record<string, (S: ModelSink, f: Frame, ring: [number, number][]) => void> = {
   ratusz: buildRatusz, katedra: buildKatedra, hala: buildHala, iglica: buildIglica, piasek: buildPiasek, uniwersytet: buildUniwersytet,
   skytower: (S, f, ring) => buildSkyTower(S, f, ring),
