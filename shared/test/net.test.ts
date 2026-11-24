@@ -76,3 +76,21 @@ describe('pokój gry', () => {
     expect(b.json.filter(m => m.t === 'pm').length).toBe(1);
   });
 });
+
+import { cellCenter, cellName, colName, gridOf, parsePlace, unprojPoint } from '../src/data/grid';
+import { CITIES } from '../src/data/cities';
+import { makeProj } from '../src/data/projection';
+describe('współrzędne i siatka mapy', () => {
+  it('kratki, litery kolumn, odwrotna projekcja, wpisane miejsca', () => {
+    expect([colName(0), colName(25), colName(26), colName(27)]).toEqual(['A', 'Z', 'AA', 'AB']);
+    const c = CITIES.wroclaw, g = gridOf(c), pr = makeProj(c.o);
+    const [x, z] = pr(51.1097, 17.0328), ll = unprojPoint(c.o, x, z);
+    expect(Math.abs(ll[0] - 51.1097) + Math.abs(ll[1] - 17.0328)).toBeLessThan(1e-9);
+    const n = cellName(g, x, z), cc = cellCenter(g, n)!;
+    expect(Math.abs(cc[0] - x)).toBeLessThanOrEqual(250); expect(Math.abs(cc[1] - z)).toBeLessThanOrEqual(250);
+    expect(cellName(g, g.x0 + 1, g.z0 + 1)).toBe('A1');
+    expect(parsePlace(c, g, n.toLowerCase())).toEqual(cc);
+    const p2 = parsePlace(c, g, '51,1097; 17,0328')!; expect(Math.hypot(p2[0] - x, p2[1] - z)).toBeLessThan(.01);
+    expect(parsePlace(c, g, 'coś')).toBeNull();
+  });
+});

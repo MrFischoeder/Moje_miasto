@@ -2,6 +2,7 @@
 // znaczniki (gracz, inni gracze, zlecenia, udostępnione lokalizacje). Przesuwanie, przybliżanie, dotknięcie punktu.
 import type { World } from '@miasto/shared/world/world';
 import { EMBEDDED_OVERVIEW } from '../world/embedded';
+import { colName, GRID, gridOf, type GridDef } from '@miasto/shared/data/grid';
 
 export interface Overview { bbox: number[]; water: number[][]; green: number[][]; major: number[][]; mid: number[][]; path: number[][]; rail: number[][]; tram: number[][]; bld: number[][]; names: [string, number, number][] }
 export interface Marker { x: number; z: number; color: string; label?: string; kind: 'me' | 'player' | 'job' | 'pin' | 'sel'; yaw?: number }
@@ -33,9 +34,12 @@ export class PhoneMap {
   private raf = 0;
   private ptr = new Map<number, { x: number; y: number }>();
   private moved = 0;
+  /** siatka kratek 500 m (A1 w północno-zachodnim rogu obszaru miasta) */
+  readonly grid: GridDef;
+  showGrid = true;
 
   constructor(private world: World) {
-    this.canvas.className = 'map';
+    this.canvas.className = 'map'; this.grid = gridOf(world.city);
     loadOverview(world.key).then(o => { this.ov = o; if (o) this.P = { water: path(o.water, true), green: path(o.green, true), bld: path(o.bld, true), major: path(o.major, false), mid: path(o.mid, false), rail: path(o.rail, false), tram: path(o.tram, false) }; this.draw(); });
     const c = this.canvas;
     c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); this.ptr.set(e.pointerId, { x: e.offsetX, y: e.offsetY }); this.moved = 0; });
@@ -92,6 +96,22 @@ export class PhoneMap {
         g.fill(p); g.stroke(p);
       }
       if (this.tilePaths.size > 80) this.tilePaths.clear();
+    }
+    // siatka kratek z podpisami kolumn (u góry) i wierszy (z lewej)
+    if (this.showGrid && s > .03) {
+      const G = this.grid, step = s < .08 ? 4 : s < .16 ? 2 : 1, cs = GRID * step;
+      const [wx0, wz0] = this.toWorld(0, 0), [wx1, wz1] = this.toWorld(W, H);
+      const c0 = Math.max(0, Math.floor((wx0 - G.x0) / cs)), c1 = Math.min(Math.ceil(G.cols / step), Math.ceil((wx1 - G.x0) / cs));
+      const r0 = Math.max(0, Math.floor((wz0 - G.z0) / cs)), r1 = Math.min(Math.ceil(G.rows / step), Math.ceil((wz1 - G.z0) / cs));
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = 'rgba(40,60,120,.35)'; g.lineWidth = 1;
+      g.beginPath();
+      for (let c = c0; c <= c1; c++) { const px = W / 2 + (G.x0 + c * cs - this.cx) * s; g.moveTo(px, 0); g.lineTo(px, H); }
+      for (let r = r0; r <= r1; r++) { const py = H / 2 + (G.z0 + r * cs - this.cz) * s; g.moveTo(0, py); g.lineTo(W, py); }
+      g.stroke();
+      g.font = '700 10px sans-serif'; g.fillStyle = 'rgba(30,45,100,.85)'; g.textAlign = 'center';
+      for (let c = c0; c < c1; c++) { const px = W / 2 + (G.x0 + (c + .5) * cs - this.cx) * s; if (px > 8 && px < W - 8) g.fillText(colName(c * step) + (step > 1 ? '…' : ''), px, 12); }
+      g.textAlign = 'left';
+      for (let r = r0; r < r1; r++) { const py = H / 2 + (G.z0 + (r + .5) * cs - this.cz) * s; if (py > 20 && py < H - 30) g.fillText(String(r * step + 1), 3, py + 3); }
     }
     // nazwy ulic
     g.setTransform(dpr, 0, 0, dpr, 0, 0);

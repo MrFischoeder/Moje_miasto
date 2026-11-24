@@ -55,7 +55,7 @@
 #phone .locked { font-size: 13px; color: #ff9f0a; text-align: center; padding: 0 18px; }
 /* mapa */
 #phone canvas.map { flex: 1; width: 100%; display: block; touch-action: none; cursor: grab; background: #1b2026; }
-#phone .mapui { position: absolute; right: 10px; top: 64px; display: flex; flex-direction: column; gap: 8px; }
+#phone .mapui { position: absolute; right: 10px; top: 124px; display: flex; flex-direction: column; gap: 8px; }
 #phone .mapui div { width: 38px; height: 38px; border-radius: 12px; background: rgba(28, 28, 30, .92); display: grid; place-items: center; font-size: 19px; cursor: pointer; }
 #phone .pop { position: absolute; left: 10px; right: 10px; bottom: 12px; background: rgba(28, 28, 30, .96); border-radius: 18px; padding: 12px; font-size: 14px; display: none; }
 #phone .pop.show { display: block; }

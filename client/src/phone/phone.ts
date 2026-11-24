@@ -6,6 +6,7 @@ import { NPCS } from '@miasto/shared/game/jobs';
 import type { ServerMsg } from '@miasto/shared/net/protocol';
 import type { Game } from '../game/game';
 import { PhoneMap, type Marker } from './mapView';
+import { cellName, fmtLatLon, parsePlace, unprojPoint } from '@miasto/shared/data/grid';
 
 type Pm = Extract<ServerMsg, { t: 'pm' }>;
 interface Msg { me: boolean; text?: string; loc?: [number, number]; img?: string; job?: Pm['job']; at: number; /** godzina w grze */ hm: string }
@@ -216,10 +217,16 @@ export class Phone {
     if (!this.map || (this.map as unknown as { world: unknown }).world !== w) this.map = new PhoneMap(w);
     const m = this.map, { page } = this.page('Mapa', () => this.home());
     const pop = h('div', 'pop'), ui = h('div', 'mapui');
-    const zin = h('div', '', '＋'), zout = h('div', '', '－'), me = h('div', '', '◎');
+    const zin = h('div', '', '＋'), zout = h('div', '', '－'), me = h('div', '', '◎'), gr = h('div', '', '#');
+    gr.title = 'Siatka kratek'; gr.style.opacity = m.showGrid ? '1' : '.5'; gr.onclick = () => { m.showGrid = !m.showGrid; gr.style.opacity = m.showGrid ? '1' : '.5'; m.draw(); };
+    // wyszukiwanie: kratka (K12) albo współrzędne (51.1097, 17.0328)
+    const find = h('div', 'compose'), q = h('input'), go = h('div', 'ib send', '→');
+    q.placeholder = 'Idź do: kratka K12 albo 51.1097, 17.0328';
+    const goTo = () => { const w2 = this.game.world; if (!w2) return; const pt = parsePlace(w2.city, m.grid, q.value); if (!pt) { q.style.borderColor = '#ff453a'; return; } q.style.borderColor = ''; m.center(pt[0], pt[1], Math.max(m.s, .25)); m.onTap(pt[0], pt[1]); };
+    go.onclick = goTo; q.onkeydown = e => { if (e.key === 'Enter') goTo(); }; find.append(q, go);
     zin.onclick = () => m.zoom(1.6); zout.onclick = () => m.zoom(1 / 1.6);
     me.onclick = () => { const p = this.myPos(); if (p) m.center(p.x, p.z, Math.max(m.s, .6)); };
-    ui.append(zin, zout, me); page.append(m.canvas, ui, pop);
+    ui.append(zin, zout, me, gr); page.append(find, m.canvas, ui, pop);
     const refresh = () => {
       const p = this.myPos(), s = this.game.session, mk: Marker[] = [];
       if (s) for (const pl of s.players.values()) if (pl.id !== s.playerId) { const e = s.entity(pl.vehicle ?? pl.walker); if (e) mk.push({ x: e.x, z: e.z, color: pl.color, label: pl.name, kind: 'player' }); }
@@ -233,11 +240,13 @@ export class Phone {
     m.onTap = (x, z) => {
       sel = [x, z]; refresh();
       const name = this.place(x, z);
-      pop.innerHTML = `<b>${esc(name && name !== '—' ? name : 'Wybrany punkt')}</b><div style="font-size:12px;opacity:.7">x ${Math.round(x)}, z ${Math.round(z)}</div>`;
-      const acts = h('div', 'acts'), tp = h('button', 'btn blue', '⚡ Teleportuj (wersja testowa)'), close = h('button', 'btn no', 'Zamknij');
+      const ll = unprojPoint(w.city.o, x, z);
+      pop.innerHTML = `<b>${esc(name && name !== '—' ? name : 'Wybrany punkt')}</b><div style="font-size:12px;opacity:.75">Kratka <b>${cellName(m.grid, x, z)}</b> · ${fmtLatLon(ll)}<br>x ${Math.round(x)}, z ${Math.round(z)}</div>`;
+      const acts = h('div', 'acts'), tp = h('button', 'btn blue', '⚡ Teleportuj (wersja testowa)'), close = h('button', 'btn no', 'Zamknij'), cp = h('button', 'btn no', '⧉ Kopiuj współrzędne');
+      cp.onclick = () => { navigator.clipboard?.writeText(`${fmtLatLon(ll)} (${cellName(m.grid, x, z)})`).catch(() => {}); cp.textContent = '✓ Skopiowano'; };
       tp.onclick = () => { this.game.session?.sendCommand({ type: 'teleport', x, z }); pop.classList.remove('show'); sel = null; setTimeout(() => { const p = this.myPos(); if (p) m.center(p.x, p.z); refresh(); }, 600); };
       close.onclick = () => { pop.classList.remove('show'); sel = null; refresh(); };
-      acts.append(tp, close); pop.append(acts); pop.classList.add('show');
+      acts.append(tp, cp, close); pop.append(acts); pop.classList.add('show');
     };
     const p = this.myPos();
     if (focus) m.center(focus[0], focus[1], Math.max(m.s, .5)); else if (p) m.center(p.x, p.z);

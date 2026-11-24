@@ -7,6 +7,7 @@ import { CITIES, cityAt, type CityKey } from '@miasto/shared/data/cities';
 import type { SaveState } from '@miasto/shared/sim/types';
 import { Game, type GameUI } from './game/game';
 import { Phone } from './phone/phone';
+import { cellName, fmtLatLon, gridOf, unprojPoint } from '@miasto/shared/data/grid';
 import { parseOsmText } from './osm/parse';
 import { locText } from './ui/hud';
 import { renderMinimap } from './ui/minimap';
@@ -76,6 +77,8 @@ const ui: GameUI = {
     const ride = g.ridePose(), clock = g.clockText();
     const box = g.mode === 'walk' && !ride ? g.world.interiors.container(e.x, e.z, e.y) : null;
     $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)) + (box ? ` · E: przeszukaj (${box.item.n})` : ''); info(g);
+    // współrzędne do testów: szerokość/długość geograficzna, kratka mapy, układ gry
+    const city = g.world.city; $('coords').textContent = `📍 ${fmtLatLon(unprojPoint(city.o, e.x, e.z))} · kratka ${cellName(gridOf(city), e.x, e.z)} · x ${Math.round(e.x)} z ${Math.round(e.z)}`;
   },
   frame(g) {
     const st = g.session?.me;
