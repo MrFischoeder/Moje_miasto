@@ -366,7 +366,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   for (const m of models) {
     const [x, z] = centroidFlat(m.ring); if (Math.floor(x / t.size) !== t.x || Math.floor(z / t.size) !== t.y) continue;
     const ring = toXZ(m.ring), base = world ? world.baseOf(ring) : 0; facPad();
-    const sink = makeSink({ tri: (a, b2, c, col, n) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad }, base, .37);
+    const sink = makeSink({ tri: (a, b2, c, col, n) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad }, base, .37); sink.ground = (x, z) => (g ? g(x, z) : 0);
     BUILDERS[m.model]?.(sink, m.frame, ring); facPad();
   }
   // pomniki, rzeźby, krasnale (własne modele z punktów OSM)

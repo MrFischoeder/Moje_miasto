@@ -12,6 +12,10 @@ type XZ = [number, number];
 export interface ModelSink extends TriSink {
   /** wysokość gruntu pod modelem */
   base: number;
+  /** grunt w punkcie (mosty: wysokość brzegów) */
+  ground: (x: number, z: number) => number;
+  /** belka między dwoma punktami 3D (wysokości bezwzględne): przekrój w (poziomo) × h (pionowo) */
+  beam(p: number[], q: number[], w: number, h: number, col: RGB): void;
   /** ściana a→c od y0 do y1 (względem gruntu), zwrócona na zewnątrz od punktu ctr */
   wall(a: XZ, c: XZ, y0: number, y1: number, col: RGB, fac: Fac | null, ctr: XZ): void;
   /** prostopadłościan o podstawie p0..p3 (wypukły czworokąt) */
@@ -38,6 +42,16 @@ export function makeSink(B: TriSink & FacadeArrays, base: number, seed: number):
     B.pad(); B.tri(a, b, c, col, n); B.pad();
   };
   const S: ModelSink = {
+    ground: () => base,
+    beam(p, q, w, hh, col) {
+      const dx = q[0] - p[0], dy = q[1] - p[1], dz = q[2] - p[2], L = Math.hypot(dx, dy, dz); if (L < .01) return;
+      let sx = -dz, sz = dx; const sl = Math.hypot(sx, sz) || 1; sx = sx / sl * w / 2; sz = sz / sl * w / 2; // bok: poziomo, prostopadle
+      const c = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2], u = hh / 2;
+      const V = (o: number[], a: number, b: number) => [o[0] + sx * a, o[1] + u * b, o[2] + sz * a];
+      const P = [V(p, -1, -1), V(p, 1, -1), V(p, 1, 1), V(p, -1, 1)], Q = [V(q, -1, -1), V(q, 1, -1), V(q, 1, 1), V(q, -1, 1)];
+      for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; T(P[i], P[j], Q[j], col, c); T(P[i], Q[j], Q[i], col, c); }
+      T(P[0], P[1], P[2], col, c); T(P[0], P[2], P[3], col, c); T(Q[0], Q[1], Q[2], col, c); T(Q[0], Q[2], Q[3], col, c);
+    },
     base, tri: (a, b, c, col, n) => { B.pad(); tri(a, b, c, col, n); B.pad(); },
     wall(a, c, y0, y1, col, fac, ctr) {
       const dx = c[0] - a[0], dz = c[1] - a[1], L = Math.hypot(dx, dz); if (L < .01) return;

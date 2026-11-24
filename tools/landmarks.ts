@@ -15,6 +15,9 @@ const MODELS: Record<string, string> = {
   // bez Wikidata w obrysie: identyfikator budynku OSM
   '101205499': 'uniwersytet', '165880544': 'skytower',
 };
+/** mosty z własnym modelem: nazwa jezdni na moście (małe litery) -> model */
+const BRIDGES: Record<string, string> = { 'most grunwaldzki': 'grunwaldzki' };
+const bridgePts = new Map<string, { pts: [number, number][]; w: number }>();
 /** nazwy budynków bez nazwy w OSM */
 const NAMES: Record<string, string> = { '101205499': 'Uniwersytet Wrocławski – Gmach Główny z Aulą Leopoldina', '165880544': 'Sky Tower' };
 /** modele bez budynku (konstrukcje): punkt [lat, lon], wielkość obrysu do ukrycia [m] */
@@ -40,8 +43,17 @@ for (const f of readdirSync(dir).filter(f => f.endsWith('.json.gz'))) {
     if (score < 7) continue;
     rows.push({ name: bname, kind: church ? 'świątynia' : b.t, score, x: Math.round(cx), z: Math.round(cz), wd: b.wd, h: b.h, id: b.id });
   }
+  for (const r of t.r) { const nm = (r.n ?? '').toLowerCase(); if (r.br && BRIDGES[nm]) { let e = bridgePts.get(nm); if (!e) bridgePts.set(nm, e = { pts: [], w: 0 }); for (let i = 0; i < r.p.length; i += 2) e.pts.push([r.p[i], r.p[i + 1]]); e.w = Math.max(e.w, r.w); } }
   for (const p of t.poi) if (p.c === 'pomnik' && p.n && (p.wd || ['statue', 'monument', 'memorial', 'bust', 'war_memorial', 'obelisk'].includes(p.t)))
     rows.push({ name: p.n, kind: 'pomnik', score: (p.wd ? 9 : 6.5), x: Math.round(p.x), z: Math.round(p.z), wd: p.wd, id: p.id });
+}
+for (const [nm, e] of bridgePts) { // oś mostu: najdalsze punkty jezdni
+  let a = e.pts[0], b = e.pts[0], best = -1;
+  for (const p of e.pts) for (const q of e.pts) { const d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d > best) { best = d; a = p; b = q; } }
+  if (b[0] < a[0]) [a, b] = [b, a];
+  const L = best, ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, D = Math.max(15, e.w + 6), nx = -uz, nz = ux, h = D / 2 + 3;
+  models.push({ model: BRIDGES[nm], name: nm, id: 0, frame: { ox: a[0], oz: a[1], ux, uz, W: L, D },
+    ring: [a[0] - nx * h, a[1] - nz * h, b[0] - nx * h, b[1] - nz * h, b[0] + nx * h, b[1] + nz * h, a[0] + nx * h, a[1] + nz * h].map(v => Math.round(v * 10) / 10) });
 }
 for (const q of POINTS) { // konstrukcje: kwadrat wokół punktu (układ gry jak w makeProj)
   const cities = JSON.parse(readFileSync(join(ROOT, 'data/cities.json'), 'utf8')), o = cities[city].o, kx = Math.cos(o[0] * Math.PI / 180) * 111320;
