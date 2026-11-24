@@ -50,7 +50,9 @@ export function classify(b: TileBuilding, city: string): BuildingClass {
     }
   }
   const raise = typ === 'blok' ? 1 : typ === 'kamienica' ? .5 : 0;
-  const levels = lv0, levelH = Math.max(2.4, Math.min(5, (H - raise) / levels));
+  // część budynku (building:part) zawieszona wyżej: siatka kondygnacji liczona od gruntu, jak w całym budynku
+  const fromGround = !!b.part && b.mh > 0;
+  const levels = fromGround ? Math.max(1, Math.round(b.h / 3.5)) : lv0, levelH = fromGround ? b.h / levels : Math.max(2.4, Math.min(5, (H - raise) / levels));
   let spacing = 3, ww = 1.2, wh = 1.4, sill = .9;
   const pick = (a: number, b2: number) => a + (b2 - a) * r();
   if (typ === 'blok') { spacing = pick(2.9, 3.3); ww = 1.4; wh = 1.45; }
@@ -59,7 +61,8 @@ export function classify(b: TileBuilding, city: string): BuildingClass {
   else if (typ === 'szereg') { spacing = pick(2.2, 2.6); ww = 1; wh = 1.5; sill = .8; }
   else if (typ === 'sklep' || SHOP.includes(t)) { spacing = 4; ww = 3.2; wh = 2.2; sill = .4; }
   else if (t === 'office') { spacing = 1.8; ww = 1.5; wh = 1.8; sill = .8; }
-  else if (NONE.includes(t) || b.part || H < 2.6) spacing = 0;
+  else if (NONE.includes(t) || H < 2.6) spacing = 0;
+  else if (b.part) { spacing = pick(2.6, 3.2); ww = 1.4; wh = 1.6; sill = .8; }
   else if (BIG.includes(t)) { spacing = 6; ww = 2.5; wh = 1; sill = Math.max(.9, levelH - 1.6); }
   wh = Math.max(.6, Math.min(wh, levelH - sill - .35));
   const out: BuildingClass = { typ, country, box, levels, levelH, raise, spacing, ww, wh, sill, seed: r() };

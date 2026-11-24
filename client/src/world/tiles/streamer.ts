@@ -108,7 +108,13 @@ export class TileStreamer {
   get hasTiles(): boolean { return this.available.size > 0; }
   get buildingCount(): number { let n = 0; for (const t of this.data.values()) n += t.b.length; return n; }
 
-  setXray(on: boolean): void { this.mats.setXray(on); }
+  setXray(on: boolean): void { this.mats.setXray(on); for (const v of this.views.values()) v.windows.group.visible = !on; }
+
+  /** Fizyczne okna przy kamerze; lit: odsetek zapalonych okien. */
+  updateWindows(x: number, z: number, lit: number): void {
+    this.mats.physWin.uLit.value = lit;
+    for (const v of this.views.values()) v.windows.update(x, z);
+  }
 
   /** Najbliższe latarnie (do światła na terenie); night: 0 dzień .. 1 noc. */
   updateLamps(x: number, z: number, night: number): void {

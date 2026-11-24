@@ -26,6 +26,7 @@ onmessage = (e: MessageEvent<TileWorkerIn>) => {
   const d = computeTile(t, world.terrain ? world : null, world, m.stops);
   const transfer: ArrayBuffer[] = [];
   for (const L of d.layers) for (const v of Object.values(L.a)) transfer.push(v.array.buffer as ArrayBuffer);
+  transfer.push(d.win.buffer as ArrayBuffer);
   for (const i of d.inst) { transfer.push(i.m.buffer as ArrayBuffer); if (i.c) transfer.push(i.c.buffer as ArrayBuffer); }
   (postMessage as (m: TileWorkerOut, t: ArrayBuffer[]) => void)({ t: 'built', d }, transfer);
 };

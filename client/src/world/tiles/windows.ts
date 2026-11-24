@@ -43,7 +43,7 @@ if (vFacA.z > 0.5 && vFacB.x > 0.5) {
     float off = (L - n * sp) * 0.5, lu = (vFacA.x - off) / sp, ci = floor(lu);
     float lv = vFacA.y - vFacB.w, k = floor(lv / vFacA.w), ly = lv - k * vFacA.w;
     float fwu = max(fwidth(vFacA.x), 1e-4), fwv = max(fwidth(vFacA.y), 1e-4);
-    float fade = 1.0 - smoothstep(0.035, 0.12, max(fwu, fwv));
+    float fade = 1.0 - smoothstep(0.03, 0.09, max(fwu, fwv)); // nieco wcześniej wygaszane: mniej migotania drobnej siatki w oddali
     if (k >= 0.0 && k < vFacC.y) {
       float cover = vFacB.y * vFacB.z / (sp * vFacA.w);
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.22, 0.3), cover * 0.6 * (1.0 - fade));

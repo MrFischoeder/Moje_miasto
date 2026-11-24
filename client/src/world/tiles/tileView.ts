@@ -10,6 +10,7 @@ import { isVehicleRoad } from '@miasto/shared/tiles/build';
 import type { AreaKind, TileData, TileRoad } from '@miasto/shared/tiles/types';
 import { MAX_SEG } from '../geometry';
 import { classify } from '@miasto/shared/interiors/facade';
+import { TileWindows, WindowMaterials, wallWindows } from './physWindows';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
@@ -26,6 +27,9 @@ export class TileMaterials {
   readonly props = new PropMaterials();
   /** światło latarni (najbliższe latarnie, natężenie nocą) */
   readonly lamps: LampUniforms = lampUniforms();
+  /** fizyczne okna przy graczu */
+  readonly physWin = new WindowMaterials();
+  xray = false;
   constructor() { for (const m of [this.build, this.flat, this.raised, this.solid]) installLamps(m, this.lamps); }
   readonly edge = new THREE.LineBasicMaterial({ color: 0x7dffb0, transparent: true });
   /** warstwy płaskie na gruncie: nie zapisują głębi (grunt zasłania za nie), kolejność rysowania = renderOrder */
@@ -38,10 +42,11 @@ export class TileMaterials {
   readonly line = new THREE.LineBasicMaterial({ vertexColors: true });
 
   setXray(on: boolean): void {
+    this.xray = on;
     this.build.opacity = on ? .25 : 1; this.edge.opacity = on ? .35 : 1;
     for (const m of [this.flat, this.flatLine, this.raised]) { m.transparent = on; m.opacity = on ? .25 : 1; m.needsUpdate = true; }
   }
-  dispose(): void { for (const m of [this.build, this.edge, this.flat, this.flatLine, this.solid, this.line, this.raised]) m.dispose(); this.props.dispose(); }
+  dispose(): void { for (const m of [this.build, this.edge, this.flat, this.flatLine, this.solid, this.line, this.raised]) m.dispose(); this.props.dispose(); this.physWin.dispose(); }
 }
 
 // kolory low-poly (render/palette.ts)
@@ -63,7 +68,7 @@ const SHOPS = ['retail', 'commercial', 'supermarket', 'kiosk'];
 type Attrs = Record<string, { array: Float32Array; size: number }>;
 type MatName = 'build' | 'edge' | 'flat' | 'flatLine' | 'solid' | 'line' | 'raised';
 export interface Layer { lines: boolean; mat: MatName; order: number; a: Attrs }
-export interface TileBuildData { key: string; layers: Layer[]; inst: InstData[]; lamps: number[]; buildings: number; ms: number }
+export interface TileBuildData { key: string; layers: Layer[]; inst: InstData[]; lamps: number[]; buildings: number; ms: number; /** fizyczne okna (physWindows.ts) */ win: Float32Array }
 
 class Buf {
   P: number[] = []; Cc: number[] = []; N: number[] = [];
@@ -200,7 +205,7 @@ function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?:
   }
 }
 
-export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void; /** oprawy latarni: x, y, z, ... */ lamps: number[] }
+export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void; /** oprawy latarni: x, y, z, ... */ lamps: number[]; windows: TileWindows }
 
 /** Kafel złożony od razu (bez wątku). */
 export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null, phys: World | null = world, stops: StopPoint[] = []): TileView {
@@ -215,11 +220,15 @@ export function assembleTile(d: TileBuildData, M: TileMaterials): TileView {
     const o = L.lines ? new THREE.LineSegments(g, M[L.mat] as THREE.LineBasicMaterial) : new THREE.Mesh(g, M[L.mat] as THREE.Material); o.renderOrder = L.order; group.add(o);
   }
   for (const im of assembleInst(d.inst, M.props)) group.add(im);
+  const windows = new TileWindows(d.win, M.physWin); group.add(windows.group); windows.group.visible = !M.xray;
   return {
-    group, buildings: d.buildings, ms: d.ms, lamps: d.lamps,
-    // obiekty (instancje) mają wspólne geometrie: zwalniamy tylko bufory instancji
-    dispose: () => group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); else { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); } }),
+    group, buildings: d.buildings, ms: d.ms, lamps: d.lamps, windows,
+    dispose: () => { windows.dispose(); group.remove(windows.group); disposeGroup(group); },
   };
+}
+/** obiekty (instancje) mają wspólne geometrie: zwalniamy tylko bufory instancji */
+function disposeGroup(group: THREE.Group): void {
+  group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); else { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); } });
 }
 
 /** Liczenie kafla: geometria jako tablice liczb (bez obiektów three.js, więc może działać w wątku). */
@@ -244,7 +253,17 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   // --- budynki: ściany, dach, krawędzie (dach, podstawa, narożniki > 25°) ---
   const FA: number[] = [], FB: number[] = [], FC: number[] = [];
   const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0); } };
+  // obrys budynku złożonego z części (building:part) nie jest rysowany: części go zastępują (inaczej ściany się nakładają i migoczą)
+  const partInfo = t.b.filter(b => b.part).map(b => { const o = toXZ(b.o); return { c: o.reduce((s, p) => [s[0] + p[0] / o.length, s[1] + p[1] / o.length], [0, 0]), A: Math.abs(area2(o)) / 2 }; });
+  const insideXZ = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
+  const coveredByParts = (o: XZ[]) => {
+    if (!partInfo.length) return false;
+    let A = 0; for (const p of partInfo) if (insideXZ(o, p.c[0], p.c[1])) A += p.A;
+    return A >= .5 * Math.abs(area2(o)) / 2;
+  };
+  const WIN: number[] = [];
   for (const b of t.b) {
+    if (!b.part && coveredByParts(toXZ(b.o))) continue;
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
     const fc = classify(b, t.city);
     const cat = fc.typ ?? (b.t === 'office' ? 'office' : HOUSE.includes(b.t) ? 'house' : INDUSTRY.includes(b.t) ? 'industrial' : SHOPS.includes(b.t) ? 'sklep' : 'inne');
@@ -257,7 +276,10 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         const a = ring[i], c = ring[(i + 1) % n], dx = c[0] - a[0], dz = c[1] - a[1], m = Math.hypot(dx, dz) || 1;
         const nrm = ccw ? [dz / m, 0, -dx / m] : [-dz / m, 0, dx / m];
         const n0 = B.P.length / 3;
-        B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], h, c[1]], [a[0], h, a[1]], col, nrm);
+        // kolejność wierzchołków zgodna z normalną na zewnątrz (obrysy bywają w obu kierunkach)
+        if (ccw) B.quad([c[0], mh, c[1]], [a[0], mh, a[1]], [a[0], h, a[1]], [c[0], h, c[1]], col, nrm);
+        else B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], h, c[1]], [a[0], h, a[1]], col, nrm);
+        wallWindows(WIN, a, c, nrm, base, mh, h, fc.levelH, fc.spacing, fc.ww, fc.wh, fc.raise, fc.sill, fc.levels, fc.seed);
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
           FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, fc.levelH); FB.push(fc.spacing, fc.ww, fc.wh, fc.raise); FC.push(fc.sill, fc.levels, fc.seed);
@@ -373,5 +395,5 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   if (!RB.empty) add(false, 'raised', 0, RB.attrs());
   if (!SL.empty) add(true, 'line', 0, SL.attrs());
   const props = buildProps(t, phys, g, stops);
-  return { key: `${t.x}_${t.y}`, layers, inst: props.inst, lamps: props.lamps, buildings: t.b.length, ms: performance.now() - t0 };
+  return { key: `${t.x}_${t.y}`, layers, inst: props.inst, lamps: props.lamps, buildings: t.b.length, ms: performance.now() - t0, win: new Float32Array(WIN) };
 }
