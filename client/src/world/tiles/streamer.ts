@@ -50,6 +50,7 @@ export class TileStreamer {
     return this.worker;
   }
   private addView(k: string, v: TileView): void {
+    const old = this.views.get(k); if (old) { this.group.remove(old.group); old.dispose(); } // nigdy dwa widoki jednego kafla
     this.views.set(k, v); this.group.add(v.group);
     this.stats.lastBuildMs = v.ms; this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, v.ms);
     this.onChange();
@@ -76,12 +77,13 @@ export class TileStreamer {
     want.sort((a, b) => a[0] - b[0]);
     for (const [, k] of want) {
       if (this.loading.size >= this.maxParallel) break;
-      if (this.data.has(k) || this.loading.has(k)) continue;
+      if (this.data.has(k) || this.loading.has(k) || this.ready.some(t => tileKey(t.x, t.y) === k)) continue; // bez podwójnego wczytania
       const [tx, ty] = k.split('_').map(Number); this.loading.add(k);
       this.source.load(tx, ty).then(t => { this.loading.delete(k); if (!this.disposed && t) this.ready.push(t); else if (!t) this.available.delete(k); });
     }
     // jeden kafelek na klatkę: kolizje od razu, bryły liczone w wątku kafli (albo od razu, gdy wątku brak)
-    const t = this.ready.shift();
+    let t = this.ready.shift();
+    while (t && this.data.has(tileKey(t.x, t.y))) t = this.ready.shift(); // już wczytany
     if (t) {
       const k = tileKey(t.x, t.y); this.data.set(k, t); this.world.addTile(t);
       if (t.dem) this.ground.refresh(t.x, t.y); // dokładny teren: siatka gruntu od nowa

@@ -1,6 +1,7 @@
 // Modele low-poly: auta, radiowóz, helikopter, samoloty, postacie. Płaskie cieniowanie, bez krawędzi.
 // Geometrie i materiały są współdzielone (jedna kopia na kształt i kolor): mniej pamięci i szybsze rysowanie.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const GEO = new Map<string, THREE.BufferGeometry>();
 const MAT = new Map<string, THREE.MeshLambertMaterial>();
@@ -22,8 +23,29 @@ const cabinGeo = () => geo('kabina', () => {
 });
 const wheelGeo = () => geo('koło', () => { const g = new THREE.CylinderGeometry(.36, .36, .26, 8); g.rotateZ(Math.PI / 2); return g; });
 
-/** Samochód osobowy w kolorze color (domyślnie żółty: auto gracza). */
+/** Scalenie części (siatki o stałym kolorze) w jedną bryłę z kolorami wierzchołków: jedno rysowanie zamiast kilkunastu. */
+const VC = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+function mergeParts(parts: THREE.Mesh[]): THREE.BufferGeometry {
+  const gs = parts.map(m => {
+    m.updateMatrix(); const g = m.geometry.clone().applyMatrix4(m.matrix), c = (m.material as THREE.MeshLambertMaterial).color, e = (m.material as THREE.MeshLambertMaterial).emissive;
+    const n = g.getAttribute('position').count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { col[i * 3] = Math.min(1, c.r + e.r); col[i * 3 + 1] = Math.min(1, c.g + e.g); col[i * 3 + 2] = Math.min(1, c.b + e.b); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+    return g;
+  });
+  return mergeGeometries(gs)!;
+}
+const CARS = new Map<number, THREE.BufferGeometry>();
+
+/** Samochód osobowy w kolorze color (domyślnie żółty: auto gracza): jedna scalona bryła na kolor. */
 export function makeCar(color = 0xe8b830): VehicleModel {
+  let g = CARS.get(color);
+  if (!g) { const parts = carParts(color); g = mergeParts(parts); CARS.set(color, g); }
+  const car = new THREE.Group(); car.add(new THREE.Mesh(g, VC));
+  return { root: car };
+}
+
+function carParts(color: number): THREE.Mesh[] {
   const car = new THREE.Group();
   car.add(part(box(1.86, .62, 4.4), 0, .62, 0, color));                       // nadwozie
   car.add(part(box(1.7, .12, 1.2), 0, .97, -1.55, color));                    // maska
@@ -34,7 +56,7 @@ export function makeCar(color = 0xe8b830): VehicleModel {
     car.add(part(box(.36, .14, .05), x, .76, -2.21, 0xfff6d8, 0x6a6450));    // reflektory
     car.add(part(box(.36, .14, .05), x, .76, 2.21, 0xc81818, 0x501010));     // tylne światła
   }
-  return { root: car };
+  return car.children as THREE.Mesh[];
 }
 
 /** Radiowóz: biały z niebieskim pasem i migającą belką (czerwony / niebieski). */
@@ -67,6 +89,7 @@ export function disposeModel(m: VehicleModel): void {
 
 export interface AvatarModel extends VehicleModel { legs: THREE.Group[]; arms: THREE.Group[]; label: THREE.Sprite }
 
+const BODIES = new Map<string, THREE.BufferGeometry>();
 const SKIN = [0xf1c8a8, 0xe0b090, 0xc89070, 0x9a6a4a, 0x6a4430];
 const PANTS = [0x2a3448, 0x3a3a3c, 0x4a3a2a, 0x1e2430, 0x5a5a60, 0x2a4a6a];
 
@@ -74,9 +97,11 @@ const PANTS = [0x2a3448, 0x3a3a3c, 0x4a3a2a, 0x1e2430, 0x5a5a60, 0x2a4a6a];
 export function makeAvatar(color: string, name: string, seed = 0): AvatarModel {
   const root = new THREE.Group(), shirt = new THREE.Color(color).getHex(), h = Math.abs(seed * 2654435761 | 0);
   const skin = SKIN[h % SKIN.length], pants = PANTS[(h >> 3) % PANTS.length];
-  root.add(part(box(.5, .7, .28), 0, 1.25, 0, shirt));
-  root.add(part(box(.26, .28, .26), 0, 1.76, 0, skin));
-  root.add(part(box(.28, .08, .28), 0, 1.92, 0, (h >> 5) % 2 ? 0x2a2018 : 0x5a4028)); // włosy
+  // tułów, głowa i włosy jako jedna bryła (wspólna dla zestawu kolorów)
+  const hair = (h >> 5) % 2 ? 0x2a2018 : 0x5a4028, bk = `${shirt},${skin},${hair}`;
+  let body = BODIES.get(bk);
+  if (!body) { body = mergeParts([part(box(.5, .7, .28), 0, 1.25, 0, shirt), part(box(.26, .28, .26), 0, 1.76, 0, skin), part(box(.28, .08, .28), 0, 1.92, 0, hair)]); BODIES.set(bk, body); }
+  root.add(new THREE.Mesh(body, VC));
   const limb = (x: number, y: number, len: number, c: number) => { const g = new THREE.Group(); g.position.set(x, y, 0); g.add(part(box(.16, len, .16), 0, -len / 2, 0, c)); root.add(g); return g; };
   const legs = [limb(-.13, .9, .9, pants), limb(.13, .9, .9, pants)], arms = [limb(-.34, 1.55, .65, shirt), limb(.34, 1.55, .65, shirt)];
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const x = cv.getContext('2d')!;
