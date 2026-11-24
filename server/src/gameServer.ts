@@ -31,7 +31,7 @@ export class GameServer {
 
   createSession(city: CityKey): Session {
     const id = `${city}-${this.nextSession++}`, world = new World(city, { terrain: loadTerrain(city) });
-    const room = new Room(id, world, tileLoader(city), { maxPlayers: this.opt.maxPlayers }, () => performance.now());
+    const room = new Room(id, world, tileLoader(city), { maxPlayers: this.opt.maxPlayers, dev: process.env.MIASTO_DEV !== '0' }, () => performance.now()); // dev: teleport z mapy telefonu
     const tr = loadTransit(city);
     if (tr) { const t = room.setTransit(tr); this.opt.log(`rozkłady ${CITIES[city].name}: ${t.tt.patterns.length} wzorców, metro w tunelach ${t.metro.ok}`); }
     room.enableTraffic();

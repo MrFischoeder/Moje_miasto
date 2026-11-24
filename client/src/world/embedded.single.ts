@@ -7,6 +7,9 @@ import londyn from '../../public/terrain/londyn.bin.gz?url';
 import wroclawTransit from '../../public/transit/wroclaw.json.gz?url';
 import warszawaTransit from '../../public/transit/warszawa.json.gz?url';
 import londynTransit from '../../public/transit/londyn.json.gz?url';
+import wroclawOv from '../../public/overview/wroclaw.json.gz?url';
+import warszawaOv from '../../public/overview/warszawa.json.gz?url';
+import londynOv from '../../public/overview/londyn.json.gz?url';
 import wroclawAir from '../../public/air/wroclaw.json?url';
 import warszawaAir from '../../public/air/warszawa.json?url';
 import londynAir from '../../public/air/londyn.json?url';
@@ -22,3 +25,5 @@ for (const [path, url] of Object.entries(tiles)) {
 export const EMBEDDED_TRANSIT: Record<string, string> = { wroclaw: wroclawTransit, warszawa: warszawaTransit, londyn: londynTransit };
 /** lotniska */
 export const EMBEDDED_AIR: Record<string, string> = { wroclaw: wroclawAir, warszawa: warszawaAir, londyn: londynAir };
+/** mapy przeglądowe (telefon) */
+export const EMBEDDED_OVERVIEW: Record<string, string> = { wroclaw: wroclawOv, warszawa: warszawaOv, londyn: londynOv };

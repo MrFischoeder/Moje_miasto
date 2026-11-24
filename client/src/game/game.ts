@@ -42,6 +42,8 @@ export interface GameUI {
   onXray(on: boolean): void;
   onMenu(): void;
   onChat(l: ChatLine): void;
+  /** wiadomość telefonu */
+  onPm?(m: Extract<import('@miasto/shared/net/protocol').ServerMsg, { t: 'pm' }>): void;
   onEvent(text: string, kind: 'crime' | 'arrest' | 'death' | 'info'): void;
   onPlayers(game: Game): void;
   setBusy(on: boolean): void;
@@ -176,6 +178,7 @@ export class Game {
     }
     const s = this.session = new NetSession(world, tr);
     s.onChat = l => this.ui.onChat(l);
+    s.onPm = m => this.ui.onPm?.(m);
     s.onEvent = (t, k) => this.ui.onEvent(t, k);
     s.onPlayers = () => this.ui.onPlayers(this);
     s.onError = t => this.ui.setStatus(t);
@@ -277,6 +280,9 @@ export class Game {
   goStation(i: number, street: boolean): void { this.session?.sendCommand({ type: 'goStation', station: i, street }); }
   toggleXray(): void { this.xray = !this.xray; this.view?.setXray(this.xray); this.ui.onXray(this.xray); }
   chat(text: string): void { this.session?.chat(text); }
+  private shot: ((url: string) => void) | null = null;
+  /** Zdjęcie ekranu gry (sama scena 3D, bez nakładek), JPEG jako data URL. */
+  capture(): Promise<string> { return new Promise(res => { this.shot = res; }); }
 
   /** Zapis i odczyt (gra jednoosobowa; w sieci stan zapisuje serwer). */
   async save(): Promise<SaveState | null> { return this.session && !this.online ? this.session.save() : null; }
@@ -367,6 +373,7 @@ export class Game {
     }
     T.lap('interfejs');
     const R = this.ctx.renderer; R.render(this.ctx.scene, this.ctx.camera); T.lap('rysowanie (wysłanie do GPU)');
+    if (this.shot) { const f = this.shot; this.shot = null; f(R.domElement.toDataURL('image/jpeg', .9)); } // aparat w telefonie: obraz zaraz po narysowaniu
     this.drawInfo.calls = R.info.render.calls; this.drawInfo.tris = R.info.render.triangles; this.drawInfo.lines = R.info.render.lines;
     this.ui.frame(this); T.lap('interfejs (minimapa)');
     T.end();

@@ -1,6 +1,7 @@
 // Pokój gry (sesja = jedno miasto): autorytatywna symulacja, kolejki wejść graczy, zarządzanie
 // zainteresowaniem (każdy dostaje byty wokół siebie), migawki z samymi zmianami, czat, kafelki.
 // Bez Node i DOM: ten sam kod działa w serwerze (WebSocket) i w Workerze (gra jednoosobowa).
+import { Jobs } from '../game/jobs';
 import { Simulation } from '../sim/sim';
 import { CITY_TZ, GameClock, localTime } from '../transit/clock';
 import { TransitSystem } from '../transit/system';
@@ -25,6 +26,8 @@ export interface RoomOptions {
   interest?: number;
   /** gra jednoosobowa: wolno zapisywać i wczytywać stan */
   local?: boolean;
+  /** wersja deweloperska: teleport z mapy w telefonie także w grze sieciowej */
+  dev?: boolean;
 }
 export interface TileLoader { has(x: number, y: number): boolean; load(x: number, y: number): Promise<TileData | null> }
 
@@ -58,6 +61,7 @@ export class Room {
   enableTraffic(): void { this.sim.enableTraffic(); }
   private playersSig = '';
   private loadingTiles = new Set<string>();
+  private jobs: Jobs;
   private q = new Map<number, QState>();
   private timing = { sum: 0, n: 0, max: 0, bytes: 0, since: 0 };
   stats: RoomStats = { players: 0, entities: 0, tiles: 0, tick: 0, tickMs: 0, tickMsMax: 0, bytesPerClientPerSec: 0 };
@@ -66,7 +70,13 @@ export class Room {
 
   constructor(readonly id: string, readonly world: World, private tiles: TileLoader | null, opt: RoomOptions = {}, private now: () => number = () => Date.now()) {
     this.sim = new Simulation(world);
-    this.opt = { maxPlayers: 64, snapEvery: 2, interest: 1000, local: false, ...opt };
+    this.opt = { maxPlayers: 64, snapEvery: 2, interest: 1000, local: false, dev: true, ...opt };
+    this.jobs = new Jobs({
+      world, now: () => this.now(),
+      pos: pid => { const p = this.sim.players.get(pid); if (!p) return null; const e = this.sim.entities.get(p.vehicle ?? p.walker); return e ? { x: e.x, z: e.z } : null; },
+      send: (pid, msg) => { const c = this.clients.get(pid); if (c) this.sendJson(c.conn, msg); },
+      pay: (pid, amount) => { const p = this.sim.players.get(pid); if (p) p.money = Math.round((p.money + amount) * 100) / 100; return this.sim.rules?.money.cur ?? 'zł'; },
+    });
   }
 
   /** Rozkłady jazdy (komunikacja miejska liczona z zegara). */
@@ -111,6 +121,8 @@ export class Room {
     let m: ClientMsg; try { m = JSON.parse(data); } catch { return; }
     if (m.t === 'cmd' && m.c && typeof m.c === 'object') this.command(c, m.c);
     else if (m.t === 'chat' && typeof m.text === 'string') this.chat(c, m.text);
+    else if (m.t === 'pm' && Number.isInteger(m.to)) this.pm(c, m);
+    else if (m.t === 'job' && Number.isInteger(m.id) && (m.act === 'accept' || m.act === 'decline')) this.jobs.answer(c.player.id, m.id, m.act);
     else if (m.t === 'save' && this.opt.local) this.sendJson(c.conn, { t: 'saved', data: this.sim.serialize() });
     else if (m.t === 'load' && this.opt.local) this.loadState(c, m.data);
     else if (m.t === 'setTime' && this.opt.local) this.setTime(m.sec, m.scale);
@@ -122,7 +134,7 @@ export class Room {
     let msg: string | undefined;
     if (cmd.type === 'mode' && ['walk', 'car', 'heli'].includes(cmd.mode)) msg = this.sim.command(c.player.id, cmd);
     else if (cmd.type === 'enter' || cmd.type === 'alight') msg = this.sim.command(c.player.id, { type: cmd.type });
-    else if (cmd.type === 'teleport' && this.opt.local && Number.isFinite(cmd.x) && Number.isFinite(cmd.z)) msg = this.sim.command(c.player.id, { type: 'teleport', x: cmd.x, z: cmd.z });
+    else if (cmd.type === 'teleport' && (this.opt.local || this.opt.dev) && Number.isFinite(cmd.x) && Number.isFinite(cmd.z)) msg = this.sim.command(c.player.id, { type: 'teleport', x: cmd.x, z: cmd.z });
     else if (cmd.type === 'goStation' && Number.isInteger(cmd.station)) msg = this.sim.command(c.player.id, { type: 'goStation', station: cmd.station, street: !!cmd.street });
     if (msg) this.sendJson(c.conn, { t: 'chat', from: '', color: '#ffcc33', text: msg, sys: true });
   }
@@ -139,6 +151,20 @@ export class Room {
     const now = this.now(); c.chat = c.chat.filter(x => now - x < 5000);
     if (c.chat.length >= 5) { this.sendJson(c.conn, { t: 'chat', from: '', color: '#ff6b6b', text: 'Za dużo wiadomości, zwolnij.', sys: true }); return; }
     c.chat.push(now); this.broadcast({ t: 'chat', from: c.player.name, color: c.player.color, text: t });
+  }
+
+  /** Telefon: wiadomość do gracza, do wszystkich albo do NPC (zlecenia); limit jak na czacie, zdjęcie do ok. 60 kB. */
+  private pm(c: Client, m: { to: number; text?: string; loc?: [number, number]; img?: string }): void {
+    const now = this.now(); c.chat = c.chat.filter(x => now - x < 5000);
+    if (c.chat.length >= 6) return; c.chat.push(now);
+    const text = typeof m.text === 'string' ? clean(m.text, 500) : undefined;
+    const loc = Array.isArray(m.loc) && m.loc.length === 2 && m.loc.every(Number.isFinite) ? [Math.round(m.loc[0] * 10) / 10, Math.round(m.loc[1] * 10) / 10] as [number, number] : undefined;
+    const img = typeof m.img === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(m.img) && m.img.length < 62_000 ? m.img : undefined;
+    if (!text && !loc && !img) return;
+    if (m.to < 0) { if (text) this.jobs.reply(c.player.id, m.to, text); return; }
+    const out: ServerMsg = { t: 'pm', from: c.player.id, name: c.player.name, color: c.player.color, to: m.to, at: now, ...(text ? { text } : {}), ...(loc ? { loc } : {}), ...(img ? { img } : {}) };
+    if (m.to === 0) { for (const o of this.clients.values()) if (o !== c) this.sendJson(o.conn, out); return; }
+    const o = this.clients.get(m.to); if (o && o !== c) this.sendJson(o.conn, out);
   }
 
   private loadState(c: Client, s: SaveState): void {
@@ -164,6 +190,7 @@ export class Room {
     this.sim.endStep();
     if (this.sim.traffic) { const now = this.clock.now(), lt = localTime(now, CITY_TZ[this.world.key] ?? 'UTC'); this.sim.stepTraffic(now / 1000, lt.sec / 3600); }
     if (this.sim.tick % 15 === 0) this.streamTiles();
+    if (this.sim.tick % SIM_HZ === 0) this.jobs.step([...this.clients.keys()]);
     this.sendPlayers();
     this.sendMe();
     if (this.sim.tick % (SIM_HZ * 10) === 0) this.broadcast({ t: 'time', time: this.clock.now(), scale: this.clock.scale });

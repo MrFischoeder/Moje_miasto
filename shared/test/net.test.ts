@@ -62,4 +62,17 @@ describe('pokój gry', () => {
     // zapis/wczytanie tylko w grze lokalnej
     room.message(pa, JSON.stringify({ t: 'save' })); expect(a.json.some(m => m.t === 'saved')).toBe(false);
   });
+  it('telefon: wiadomość do gracza i do wszystkich, lokalizacja, zdjęcie z limitem, bez echa do nadawcy', () => {
+    const room = new Room('t', world, null), a = new Fake(), b = new Fake(), c = new Fake();
+    const pa = room.join(a, 'A')!, pb = room.join(b, 'B')!; room.join(c, 'C');
+    room.message(pa, JSON.stringify({ t: 'pm', to: pb, text: 'hej', loc: [10.04, -5] }));
+    const got = b.json.find(m => m.t === 'pm');
+    expect(got).toMatchObject({ from: pa, name: 'A', to: pb, text: 'hej', loc: [10, -5] });
+    expect(c.json.some(m => m.t === 'pm')).toBe(false); expect(a.json.some(m => m.t === 'pm')).toBe(false);
+    room.message(pb, JSON.stringify({ t: 'pm', to: 0, text: 'do wszystkich' }));
+    expect(a.json.filter(m => m.t === 'pm').length).toBe(1); expect(c.json.filter(m => m.t === 'pm').length).toBe(1);
+    room.message(pa, JSON.stringify({ t: 'pm', to: pb, img: 'data:image/jpeg;base64,' + 'A'.repeat(70_000) })); // za duże: odrzucone
+    room.message(pa, JSON.stringify({ t: 'pm', to: pb, img: 'javascript:alert(1)' }));
+    expect(b.json.filter(m => m.t === 'pm').length).toBe(1);
+  });
 });

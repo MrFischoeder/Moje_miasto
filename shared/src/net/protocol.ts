@@ -117,12 +117,19 @@ export type ServerMsg =
   | { t: 'stats'; tickMs: number; tickMsMax: number; entities: number; cars: number; peds: number; police: number; interiors: number }
   | { t: 'players'; list: PlayerInfo[] }
   | { t: 'chat'; from: string; color: string; text: string; sys?: boolean }
+  /** wiadomość telefonu (gracz albo NPC o ujemnym id); to = 0: do wszystkich; job: stan zlecenia NPC */
+  | { t: 'pm'; from: number; name: string; color: string; to: number; at: number; text?: string; loc?: [number, number]; img?: string;
+      job?: { id: number; state: 'offer' | 'active' | 'done' | 'cancel'; reward?: number; target?: [number, number] } }
   | { t: 'saved'; data: SaveState }
   | { t: 'error'; text: string };
 
 export type ClientMsg =
   | { t: 'cmd'; c: Command }
   | { t: 'chat'; text: string }
+  /** telefon: wiadomość do gracza (id), do wszystkich (0) albo do NPC (id < 0); tekst, lokalizacja [x, z], zdjęcie (data URL JPEG) */
+  | { t: 'pm'; to: number; text?: string; loc?: [number, number]; img?: string }
+  /** odpowiedź na zlecenie NPC */
+  | { t: 'job'; id: number; act: 'accept' | 'decline' }
   | { t: 'save' }
   | { t: 'load'; data: SaveState }
   /** gra jednoosobowa: ustawienie zegara (godzina lokalna w sekundach od północy, skala) */

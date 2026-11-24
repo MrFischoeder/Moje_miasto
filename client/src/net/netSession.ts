@@ -49,6 +49,8 @@ export class NetSession {
   readonly me = { hp: 100, money: 0, wanted: 0, dead: false, cur: 'zł' };
   onEvent: (text: string, kind: 'crime' | 'arrest' | 'death' | 'info') => void = () => {};
   onChat: (l: ChatLine) => void = () => {};
+  /** wiadomości telefonu (gracze, NPC, zlecenia) */
+  onPm: (m: Extract<ServerMsg, { t: 'pm' }>) => void = () => {};
   onPlayers: () => void = () => {};
   onError: (text: string) => void = () => {};
   onClose: () => void = () => {};
@@ -65,6 +67,8 @@ export class NetSession {
   sendInput(cmd: InputCmd): void { this.input = cmd; }
   sendCommand(c: Command): void { this.json({ t: 'cmd', c }); }
   chat(text: string): void { this.json({ t: 'chat', text }); }
+  pm(to: number, body: { text?: string; loc?: [number, number]; img?: string }): void { this.json({ t: 'pm', to, ...body }); }
+  jobAnswer(id: number, act: 'accept' | 'decline'): void { this.json({ t: 'job', id, act }); }
   private json(m: ClientMsg): void { const s = JSON.stringify(m); this.net.bytesOut += s.length; this.tr.send(s); }
 
   save(): Promise<SaveState> { return new Promise(res => { this.savedWait = res; this.json({ t: 'save' }); }); }
@@ -90,6 +94,7 @@ export class NetSession {
         this.pred = null; this.history = []; this.view.clear(); this.qprev.clear(); this.samples.clear(); this.readyRes();
       } else if (m.t === 'players') { this.players.clear(); for (const p of m.list) this.players.set(p.id, p); this.onPlayers(); }
       else if (m.t === 'chat') this.onChat({ ...m, at: performance.now() });
+      else if (m.t === 'pm') this.onPm(m);
       else if (m.t === 'time') this.clock.set(m.time, m.scale);
       else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur });
       else if (m.t === 'event') this.onEvent(m.text, m.kind);

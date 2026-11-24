@@ -1,5 +1,6 @@
 // Symulacja gry: stały krok, byty, gracze, polecenia. Bez three.js i DOM,
 // więc ten sam kod działa w przeglądarce i na serwerze Node.js.
+import { TILE_SIZE, tileKey } from '../tiles/types';
 import type { World } from '../world/world';
 import type { TransitSystem } from '../transit/system';
 import { Traffic } from '../traffic/traffic';
@@ -145,7 +146,7 @@ export class Simulation {
     }
     if (c.type === 'teleport') {
       this.exitVehicle(p, false); const w = this.entity(p.walker);
-      w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; return;
+      w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
     if (c.type === 'mode') this.setMode(p, c.mode);
     else if (c.type === 'enter') { if (!this.board(p) && !this.search(p)) this.enterNearest(p); }
@@ -183,7 +184,20 @@ export class Simulation {
   }
 
   /** Koniec kroku świata: pieszy siedzący w pojeździe jedzie razem z nim (zainteresowanie, zapis). */
+  /** po teleporcie: gracze do sprawdzenia, czy nie stoją w budynku (kafle doczytują się z opóźnieniem) */
+  private unstuck = new Map<number, number>();
+  private freeNear(x: number, z: number): [number, number] | null {
+    for (let r = 2; r <= 80; r += 2) for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r; if (!this.world.blocked(px, pz)) return [px, pz]; }
+    return null;
+  }
+
   endStep(): void {
+    for (const [pid, n] of this.unstuck) {
+      const p = this.players.get(pid); if (!p || n <= 0) { this.unstuck.delete(pid); continue; } this.unstuck.set(pid, n - 1);
+      const w = this.entity(p.walker); if (!this.world.tiles.has(tileKey(Math.floor(w.x / TILE_SIZE), Math.floor(w.z / TILE_SIZE)))) continue;
+      if (this.world.blocked(w.x, w.z)) { const q = this.freeNear(w.x, w.z); if (q) { w.x = q[0]; w.z = q[1]; w.y = this.world.surfaceAt(q[0], q[1], 1e6); p.viewSeq++; } }
+      this.unstuck.delete(pid);
+    }
     if (this.transit) for (const p of this.players.values()) if (p.ride) {
       const a = this.transit.trip(p.ride), w = this.entity(p.walker);
       if (!a) { this.leaveRide(p, null); continue; } // kurs się skończył: wysiada na pętli

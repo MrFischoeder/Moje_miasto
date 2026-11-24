@@ -6,6 +6,7 @@ import './style.css';
 import { CITIES, cityAt, type CityKey } from '@miasto/shared/data/cities';
 import type { SaveState } from '@miasto/shared/sim/types';
 import { Game, type GameUI } from './game/game';
+import { Phone } from './phone/phone';
 import { parseOsmText } from './osm/parse';
 import { locText } from './ui/hud';
 import { renderMinimap } from './ui/minimap';
@@ -48,6 +49,7 @@ const ui: GameUI = {
   setStatus(t) { $('status').textContent = t; },
   onMenu: openMenu,
   onChat(l) { addChat(l.from, l.color, l.text, l.sys); },
+  onPm(m) { phone?.onPm(m); },
   onEvent(text, kind) {
     const box = $('evt'), d = document.createElement('div'); d.className = kind; d.textContent = text; box.append(d);
     while (box.children.length > 3) box.firstChild!.remove();
@@ -93,7 +95,12 @@ const ui: GameUI = {
 
 const game = new Game(canvas, ui);
 const origAction = game.action.bind(game);
-game.action = a => { if (a === 'chat') openChat(); else origAction(a); };
+// telefon (klawisz C, przycisk Telefon)
+const phone: Phone = new Phone(game);
+const phoneBtn = $('phoneBtn');
+phone.onUnread = n => { phoneBtn.innerHTML = 'Telefon' + (n ? `<span class="n">${n}</span>` : ''); };
+phoneBtn.onclick = () => phone.toggle();
+game.action = a => { if (a === 'chat') openChat(); else if (a === 'phone') phone.toggle(); else origAction(a); };
 game.input.attachTouch($('joy'), $('knob'), $('upB'), $('dnB'));
 
 $('xrayBtn').onclick = () => game.toggleXray();

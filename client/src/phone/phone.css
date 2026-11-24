@@ -1,0 +1,89 @@
+/* Telefon komórkowy (nakładka): współczesny smartfon, ciemny motyw, aplikacje */
+#phone { position: fixed; right: 24px; bottom: 24px; width: 340px; height: 700px; max-height: calc(100vh - 48px); z-index: 50;
+  border-radius: 46px; background: #0b0d10; padding: 11px; box-shadow: 0 0 0 2px #2b2f36, 0 0 0 4px #121418, 0 24px 60px rgba(0, 0, 0, .55);
+  transform: translateY(120%); transition: transform .28s cubic-bezier(.2, .8, .2, 1); font-family: -apple-system, 'Segoe UI', Roboto, 'Chakra Petch', sans-serif; color: #f2f4f7; user-select: none; }
+#phone.open { transform: translateY(0); }
+#phone .screen { position: relative; width: 100%; height: 100%; border-radius: 36px; overflow: hidden; background: linear-gradient(160deg, #1d3b5c 0%, #3e2a5a 55%, #7a3b4f 100%); display: flex; flex-direction: column; }
+#phone .island { position: absolute; top: 9px; left: 50%; width: 92px; height: 26px; margin-left: -46px; background: #000; border-radius: 14px; z-index: 5; }
+#phone .bar { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 26px 0; font-size: 14px; font-weight: 600; z-index: 4; }
+#phone .bar .ico { display: flex; gap: 5px; align-items: center; font-size: 11px; letter-spacing: 1px; }
+#phone .batt { width: 24px; height: 11px; border: 1.5px solid #f2f4f7; border-radius: 3px; position: relative; padding: 1px; }
+#phone .batt i { display: block; height: 100%; width: 78%; background: #f2f4f7; border-radius: 1px; }
+#phone .view { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+#phone .home { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); align-content: start; gap: 22px 8px; padding: 26px 18px; }
+#phone .widget { grid-column: span 4; background: rgba(255, 255, 255, .12); backdrop-filter: blur(10px); border-radius: 22px; padding: 14px 16px; }
+#phone .widget b { display: block; font-size: 40px; font-weight: 300; line-height: 1; }
+#phone .widget span { font-size: 13px; opacity: .8; }
+#phone .app { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; position: relative; }
+#phone .app .icon { width: 58px; height: 58px; border-radius: 15px; display: grid; place-items: center; font-size: 28px; box-shadow: 0 4px 12px rgba(0, 0, 0, .25); }
+#phone .app .badge { position: absolute; top: -5px; right: 2px; min-width: 20px; height: 20px; border-radius: 10px; background: #ff3b30; font-size: 12px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
+#phone .dock { margin: 0 12px 10px; padding: 12px; border-radius: 28px; background: rgba(255, 255, 255, .16); backdrop-filter: blur(14px); display: flex; justify-content: space-around; flex: none; }
+#phone .homebar { height: 22px; flex: none; display: grid; place-items: center; cursor: pointer; }
+#phone .homebar i { width: 130px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .85); }
+/* ekrany aplikacji */
+#phone .page { position: absolute; inset: 0; background: #000; display: flex; flex-direction: column; }
+#phone .head { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px 10px; font-size: 17px; font-weight: 600; border-bottom: 1px solid #1c1f24; background: #0d0f12; }
+#phone .head .back { color: #0a84ff; cursor: pointer; font-size: 26px; line-height: 1; padding-right: 4px; }
+#phone .head .av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; color: #000; }
+#phone .list { flex: 1; overflow-y: auto; }
+#phone .row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #16181c; cursor: pointer; }
+#phone .row:hover { background: #111317; }
+#phone .row .av { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #000; flex: none; }
+#phone .row .tx { flex: 1; min-width: 0; }
+#phone .row .tx b { display: block; font-size: 15px; }
+#phone .row .tx span { display: block; font-size: 13px; color: #8e8e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#phone .row .dot { width: 10px; height: 10px; border-radius: 50%; background: #0a84ff; }
+#phone .thread { flex: 1; overflow-y: auto; padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 6px; }
+#phone .msg { max-width: 78%; padding: 8px 12px; border-radius: 18px; font-size: 14px; line-height: 1.3; background: #26282d; align-self: flex-start; word-wrap: break-word; }
+#phone .msg.me { background: #0a84ff; align-self: flex-end; }
+#phone .msg img { display: block; max-width: 100%; border-radius: 12px; margin: 2px 0; cursor: zoom-in; }
+#phone .msg .loc { display: flex; align-items: center; gap: 6px; cursor: pointer; text-decoration: underline; }
+#phone .msg .job { display: flex; gap: 8px; margin-top: 8px; }
+#phone .msg .job button, #phone .btn { border: 0; border-radius: 12px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+#phone .ok { background: #30d158; color: #000; } #phone .no { background: #3a3a3c; color: #fff; } #phone .blue { background: #0a84ff; color: #fff; }
+#phone .msg .meta { font-size: 11px; opacity: .6; margin-top: 3px; }
+#phone .compose { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 10px 10px; background: #0d0f12; border-top: 1px solid #1c1f24; }
+#phone .compose input { flex: 1; min-width: 0; background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 18px; color: #fff; padding: 8px 12px; font: inherit; font-size: 14px; outline: none; }
+#phone .compose .ib { width: 34px; height: 34px; border-radius: 50%; background: #1c1c1e; display: grid; place-items: center; cursor: pointer; font-size: 17px; flex: none; }
+#phone .compose .ib.send { background: #0a84ff; }
+/* telefon (połączenia) */
+#phone .dial { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 10px; }
+#phone .dial .num { font-size: 30px; font-weight: 300; height: 40px; letter-spacing: 2px; }
+#phone .keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 14px; }
+#phone .keys div { width: 72px; height: 72px; border-radius: 50%; background: #333336; display: grid; place-items: center; font-size: 28px; cursor: pointer; }
+#phone .call { width: 72px; height: 72px; border-radius: 50%; background: #30d158; display: grid; place-items: center; font-size: 30px; cursor: pointer; position: relative; }
+#phone .locked { font-size: 13px; color: #ff9f0a; text-align: center; padding: 0 18px; }
+/* mapa */
+#phone canvas.map { flex: 1; width: 100%; display: block; touch-action: none; cursor: grab; background: #1b2026; }
+#phone .mapui { position: absolute; right: 10px; top: 64px; display: flex; flex-direction: column; gap: 8px; }
+#phone .mapui div { width: 38px; height: 38px; border-radius: 12px; background: rgba(28, 28, 30, .92); display: grid; place-items: center; font-size: 19px; cursor: pointer; }
+#phone .pop { position: absolute; left: 10px; right: 10px; bottom: 12px; background: rgba(28, 28, 30, .96); border-radius: 18px; padding: 12px; font-size: 14px; display: none; }
+#phone .pop.show { display: block; }
+#phone .pop .acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+/* galeria */
+#phone .grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; align-content: start; }
+#phone .grid img { width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
+#phone .photo { flex: 1; display: flex; flex-direction: column; justify-content: center; background: #000; }
+#phone .photo img { width: 100%; }
+#phone .bar2 { display: flex; gap: 8px; justify-content: center; padding: 10px; flex-wrap: wrap; }
+#phone .empty { color: #8e8e93; text-align: center; padding: 40px 20px; font-size: 14px; }
+/* aparat: wizjer na całym ekranie gry */
+#viewfinder { position: fixed; inset: 0; z-index: 49; pointer-events: none; display: none; }
+#viewfinder.open { display: block; }
+#viewfinder .frame { position: absolute; inset: 40px; border: 2px solid rgba(255, 255, 255, .7); border-radius: 18px; }
+#viewfinder .frame::before, #viewfinder .frame::after { content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 2px; margin-left: -20px; background: rgba(255, 255, 255, .6); }
+#viewfinder .frame::after { transform: rotate(90deg); }
+#viewfinder .ctl { position: absolute; bottom: 60px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 40px; pointer-events: auto; }
+#viewfinder .shutter { width: 74px; height: 74px; border-radius: 50%; background: #fff; border: 6px solid rgba(255, 255, 255, .45); background-clip: padding-box; cursor: pointer; }
+#viewfinder .vb { padding: 10px 16px; border-radius: 20px; background: rgba(0, 0, 0, .6); color: #fff; font: 600 14px sans-serif; cursor: pointer; }
+#viewfinder .flash { position: absolute; inset: 0; background: #fff; opacity: 0; transition: opacity .25s; }
+#viewfinder .hint { position: absolute; top: 56px; left: 0; right: 0; text-align: center; color: #fff; font: 600 14px sans-serif; text-shadow: 0 1px 3px #000; }
+/* powiadomienie */
+#phoneToast { position: fixed; top: 14px; left: 50%; transform: translate(-50%, -140%); z-index: 60; min-width: 300px; max-width: 420px; background: rgba(30, 30, 32, .94);
+  backdrop-filter: blur(12px); color: #fff; border-radius: 20px; padding: 10px 14px; font: 14px -apple-system, 'Segoe UI', sans-serif; box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
+  transition: transform .3s; cursor: pointer; display: flex; gap: 10px; align-items: center; }
+#phoneToast.show { transform: translate(-50%, 0); }
+#phoneToast .ic { width: 34px; height: 34px; border-radius: 9px; background: #30d158; display: grid; place-items: center; font-size: 18px; flex: none; }
+#phoneToast b { display: block; font-size: 13px; } #phoneToast span { font-size: 13px; opacity: .9; }
+#phoneBtn .n { background: #ff3b30; color: #fff; border-radius: 9px; padding: 0 6px; margin-left: 6px; font-size: 12px; }
+@media (max-width: 600px) { #phone { right: 8px; left: 8px; width: auto; bottom: 8px; height: calc(100vh - 16px); border-radius: 36px; } }
