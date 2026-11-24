@@ -25,3 +25,46 @@ jobs:
           name: moje-miasto
           path: dist-single/moje-miasto.html
           retention-days: 7
+
+  # Po udanych testach: wersja przeglądarkowa (cała Warszawa, kafle doczytywane z serwera) wgrywana na własny serwer.
+  # Ustawienia w GitHub: Settings -> Secrets and variables -> Actions (instrukcja: docs/WDROZENIE-SERWER.md).
+  # Bez sekretu DEPLOY_SSH_KEY ten krok nic nie robi.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: true
+    env:
+      SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      HOST: ${{ secrets.DEPLOY_HOST }}
+      DIR: ${{ secrets.DEPLOY_PATH }}
+      USR: ${{ secrets.DEPLOY_USER }}
+    steps:
+      - name: Czy wgrywanie jest skonfigurowane
+        id: cfg
+        run: |
+          if [ -z "$SSH_KEY" ] || [ -z "$HOST" ] || [ -z "$DIR" ]; then echo "Brak sekretów DEPLOY_* – pomijam wgrywanie na serwer."; echo "on=0" >> "$GITHUB_OUTPUT"; else echo "on=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.on == '1'
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.on == '1'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.cfg.outputs.on == '1'
+        run: npm ci && npm run build
+      - name: Wgranie na serwer
+        if: steps.cfg.outputs.on == '1'
+        run: |
+          set -e
+          USR="${USR:-root}"
+          case "$DIR" in /var/www/*/*) ;; *) echo "DEPLOY_PATH musi być katalogiem strony w /var/www/... (jest: $DIR)"; exit 1;; esac
+          mkdir -p ~/.ssh && printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          S="ssh -i $HOME/.ssh/deploy -o BatchMode=yes"
+          # zabezpieczenie: pierwszy raz tylko do pustego katalogu subdomeny (domyślne pliki Plesk: kilka pozycji)
+          $S "$USR@$HOST" "set -e; mkdir -p '$DIR'; cd '$DIR'; if [ ! -f .moje-miasto ]; then n=\$(ls -A | wc -l); if [ \$n -gt 10 ]; then echo 'Katalog nie wygląda na nowy katalog subdomeny – przerywam, nic nie zmieniono.'; exit 1; fi; touch .moje-miasto; fi"
+          rsync -rz --delete --chmod=D755,F644 --exclude .moje-miasto --exclude tiles-pelne/ -e "$S" client/dist/ "$USR@$HOST:$DIR/"
+          $S "$USR@$HOST" "chown -R \$(stat -c %U:%G '$DIR') '$DIR'"
+          echo "Wgrano: $(du -sh client/dist | cut -f1) do $DIR"
