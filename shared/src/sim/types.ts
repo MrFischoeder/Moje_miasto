@@ -31,6 +31,8 @@ export interface Entity {
   police?: boolean;
   /** właściciel (pojazd przywoływany przez gracza) */
   owner: number | null;
+  /** wariant pojazdu naziemnego (VEH w sim/vehicles.ts): model, długość, osiągi */
+  v?: number;
 }
 
 export interface PlayerState {
@@ -86,7 +88,7 @@ export const NO_INPUT: InputCmd = { f: 0, s: 0, run: false, brake: false, lift: 
 
 /** Polecenia jednorazowe. */
 export type Command =
-  | { type: 'mode'; mode: Mode }
+  | { type: 'mode'; mode: Mode; /** wariant własnego pojazdu (VEH) */ v?: number }
   | { type: 'enter' }
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */

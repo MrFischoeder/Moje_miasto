@@ -2,6 +2,29 @@
 import type { World } from '../world/world';
 import type { Entity, InputCmd } from './types';
 
+/** Pojazdy naziemne (wariant e.v): klasa, długość [m], prędkość zwykła / z dopalaniem [m/s], przyspieszenie, miejsca */
+export interface VSpec { name: string; cls: 'car' | 'van' | 'truck' | 'moto' | 'scooter' | 'escooter'; len: number; max: number; boost: number; acc: number; seats: number }
+export const VEH: VSpec[] = [
+  { name: 'Hatchback', cls: 'car', len: 4.3, max: 28, boost: 45, acc: 8, seats: 4 },
+  { name: 'Sedan', cls: 'car', len: 4.7, max: 28, boost: 46, acc: 8, seats: 4 },
+  { name: 'Kombi', cls: 'car', len: 4.7, max: 28, boost: 45, acc: 7.6, seats: 4 },
+  { name: 'SUV', cls: 'car', len: 4.6, max: 27, boost: 43, acc: 7.6, seats: 4 },
+  { name: 'Auto miejskie', cls: 'car', len: 3.6, max: 25, boost: 38, acc: 7.4, seats: 3 },
+  { name: 'Minivan', cls: 'car', len: 4.8, max: 26, boost: 40, acc: 7, seats: 4 },
+  { name: 'Taksówka', cls: 'car', len: 4.7, max: 28, boost: 46, acc: 8, seats: 4 },
+  { name: 'Auto sportowe', cls: 'car', len: 4.6, max: 33, boost: 58, acc: 10.5, seats: 1 },
+  { name: 'Dostawczak', cls: 'van', len: 5.9, max: 25, boost: 33, acc: 6, seats: 2 },
+  { name: 'Ciężarówka', cls: 'truck', len: 8.5, max: 22, boost: 26, acc: 4.5, seats: 1 },
+  { name: 'Ciągnik z naczepą', cls: 'truck', len: 16, max: 22, boost: 25, acc: 3.6, seats: 1 },
+  { name: 'Motocykl', cls: 'moto', len: 2.2, max: 32, boost: 60, acc: 11.5, seats: 1 },
+  { name: 'Skuter', cls: 'scooter', len: 1.9, max: 15, boost: 19, acc: 6.5, seats: 1 },
+  { name: 'Hulajnoga elektryczna', cls: 'escooter', len: 1.1, max: 6.9, boost: 6.9, acc: 3.5, seats: 0 },
+];
+/** losowy wariant pojazdu NPC (r w [0, 1)): głównie osobowe, trochę dostawczych, ciężarówek, jednośladów */
+const NPC_W = [14, 12, 10, 10, 9, 6, 4, 3, 7, 3, 2, 2, 2, .6];
+export function npcVariant(r: number): number { const s = NPC_W.reduce((a, b) => a + b, 0); let x = r * s; for (let i = 0; i < NPC_W.length; i++) { x -= NPC_W[i]; if (x <= 0) return i; } return 0; }
+export const vspec = (e: { v?: number }) => VEH[e.v ?? 0] ?? VEH[0];
+
 export function walkStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
   e.yaw = cmd.yaw; e.pitch = cmd.pitch;
   const { f, s } = cmd, sp = 4.5 * (cmd.run ? 3 : 1);
@@ -17,8 +40,8 @@ export function walkStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
 }
 
 export function carStep(e: Entity, cmd: InputCmd, dt: number, w: World): void {
-  const { f, s, run } = cmd, max = run ? 45 : 28;
-  if (f > 0) e.speed = e.speed < 0 ? e.speed + 22 * dt : Math.min(max, e.speed + 8 * f * (run ? 1.7 : 1) * dt);
+  const sp = vspec(e), { f, s, run } = cmd, max = run ? sp.boost : sp.max;
+  if (f > 0) e.speed = e.speed < 0 ? e.speed + 22 * dt : Math.min(max, e.speed + sp.acc * f * (run ? 1.7 : 1) * dt);
   else if (f < 0) e.speed = e.speed > 0 ? e.speed - 22 * dt : Math.max(-9, e.speed + 6 * f * dt);
   else e.speed *= Math.max(0, 1 - .45 * dt);
   if (cmd.brake) e.speed *= Math.max(0, 1 - 3 * dt);

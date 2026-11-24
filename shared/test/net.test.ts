@@ -31,7 +31,7 @@ describe('pokój gry', () => {
     const prev = new Map<number, QState>();
     const s1 = decodeSnapshot(a.snaps[0], prev);
     expect(new DataView(a.snaps[0]).getUint8(0)).toBe(MSG_SNAPSHOT);
-    expect(s1.ents.length).toBe(1); expect(s1.ents[0].mask).toBe(0xffff);
+    expect(s1.ents.length).toBe(1); expect(s1.ents[0].mask).toBe(0x1ffff); // 17 pól (z wariantem pojazdu)
     room.tick(); const s2 = decodeSnapshot(a.snaps[1], prev);
     expect(s2.ents.length).toBe(0); // nic się nie zmieniło
     room.message(pid, encodeInput(1, { ...NO_INPUT, f: 1, yaw: 0 })); room.tick();

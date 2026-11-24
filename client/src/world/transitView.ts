@@ -30,9 +30,11 @@ class Dyn {
   }
 }
 
+const hashKey = (k: string) => { let h = 0; for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0; return Math.abs(h) % 1000; };
+
 export class TransitView {
   readonly group = new THREE.Group();
-  private fill = new Dyn(); private lines = new Dyn();
+  private fill = new Dyn(); private lines = new Dyn(); private glass = new Dyn();
   private colors = new Map<number, [RGB, RGB]>();
   private signs = new Map<string, THREE.Sprite>();
   /** ostatnio widziane kursy (minimapa, HUD) */
@@ -45,12 +47,14 @@ export class TransitView {
     }
     const m = new THREE.Mesh(this.fill.geo, new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide }));
     const l = new THREE.LineSegments(this.lines.geo, new THREE.LineBasicMaterial({ vertexColors: true }));
-    m.frustumCulled = l.frustumCulled = false; this.group.add(m, l);
+    // szyby: półprzezroczyste (widać pasażerów), bez zapisu głębi
+    const g = new THREE.Mesh(this.glass.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide }));
+    g.renderOrder = 2; m.frustumCulled = l.frustumCulled = g.frustumCulled = false; this.group.add(m, l, g);
   }
 
   /** Przebudowa dla pojazdów w promieniu R od (x, z); `hide` = kurs, którym jedzie gracz w widoku z wnętrza. */
   update(x: number, z: number, R: number, hide: string | null = null): void {
-    this.fill.reset(); this.lines.reset();
+    this.fill.reset(); this.lines.reset(); this.glass.reset();
     this.visible = this.sys.near([x - R, z - R, x + R, z + R]);
     const near = new Set<string>();
     for (const a of this.visible) {
@@ -59,7 +63,7 @@ export class TransitView {
       for (let j = 0; j < spec.n; j++) {
         const s1 = a.st.s + L / 2 - j * cl, s0 = s1 - cl + .6;
         const A = this.sys.pose(a.p, s0), B = this.sys.pose(a.p, s1);
-        this.car(A, B, spec.w, spec.h, spec.lift, fc, ec, j === 0);
+        this.car(A, B, spec.w, spec.h, spec.lift, fc, ec, j === 0, j === spec.n - 1, k, hashKey(a.key) + j * 7);
       }
       // numer linii nad czołem (tylko blisko)
       const front = this.sys.pose(a.p, a.st.s + L / 2);
@@ -70,26 +74,70 @@ export class TransitView {
       }
     }
     for (const [key, sp] of this.signs) if (!near.has(key)) { this.group.remove(sp); sp.material.map?.dispose(); sp.material.dispose(); this.signs.delete(key); }
-    this.fill.flush(); this.lines.flush();
+    this.fill.flush(); this.lines.flush(); this.glass.flush();
   }
 
-  /** Wagon jako prostopadłościan od punktu A (tył) do B (przód), z pasem okien i drzwiami. */
-  private car(A: { x: number; y: number; z: number }, B: { x: number; y: number; z: number }, w: number, h: number, lift: number, fc: RGB, ec: RGB, front: boolean): void {
-    const dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2;
-    const c = (p: typeof A, s: number, y: number): number[] => [p.x + nx * s, p.y + lift + y, p.z + nz * s];
-    const q = [c(A, -1, 0), c(B, -1, 0), c(B, 1, 0), c(A, 1, 0), c(A, -1, h), c(B, -1, h), c(B, 1, h), c(A, 1, h)];
-    const F = this.fill, Ln = this.lines, tri = (a: number[], b: number[], cc: number[], col: RGB) => { for (const v of [a, b, cc]) F.push(v[0], v[1], v[2], col); };
-    const shade = (k: number): RGB => [Math.min(1, fc[0] * k), Math.min(1, fc[1] * k), Math.min(1, fc[2] * k)];
-    // ściany i dach (bez podłogi); płaskie cieniowanie udawane jasnością ścian (bok, czoło, dach)
-    const faces: [number, number, number, number, number][] = [[0, 1, 5, 4, .82], [1, 2, 6, 5, .7], [2, 3, 7, 6, .95], [3, 0, 4, 7, .7], [4, 5, 6, 7, 1.15]];
-    for (const [a, b, cc, d, k] of faces) { const col = shade(k); tri(q[a], q[b], q[cc], col); tri(q[a], q[cc], q[d], col); }
-    // pas okien (ciemne szyby) po obu stronach, minimalnie odsunięty od ściany
-    const glass: RGB = [.14, .18, .24];
-    for (const sd of [-1.02, 1.02]) { const g0 = c(A, sd, h * .45), g1 = c(B, sd, h * .45), g2 = c(B, sd, h * .85), g3 = c(A, sd, h * .85); tri(g0, g1, g2, glass); tri(g0, g2, g3, glass); }
-    if (front) { const f0 = c(B, -.85, h * .4), f1 = c(B, .85, h * .4), f2 = c(B, .85, h * .88), f3 = c(B, -.85, h * .88), o = [(B.x - A.x) / L * .03, 0, (B.z - A.z) / L * .03];
-      const mv = (v: number[]) => [v[0] + o[0], v[1], v[2] + o[2]]; tri(mv(f0), mv(f1), mv(f2), glass); tri(mv(f0), mv(f2), mv(f3), glass); }
+  /**
+   * Wagon / autobus od A (tył) do B (przód): dolna część i dach nieprzezroczyste, pas przezroczystych okien
+   * ze słupkami, skośna przednia szyba (czoło składu), drzwi po prawej stronie, podłoga, fotele i pasażerowie.
+   * Barwy: tramwaj biały z niebieskim pasem dolnym, autobus biały; kolor linii jako pas pod oknami.
+   */
+  private car(A: { x: number; y: number; z: number }, B: { x: number; y: number; z: number }, w: number, h: number, lift: number, fc: RGB, ec: RGB, front: boolean, rear: boolean, kind: TransitKind, seed: number): void {
+    const dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L, nx = -uz * w / 2, nz = ux * w / 2;
+    const c = (p: typeof A, s: number, y: number, du = 0): number[] => [p.x + nx * s + ux * du, p.y + lift + y, p.z + nz * s + uz * du];
+    const F = this.fill, G = this.glass, Ln = this.lines;
+    const tri = (D: Dyn, a: number[], b: number[], cc: number[], col: RGB) => { for (const v of [a, b, cc]) D.push(v[0], v[1], v[2], col); };
+    const quad = (D: Dyn, a: number[], b: number[], cc: number[], d: number[], col: RGB) => { tri(D, a, b, cc, col); tri(D, a, cc, d, col); };
+    const city = kind === 'tram' || kind === 'bus';
+    const body: RGB = city ? [.94, .94, .92] : fc, low: RGB = kind === 'tram' ? [.1, .26, .55] : city ? [.22, .24, .28] : [fc[0] * .7, fc[1] * .7, fc[2] * .7];
+    const glassC: RGB = [.55, .72, .82], frame: RGB = [.16, .17, .19];
+    const yw0 = h * .36, yw1 = h * .86, inset = front ? .55 : 0; // wysokość pasa okien; czoło skośne
+    const P = (t: number, s: number, y: number, du = 0) => { const q = { x: A.x + dx * t, y: A.y + (B.y - A.y) * t, z: A.z + dz * t }; return c(q, s, y, du); };
+    for (const s of [-1, 1]) {
+      const k = s > 0 ? .8 : .7, sh = (col: RGB): RGB => [col[0] * k, col[1] * k, col[2] * k];
+      quad(F, P(0, s, 0), P(1, s, 0), P(1, s, yw0 * .45), P(0, s, yw0 * .45), sh(low));       // pas dolny
+      quad(F, P(0, s, yw0 * .45), P(1, s, yw0 * .45), P(1, s, yw0 - .12), P(0, s, yw0 - .12), sh(body));
+      quad(F, P(0, s, yw0 - .12), P(1, s, yw0 - .12), P(1, s, yw0), P(0, s, yw0), sh(city ? fc : body)); // pas w kolorze linii
+      quad(F, P(0, s, yw1), P(1, s, yw1), P(1, s, h), P(0, s, h), sh(body));                    // nad oknami
+      // okna ze słupkami co ok. 1,7 m; drzwi (prawa strona) w stałych miejscach
+      const n = Math.max(2, Math.round(L / 1.7)), doors = s > 0 ? (kind === 'bus' ? [.12, .5, .86] : [.2, .72]) : [];
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n, t1 = (i + 1) / n, door = doors.some(d => d >= t0 && d < t1);
+        if (door) { quad(F, P(t0 + .01, s * 1.003, .1), P(t1 - .01, s * 1.003, .1), P(t1 - .01, s * 1.003, yw1), P(t0 + .01, s * 1.003, yw1), [.3, .32, .35]); quad(G, P(t0 + .02, s * 1.006, yw0 * .5), P(t1 - .02, s * 1.006, yw0 * .5), P(t1 - .02, s * 1.006, yw1 - .1), P(t0 + .02, s * 1.006, yw1 - .1), glassC); continue; }
+        quad(G, P(t0, s, yw0), P(t1, s, yw0), P(t1, s, yw1), P(t0, s, yw1), glassC);
+        quad(F, P(t0, s * 1.004, yw0), P(t0 + .1 / L, s * 1.004, yw0), P(t0 + .1 / L, s * 1.004, yw1), P(t0, s * 1.004, yw1), frame);
+      }
+    }
+    // dach, podłoga
+    quad(F, P(0, -1, h), P(1 - (front ? inset / L : 0), -1, h), P(1 - (front ? inset / L : 0), 1, h), P(0, 1, h), [body[0] * 1.05, body[1] * 1.05, body[2] * 1.05].map(v => Math.min(1, v)) as RGB);
+    quad(F, P(0, -1, .25), P(1, -1, .25), P(1, 1, .25), P(0, 1, .25), [.25, .26, .28]);
+    // czoło: skośna szyba w składzie z przodu, inaczej ściana z przejściem
+    const endWall = (t: number, out: number, isFront: boolean) => {
+      if (isFront) {
+        quad(F, P(t, -1, 0), P(t, 1, 0), P(t, 1, yw0 * .8), P(t, -1, yw0 * .8), low);
+        const top = 1 - inset / L; quad(G, P(t, -1, yw0 * .8), P(t, 1, yw0 * .8), P(top, 1, h), P(top, -1, h), glassC);
+        for (const s of [-1, 1]) tri(G, P(t, s, yw0 * .8), P(top, s, h), P(t, s, h), glassC);
+        quad(F, P(t, -.6, yw0 * .45, out * .02), P(t, -.3, yw0 * .45, out * .02), P(t, -.3, yw0 * .6, out * .02), P(t, -.6, yw0 * .6, out * .02), [1, .96, .8]); // reflektory
+        quad(F, P(t, .3, yw0 * .45, out * .02), P(t, .6, yw0 * .45, out * .02), P(t, .6, yw0 * .6, out * .02), P(t, .3, yw0 * .6, out * .02), [1, .96, .8]);
+      } else quad(F, P(t, -1, 0), P(t, 1, 0), P(t, 1, h), P(t, -1, h), [body[0] * .75, body[1] * .75, body[2] * .75]);
+    };
+    endWall(1, 1, front); if (rear) endWall(0, -1, kind === 'tram' || kind === 'metro'); // tramwaj dwukierunkowy: czoło także z tyłu
+    // fotele i pasażerowie (stałe dla kursu)
+    const R = (i: number) => { const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return x - Math.floor(x); };
+    const seatC: RGB = kind === 'tram' ? [.15, .3, .6] : [.55, .1, .12], skins: RGB[] = [[.95, .78, .66], [.86, .68, .52], [.6, .42, .3]], shirts: RGB[] = [[.25, .45, .7], [.7, .3, .25], [.3, .55, .35], [.85, .75, .3], [.35, .35, .4], [.6, .4, .65]];
+    const box = (t: number, s: number, y0: number, y1: number, hw: number, hd: number, col: RGB) => {
+      const q = (a: number, b: number, y: number) => P(t + a / L, s + b / (w / 2), y);
+      quad(F, q(-hd, -hw, y1), q(hd, -hw, y1), q(hd, hw, y1), q(-hd, hw, y1), col);
+      for (const [a0, b0, a1, b1] of [[-hd, -hw, hd, -hw], [hd, -hw, hd, hw], [hd, hw, -hd, hw], [-hd, hw, -hd, -hw]]) quad(F, q(a0, b0, y0), q(a1, b1, y0), q(a1, b1, y1), q(a0, b0, y1), [col[0] * .8, col[1] * .8, col[2] * .8]);
+    };
+    const rows = Math.max(2, Math.floor((L - 2) / 1.6));
+    for (let i = 0; i < rows; i++) for (const s of [-.62, .62]) {
+      const t = (1 + i * 1.6) / L; if (t > .92) continue;
+      box(t, s, .25, .7, .38, .25, seatC);
+      if (R(i * 2 + (s > 0 ? 1 : 0)) < .45) { const sh = shirts[Math.floor(R(i + 9) * shirts.length)], sk = skins[Math.floor(R(i + 3) * skins.length)]; box(t, s, .7, 1.3, .22, .14, sh); box(t, s, 1.3, 1.58, .13, .12, sk); }
+    }
     const seg = (u: number[], v: number[], col: RGB) => { Ln.push(u[0], u[1], u[2], col); Ln.push(v[0], v[1], v[2], col); };
-    for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) seg(q[a], q[b], ec);
+    for (const s of [-1, 1]) { seg(P(0, s, 0), P(1, s, 0), ec); seg(P(0, s, h), P(1 - (front ? inset / L : 0), s, h), ec); }
   }
 
   private sign(num: string, head: string, col: RGB): THREE.Sprite {
@@ -104,7 +152,7 @@ export class TransitView {
 
   dispose(): void {
     for (const sp of this.signs.values()) { sp.material.map?.dispose(); sp.material.dispose(); }
-    this.fill.geo.dispose(); this.lines.geo.dispose();
+    this.fill.geo.dispose(); this.lines.geo.dispose(); this.glass.geo.dispose();
     this.group.traverse(o => { const m = o as THREE.Mesh; if (m.material) (m.material as THREE.Material).dispose(); });
   }
 }

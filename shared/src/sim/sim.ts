@@ -1,5 +1,6 @@
 // Symulacja gry: stały krok, byty, gracze, polecenia. Bez three.js i DOM,
 // więc ten sam kod działa w przeglądarce i na serwerze Node.js.
+import { VEH } from './vehicles';
 import { TILE_SIZE, tileKey } from '../tiles/types';
 import type { World } from '../world/world';
 import type { TransitSystem } from '../transit/system';
@@ -148,7 +149,7 @@ export class Simulation {
       this.exitVehicle(p, false); const w = this.entity(p.walker);
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
-    if (c.type === 'mode') this.setMode(p, c.mode);
+    if (c.type === 'mode') this.setMode(p, c.mode, c.v);
     else if (c.type === 'enter') { if (!this.board(p) && !this.search(p)) this.enterNearest(p); }
     else if (c.type === 'goStation') {
       const s = this.world.stations[c.station]; if (!s) return;
@@ -265,9 +266,10 @@ export class Simulation {
 
   // ---------- pojazdy ----------
   /** Pojazd gracza danego typu (przywoływany klawiszem); tworzy go, gdy nie istnieje. */
-  private personal(p: PlayerState, kind: 'car' | 'heli'): Entity {
-    for (const e of this.entities.values()) if (e.kind === kind && e.owner === p.id && (e.driver == null || e.driver === p.id) && !e.pass.length) return e;
-    const e = this.spawn(kind, 0, 0, 0); e.owner = p.id; return e;
+  private personal(p: PlayerState, kind: 'car' | 'heli', variant?: number): Entity {
+    const v = kind === 'car' && Number.isInteger(variant) && VEH[variant!] ? variant! : 0;
+    for (const e of this.entities.values()) if (e.kind === kind && e.owner === p.id && (e.driver == null || e.driver === p.id) && !e.pass.length) { if (kind === 'car') e.v = v; return e; }
+    const e = this.spawn(kind, 0, 0, 0); e.owner = p.id; if (kind === 'car') e.v = v; return e;
   }
 
   private enter(p: PlayerState, v: Entity, passenger = false): void {
@@ -314,7 +316,7 @@ export class Simulation {
   }
 
   /** Przełączanie trybu jak w prototypie: ponowne wybranie trybu pojazdu = wysiadanie. */
-  setMode(p: PlayerState, m: Mode): void {
+  setMode(p: PlayerState, m: Mode, variant?: number): void {
     if (p.passenger) { this.exitVehicle(p); return; }
     const from = this.modeOf(p);
     if (m === from && m !== 'walk') m = 'walk'; if (m === from) return;
@@ -327,13 +329,13 @@ export class Simulation {
         if (t) { x = t[0] + t[2][0] * 5; z = t[1] + t[2][1] * 5; yaw = Math.atan2(-t[2][0], -t[2][1]); } else if (s) { x = s.x; z = s.z; }
       }
       if (m === 'car') [x, z] = W.freeSpot(x, z, yaw);
-      const v = this.personal(p, m);
+      const v = this.personal(p, m, variant);
       Object.assign(v, { x, z, yaw, y: m === 'heli' ? W.roofTop(x, z) + (under ? 40 : 0) : under ? W.ground(x, z) : W.surfaceAt(x, z, w.y), speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0, air: false });
       this.enter(p, v);
       return;
     }
     // przesiadka między pojazdami
-    const old = this.entity(p.vehicle!), v = this.personal(p, m);
+    const old = this.entity(p.vehicle!), v = this.personal(p, m, variant);
     if (m === 'car') {
       const [x, z] = W.freeSpot(old.x, old.z, old.yaw);
       Object.assign(v, { x, z, y: W.ground(x, z), yaw: old.yaw, speed: 0, roll: 0, tilt: 0 });

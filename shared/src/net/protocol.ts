@@ -3,7 +3,7 @@
 // Pozycje: liczby całkowite w centymetrach; kąty: int16 (pełny obrót = 65536).
 import type { Command, Entity, EntityKind, InputCmd, PlayerState, SaveState } from '../sim/types';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const MSG_INPUT = 1, MSG_SNAPSHOT = 2;
 
 // ---------- kwantyzacja ----------
@@ -38,7 +38,7 @@ export const quantizeInput = (c: InputCmd): InputCmd => decodeInput(encodeInput(
 // ---------- stan bytu ----------
 const KINDS: EntityKind[] = ['walker', 'car', 'heli'];
 /** Pola bytu w kolejności bitów maski. */
-export const FIELDS = ['kind', 'x', 'y', 'z', 'yaw', 'pitch', 'speed', 'vx', 'vy', 'vz', 'roll', 'tilt', 'reg', 'lift', 'driver', 'owner'] as const;
+export const FIELDS = ['kind', 'x', 'y', 'z', 'yaw', 'pitch', 'speed', 'vx', 'vy', 'vz', 'roll', 'tilt', 'reg', 'lift', 'driver', 'owner', 'v'] as const;
 export const NF = FIELDS.length;
 /** Skwantowany stan bytu (to, co porównujemy i wysyłamy). */
 export type QState = Int32Array;
@@ -47,20 +47,21 @@ export function quantize(e: Entity, out: QState = new Int32Array(NF + 1)): QStat
   out[0] = KINDS.indexOf(e.kind) | (e.air ? 4 : 0) | (e.hide ? 8 : 0) | (Math.min(3, e.pass.length) << 4) | (e.npc ? 64 : 0) | (e.police ? 128 : 0);
   out[1] = qPos(e.x); out[2] = qPos(e.y); out[3] = qPos(e.z); out[4] = qAng(e.yaw); out[5] = qSmall(e.pitch);
   out[6] = qVel(e.speed); out[7] = qVel(e.vx); out[8] = qVel(e.vy); out[9] = qVel(e.vz); out[10] = qSmall(e.roll); out[11] = qSmall(e.tilt);
-  out[12] = e.reg; out[13] = q8(e.lift); out[14] = e.driver ?? 0; out[15] = e.owner ?? 0;
+  out[12] = e.reg; out[13] = q8(e.lift); out[14] = e.driver ?? 0; out[15] = e.owner ?? 0; out[16] = e.v ?? 0;
   return out;
 }
-const SIZE = [1, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2];
+const SIZE = [1, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 1];
 
 /** Byt odtworzony po stronie klienta. */
 export function applyQ(e: Entity, q: QState): void {
   e.kind = KINDS[q[0] & 3]; e.air = !!(q[0] & 4); e.hide = !!(q[0] & 8); e.npc = !!(q[0] & 64); e.police = !!(q[0] & 128);
   e.x = dPos(q[1]); e.y = dPos(q[2]); e.z = dPos(q[3]); e.yaw = dAng(q[4]); e.pitch = dSmall(q[5]);
   e.speed = q[6] / 100; e.vx = q[7] / 100; e.vy = q[8] / 100; e.vz = q[9] / 100; e.roll = dSmall(q[10]); e.tilt = dSmall(q[11]);
-  e.reg = q[12]; e.lift = q[13] / 127; e.driver = q[14] || null; e.owner = q[15] || null;
+  e.reg = q[12]; e.lift = q[13] / 127; e.driver = q[14] || null; e.owner = q[15] || null; e.v = q[16];
+  const np = (q[0] >> 4) & 3; if (e.pass.length !== np) e.pass = new Array(np).fill(0); // liczba pasażerów (do rysowania)
 }
 export function emptyEntity(id: number): Entity {
-  return { id, kind: 'walker', x: 0, y: 0, z: 0, yaw: 0, pitch: 0, speed: 0, vx: 0, vy: 0, vz: 0, roll: 0, tilt: 0, reg: -1, air: false, lift: 0, driver: null, pass: [], hide: false, owner: null };
+  return { id, kind: 'walker', x: 0, y: 0, z: 0, yaw: 0, pitch: 0, speed: 0, vx: 0, vy: 0, vz: 0, roll: 0, tilt: 0, reg: -1, air: false, lift: 0, driver: null, pass: [], hide: false, owner: null, v: 0 };
 }
 
 // ---------- migawka (serwer -> klient) ----------
@@ -70,14 +71,14 @@ export interface Snapshot { tick: number; ack: number; ents: SnapshotEntity[]; r
 /** Koduje migawkę: dla każdego bytu maska zmienionych pól względem poprzednio wysłanego stanu. */
 export function encodeSnapshot(tick: number, ack: number, ents: SnapshotEntity[], removed: number[]): ArrayBuffer {
   let n = 1 + 4 + 4 + 2 + 2 + removed.length * 2;
-  for (const e of ents) { n += 4; for (let f = 0; f < NF; f++) if (e.mask & (1 << f)) n += SIZE[f]; }
+  for (const e of ents) { n += 6; for (let f = 0; f < NF; f++) if (e.mask & (1 << f)) n += SIZE[f]; }
   const b = new ArrayBuffer(n), v = new DataView(b); let o = 0;
   v.setUint8(o, MSG_SNAPSHOT); o += 1; v.setUint32(o, tick, true); o += 4; v.setUint32(o, ack >>> 0, true); o += 4; v.setUint16(o, ents.length, true); o += 2;
   for (const e of ents) {
-    v.setUint16(o, e.id, true); o += 2; v.setUint16(o, e.mask, true); o += 2;
+    v.setUint16(o, e.id, true); o += 2; v.setUint32(o, e.mask >>> 0, true); o += 4;
     for (let f = 0; f < NF; f++) if (e.mask & (1 << f)) {
       const x = e.q[f];
-      switch (SIZE[f]) { case 1: if (f === 0) v.setUint8(o, x); else v.setInt8(o, x); break; case 2: if (f === 4 || f === 14 || f === 15) v.setUint16(o, x, true); else v.setInt16(o, x, true); break; case 4: v.setInt32(o, x, true); break; }
+      switch (SIZE[f]) { case 1: if (f === 0 || f === 16) v.setUint8(o, x); else v.setInt8(o, x); break; case 2: if (f === 4 || f === 14 || f === 15) v.setUint16(o, x, true); else v.setInt16(o, x, true); break; case 4: v.setInt32(o, x, true); break; }
       o += SIZE[f];
     }
   }
@@ -91,10 +92,10 @@ export function decodeSnapshot(b: ArrayBuffer, prev: Map<number, QState>): Snaps
   const tick = v.getUint32(o, true); o += 4; const ack = v.getUint32(o, true); o += 4; const n = v.getUint16(o, true); o += 2;
   const ents: SnapshotEntity[] = [];
   for (let i = 0; i < n; i++) {
-    const id = v.getUint16(o, true); o += 2; const mask = v.getUint16(o, true); o += 2;
+    const id = v.getUint16(o, true); o += 2; const mask = v.getUint32(o, true); o += 4;
     const q = new Int32Array(prev.get(id) ?? new Int32Array(NF + 1));
     for (let f = 0; f < NF; f++) if (mask & (1 << f)) {
-      switch (SIZE[f]) { case 1: q[f] = f === 0 ? v.getUint8(o) : v.getInt8(o); break; case 2: q[f] = (f === 4 || f === 14 || f === 15) ? v.getUint16(o, true) : v.getInt16(o, true); break; case 4: q[f] = v.getInt32(o, true); break; }
+      switch (SIZE[f]) { case 1: q[f] = f === 0 || f === 16 ? v.getUint8(o) : v.getInt8(o); break; case 2: q[f] = (f === 4 || f === 14 || f === 15) ? v.getUint16(o, true) : v.getInt16(o, true); break; case 4: q[f] = v.getInt32(o, true); break; }
       o += SIZE[f];
     }
     prev.set(id, q); ents.push({ id, mask, q });

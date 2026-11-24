@@ -1,6 +1,7 @@
 // Ruch uliczny wokół graczy: auta z kierowcami NPC jadą grafem pasów (model IDM: odstęp, hamowanie),
 // zatrzymują się na czerwonym, hamują przed graczami. Pojawiają się i znikają poza zasięgiem wzroku;
 // liczba aut zależy od pory dnia. Dalej od graczy ruch nie jest symulowany (jest tylko natężeniem).
+import { npcVariant, vspec } from '../sim/vehicles';
 import { rng } from '../util/rng';
 import type { Entity } from '../sim/types';
 import type { World } from '../world/world';
@@ -83,7 +84,7 @@ export class Traffic {
         const cx = Math.floor((c.e.x + fx * d) / G), cz = Math.floor((c.e.z + fz * d) / G);
         for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) for (const o of grid.get(i + ',' + j) || []) {
           const dx = o.x - c.e.x, dz = o.z - c.e.z, along = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
-          if (along > 0 && along < 40 && lat < 2.2 && Math.abs(o.y - c.e.y) < 3) { const g = along - (o.kind === 'walker' ? 2.5 : 4.6); if (g < gap) { gap = Math.max(.1, g); vl = 0; } }
+          if (along > 0 && along < 40 && lat < 2.2 && Math.abs(o.y - c.e.y) < 3) { const g = along - (o.kind === 'walker' ? 2.5 : (vspec(o).len + vspec(c.e).len) / 2); if (g < gap) { gap = Math.max(.1, g); vl = 0; } }
         }
       }
       const s0 = 2.5, T = 1.3, a = 1.6, b = 2.8, dv = c.v - vl, sStar = s0 + Math.max(0, c.v * T + c.v * dv / (2 * Math.sqrt(a * b)));
@@ -97,7 +98,7 @@ export class Traffic {
           if (!players.some(p => Math.hypot(p.x - c.e.x, p.z - c.e.z) < HIDE_R)) this.remove(c);
           break;
         }
-        c.s -= c.edge.len; c.edge = nx; c.lane = Math.min(c.lane, nx.lanes - 1); c.next = null; c.v0 = nx.speed * (0.9 + (c.e.id % 7) * .03);
+        c.s -= c.edge.len; c.edge = nx; c.lane = Math.min(c.lane, nx.lanes - 1); c.next = null; c.v0 = Math.min(vspec(c.e).max, nx.speed * (0.9 + (c.e.id % 7) * .03));
       }
       if (!this.cars.has(c.e.id)) continue;
       if (!c.next && c.edge.len - c.s < 60) c.next = this.pickNext(c.edge);
@@ -115,8 +116,9 @@ export class Traffic {
   /** Najbliższe auto przed nami na tym samym pasie (także na następnej krawędzi). */
   private leader(c: Car): { gap: number; v: number } | null {
     const l = this.byEdge.get(c.edge.id) || [];
-    for (const o of l) if (o !== c && o.lane === c.lane && o.s > c.s) return { gap: o.s - c.s - 4.6, v: o.v };
-    if (c.next) { const n = this.byEdge.get(c.next.id) || []; for (const o of n) if (o.lane === Math.min(c.lane, c.next.lanes - 1)) return { gap: c.edge.len - c.s + o.s - 4.6, v: o.v }; }
+    const half = (o: Car) => (vspec(o.e).len + vspec(c.e).len) / 2; // odstęp liczony od środków pojazdów różnej długości
+    for (const o of l) if (o !== c && o.lane === c.lane && o.s > c.s) return { gap: o.s - c.s - half(o), v: o.v };
+    if (c.next) { const n = this.byEdge.get(c.next.id) || []; for (const o of n) if (o.lane === Math.min(c.lane, c.next.lanes - 1)) return { gap: c.edge.len - c.s + o.s - half(o), v: o.v }; }
     return null;
   }
 
@@ -142,8 +144,8 @@ export class Traffic {
       if ((this.byEdge.get(e.id) || []).some(o => o.lane === lane && Math.abs(o.s - s) < 20)) continue;
       this.graph.pose(e, s, this.side * (lane + .5) * LANE_W, q);
       const ent = this.host.spawn('car', q.x, this.host.world.surfaceAt(q.x, q.z, 1e6), q.z, q.yaw);
-      ent.npc = true; ent.driver = null;
-      const c: Car = { e: ent, edge: e, lane, s, v: e.speed * .6, v0: e.speed * (0.9 + (ent.id % 7) * .03), next: null };
+      ent.npc = true; ent.driver = null; ent.v = npcVariant(this.R());
+      const c: Car = { e: ent, edge: e, lane, s, v: Math.min(vspec(ent).max, e.speed * .6), v0: Math.min(vspec(ent).max, e.speed * (0.9 + (ent.id % 7) * .03)), next: null };
       this.cars.set(ent.id, c); let l = this.byEdge.get(e.id); if (!l) this.byEdge.set(e.id, l = []); l.push(c);
       return true;
     }

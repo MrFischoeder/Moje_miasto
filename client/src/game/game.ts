@@ -20,7 +20,8 @@ import { EMBEDDED_TILES } from '../world/embedded';
 import { decodeTile, HttpTileSource, MemoryTileSource, NoTiles, type TileSource } from '../world/tiles/source';
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
-import { disposeModel, makeAvatar, makeOfficer, makePoliceCar, makeCar, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
+import { disposeModel, makeAvatar, makeOfficer, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
+import { makePoliceVehicle, makeVehicle, setOccupants, type Vehicle3D } from '../player/vehicles';
 import { Input } from '../input/input';
 import type { Action } from '../input/bindings';
 import { NetSession, type ChatLine } from '../net/netSession';
@@ -90,11 +91,13 @@ export class Game {
   /** gra sieciowa (null = jednoosobowa) */
   online: OnlineInfo | null = null;
   xray = false;
+  /** wybrany własny pojazd naziemny (wariant VEH) */
+  vehicle = 0;
   playerName = 'Gracz';
   readonly labels = new StationLabels();
   private drape: GridDrape;
   private world3d = new THREE.Group();
-  private models = new Map<number, VehicleModel | AvatarModel>();
+  private models = new Map<number, VehicleModel | AvatarModel | Vehicle3D>();
   private walkPhase = new Map<number, { x: number; z: number; ph: number }>();
   /** kierunek patrzenia pieszego (należy do klienta, wysyłany w poleceniu wejścia) */
   viewYaw = 0; viewPitch = 0;
@@ -268,7 +271,7 @@ export class Game {
     const s = this.session;
     switch (a) {
       case 'modeWalk': s?.sendCommand({ type: 'mode', mode: 'walk' }); break;
-      case 'modeCar': s?.sendCommand({ type: 'mode', mode: 'car' }); break;
+      case 'modeCar': s?.sendCommand({ type: 'mode', mode: 'car', v: this.vehicle }); break;
       case 'modeHeli': s?.sendCommand({ type: 'mode', mode: 'heli' }); break;
       case 'interact': if (this.lastMode === 'walk' || this.riding) s?.sendCommand({ type: 'enter' }); break;
       case 'camera': this.rig.toggleFP(); this.ui.onModeChanged(this.lastMode, this.rig.fp); break;
@@ -386,13 +389,15 @@ export class Game {
       if (e.kind === 'walker' && (e.id === p.walker || e.hide)) continue;
       seen.add(e.id);
       let m = this.models.get(e.id);
+      if (m && e.kind === 'car' && m.root.userData.v !== (e.v ?? 0)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(e.id); m = undefined; } // zmiana pojazdu gracza
       if (!m) {
         if (e.kind === 'walker') {
           if (e.police) m = makeOfficer(e.id);
           else if (e.npc) m = makeAvatar(PED_COLORS[e.id % PED_COLORS.length], '', e.id);
           else { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?', e.id); }
         }
-        else m = e.kind === 'car' ? (e.police ? makePoliceCar() : makeCar(e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : undefined)) : makeHeli();
+        else if (e.kind === 'car') { m = e.police ? makePoliceVehicle(e.id) : makeVehicle(e.v ?? 0, e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : 0xe8b830, !!e.npc, e.id); m.root.userData.v = e.v ?? 0; }
+        else m = makeHeli();
         this.models.set(e.id, m); this.world3d.add(m.root);
       }
       const pv = s.previous(e.id) ?? e, x = lerp(pv.x, e.x, alpha), y = lerp(pv.y, e.y, alpha), z = lerp(pv.z, e.z, alpha), yaw = lerpAngle(pv.yaw, e.yaw, alpha);
@@ -408,10 +413,11 @@ export class Game {
       if (e.kind === 'car') {
         m.root.position.set(x, y, z); m.root.rotation.set(0, yaw, 0); m.root.rotateZ(e.roll);
         if (m.lights) { const ph = Math.floor(performance.now() / 160) % 2; m.lights[0].visible = ph === 0; m.lights[1].visible = ph === 1; }
+        if ('occupants' in m) setOccupants(m, e.driver != null, e.pass.length); // widać, kto siedzi w środku
       }
       else {
         m.root.position.set(x, y, z); m.root.rotation.set(e.tilt, yaw, e.roll);
-        m.rotor!.rotation.y += dt * (e.driver == null ? 0 : e.air || e.lift > 0 ? 30 : 10); m.trotor!.rotation.x += dt * 45;
+        const hm = m as VehicleModel; hm.rotor!.rotation.y += dt * (e.driver == null ? 0 : e.air || e.lift > 0 ? 30 : 10); hm.trotor!.rotation.x += dt * 45;
       }
     }
     for (const [id, m] of this.models) if (!seen.has(id)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(id); this.walkPhase.delete(id); }

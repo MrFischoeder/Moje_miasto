@@ -7,6 +7,7 @@ import { CITIES, cityAt, type CityKey } from '@miasto/shared/data/cities';
 import type { SaveState } from '@miasto/shared/sim/types';
 import { Game, type GameUI } from './game/game';
 import { Phone } from './phone/phone';
+import { VEH } from '@miasto/shared/sim/vehicles';
 import { cellName, fmtLatLon, gridOf, unprojPoint } from '@miasto/shared/data/grid';
 import { parseOsmText } from './osm/parse';
 import { locText } from './ui/hud';
@@ -98,6 +99,12 @@ const ui: GameUI = {
 
 const game = new Game(canvas, ui);
 const origAction = game.action.bind(game);
+// wybór własnego pojazdu (zapamiętany w przeglądarce)
+const vehSel = $<HTMLSelectElement>('vehSel');
+vehSel.innerHTML = VEH.map((v, i) => `<option value="${i}">${v.name}</option>`).join('');
+try { game.vehicle = Math.min(VEH.length - 1, Math.max(0, +(localStorage.getItem('mm.pojazd') ?? 0) || 0)); } catch { /* brak pamięci */ } vehSel.value = String(game.vehicle);
+vehSel.onchange = () => { game.vehicle = +vehSel.value; try { localStorage.setItem('mm.pojazd', vehSel.value); } catch { /* */ } };
+
 // telefon (klawisz C, przycisk Telefon)
 const phone: Phone = new Phone(game);
 const phoneBtn = $('phoneBtn');
@@ -269,3 +276,5 @@ game.loadCity((startCity in CITIES ? startCity : 'wroclaw') as CityKey, null); c
 
 // uchwyt dla testów i konsoli
 (window as unknown as { __game: Game }).__game = game;
+// narzędzia deweloperskie (podgląd modeli w testach)
+import('./player/vehicles').then(m => import('three').then(T => { (window as unknown as { __dev: unknown }).__dev = { ...m, THREE: T }; }));
