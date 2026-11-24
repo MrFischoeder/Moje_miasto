@@ -4,6 +4,7 @@ import wroclaw from '../../../../../data/landmarks/wroclaw.json';
 import type { ModelSink, Frame } from './sink';
 import { buildRatusz } from './ratusz';
 import { buildBridgeTemplate, buildGrunwaldzki, buildPiaskowy, buildPokoju, buildPomorski, buildTumski, buildZwierzyniecki } from './bridges';
+import { buildLiebich, buildPlanetarium } from './wroclaw';
 import { buildArsenal, buildImieniaJezus, buildMagdalena, buildMuzeum, buildPalacKrolewski, buildStaraGielda, buildWiezaCisnien, buildWincenty, buildWojciech, buildZamekLesnica } from './wroclaw';
 import { buildDworzec, buildElzbieta, buildHala, buildHalaTargowa, buildIglica, buildKatedra, buildKolegiata, buildNFM, buildOpera, buildPiasek, buildSkyTower, buildUniwersytet } from './wroclaw';
 
@@ -12,6 +13,7 @@ export const MODELS: Record<string, LandmarkModel[]> = { wroclaw: (wroclaw as un
 export const BUILDERS: Record<string, (S: ModelSink, f: Frame, ring: [number, number][]) => void> = {
   ratusz: buildRatusz, katedra: buildKatedra, hala: buildHala, iglica: buildIglica, piasek: buildPiasek, uniwersytet: buildUniwersytet,
   skytower: (S, f, ring) => buildSkyTower(S, f, ring),
+  liebich: buildLiebich, planetarium: buildPlanetarium,
   grunwaldzki: buildGrunwaldzki, zwierzyniecki: buildZwierzyniecki, tumski: buildTumski, piaskowy: buildPiaskowy, pokoju: buildPokoju, pomorski: buildPomorski,
   'most:beam': (S, f) => buildBridgeTemplate(S, f, 'beam'), 'most:': (S, f) => buildBridgeTemplate(S, f, 'beam'), 'most:truss': (S, f) => buildBridgeTemplate(S, f, 'truss'),
   'most:arch': (S, f) => buildBridgeTemplate(S, f, 'arch'), 'most:humpback': (S, f) => buildBridgeTemplate(S, f, 'humpback'), 'most:suspension': (S, f) => buildBridgeTemplate(S, f, 'suspension'),

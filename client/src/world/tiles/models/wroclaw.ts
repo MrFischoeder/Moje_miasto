@@ -343,3 +343,42 @@ export function buildWiezaCisnien(S: ModelSink, f0: Frame): void {
   addRoof(S, rect(local(c, f), -s * .85, -s * .85, s * .85, s * .85), S.base + 30, 13, 'pyramidal', false, SLATE, BRICK);
   for (const p of t) { const o = ngon(p, 1.8, 8); walls(S, o, 0, 34, BRICK2, null); addRoof(S, o, S.base + 34, 5, 'cone', false, SLATE, BRICK2); }
 }
+
+// ======================= Wzgórze Partyzantów (dawny Bastion Sakwowy, Liebichshöhe) =======================
+/** Taras z kolumnadą: ceglana podmurówka bastionu, jasna budowla z arkadami od strony fosy, taras z balustradą,
+ *  półkolista kolumnada, belweder z kopułką i figurą, szerokie schody do fosy (stylizacja low-poly). */
+export function buildLiebich(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f, vm = D / 2;
+  // podmurówka bastionu (cegła), szersza niż budowla
+  const base = rect(P, -4, -4, W + 4, D + 4); walls(S, base, -2, 3, BRICK, null); S.slab(base, 3, 3.3, GRANITE_C);
+  // budowla z arkadami
+  const body = rect(P, 0, 0, W, D);
+  walls(S, body, 3.3, 11, CREAM, { levelH: 7.7, spacing: 3.4, ww: 2.2, wh: 4.6, sill: .8, raise: 3.3, levels: 1, mat: 0, arch: true });
+  S.slab(rect(P, -.5, -.5, W + .5, D + .5), 11, 11.6, WHITE);
+  // balustrada tarasu (słupki)
+  for (let u = 0; u <= W; u += 1.6) for (const v of [-.2, D + .2]) S.box(P(u - .15, v - .15), P(u + .15, v - .15), P(u + .15, v + .15), P(u - .15, v + .15), 11.6, 12.6, WHITE, null);
+  for (let v = 0; v <= D; v += 1.6) for (const u of [-.2, W + .2]) S.box(P(u - .15, v - .15), P(u + .15, v - .15), P(u + .15, v + .15), P(u - .15, v + .15), 11.6, 12.6, WHITE, null);
+  for (const [a, b] of [[P(0, -.2), P(W, -.2)], [P(0, D + .2), P(W, D + .2)]] as [XZ, XZ][]) S.beam([a[0], S.base + 12.7, a[1]], [b[0], S.base + 12.7, b[1]], .3, .2, WHITE);
+  // półkolista kolumnada na tarasie (otwarta na zachód, ku fosie)
+  const cc = P(W * .55, vm), R = Math.min(D * .42, 7), ro = Math.atan2(f.uz, f.ux);
+  const ring = arc(cc, R, ro + Math.PI / 2, ro + Math.PI * 1.5, 10);
+  for (const p of ring) walls(S, ngon(p, .32, 8), 11.6, 16, WHITE, null);
+  for (let i = 0; i + 1 < ring.length; i++) S.beam([ring[i][0], S.base + 16.3, ring[i][1]], [ring[i + 1][0], S.base + 16.3, ring[i + 1][1]], .7, .6, WHITE);
+  // belweder z kopułką i figurą
+  const tc = P(W * .8, vm), t = rect(local(tc, f), -3, -3, 3, 3);
+  walls(S, t, 11.6, 19, CREAM, { levelH: 7.4, spacing: 2, ww: 1.2, wh: 3.4, sill: 2.4, raise: 11.6, levels: 1, mat: 0, arch: true });
+  S.slab(rect(local(tc, f), -3.4, -3.4, 3.4, 3.4), 19, 19.5, WHITE);
+  addRoof(S, ngon(tc, 2.6, 8), S.base + 19.5, 3.2, 'dome', false, COPPER, CREAM);
+  walls(S, ngon(tc, .35, 6), 22.7, 24, WHITE, null); S.beam([tc[0], S.base + 24, tc[1]], [tc[0], S.base + 25.8, tc[1]], .5, .45, GOLD);
+  // szerokie schody od strony fosy (zachód): stopnie schodzące z podmurówki
+  for (let k = 0; k < 8; k++) { const u0 = -4 - k * 1.2; S.box(P(u0 - 1.2, vm - 6), P(u0, vm - 6), P(u0, vm + 6), P(u0 - 1.2, vm + 6), -2, 3 - (k + 1) * .4, GRANITE_C, null); }
+}
+const GRANITE_C: RGB = [.7, .68, .63];
+
+/** Stare Planetarium: rotunda z kopułą */
+export function buildPlanetarium(S: ModelSink, f: Frame): void {
+  const c: XZ = [f.ox + f.ux * f.W / 2 - f.uz * f.D / 2, f.oz + f.uz * f.W / 2 + f.ux * f.D / 2], r = Math.min(f.W, f.D) * .48, ring = ngon(c, r, 16);
+  walls(S, ring, 0, 5.5, CREAM, { levelH: 5.5, spacing: 2.6, ww: .9, wh: 2.4, sill: 1.6, raise: 0, levels: 1, mat: 0, arch: true });
+  S.slab(ngon(c, r + .3, 16), 5.5, 6, WHITE);
+  addRoof(S, ngon(c, r, 16), S.base + 6, r * .9, 'dome', false, [.78, .8, .82], CREAM);
+}

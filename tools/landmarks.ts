@@ -13,7 +13,7 @@ const MODELS: Record<string, string> = {
   Q11819161: 'gielda', Q1329563: 'muzeum', Q2968370: 'wiezacisnien', Q16619009: 'lesnica',
   Q428443: 'dworzec', Q1093429: 'halatargowa', Q11741013: 'kolegiata', Q1336270: 'opera', Q1330584: 'elzbieta', Q6972777: 'nfm',
   // bez Wikidata w obrysie: identyfikator budynku OSM
-  '101205499': 'uniwersytet', '165880544': 'skytower',
+  '101205499': 'uniwersytet', '165880544': 'skytower', '310621710': 'liebich', '101134420': 'planetarium',
 };
 /** mosty z własnym modelem: nazwa jezdni na moście (małe litery) -> model */
 const BRIDGES: Record<string, string> = {}; // (stary sposób: oś z jezdni; mosty biorą się teraz z obrysów, tools/bridges.py)
@@ -21,7 +21,7 @@ const BRIDGES: Record<string, string> = {}; // (stary sposób: oś z jezdni; mos
 const BRIDGE_MODELS: Record<string, string> = { 'most grunwaldzki': 'grunwaldzki', 'most zwierzyniecki': 'zwierzyniecki', 'most tumski': 'tumski', 'most piaskowy': 'piaskowy', 'most pokoju': 'pokoju', 'most pomorski północny': 'pomorski', 'most pomorski środkowy': 'pomorski', 'most pomorski południowy': 'pomorski' };
 const bridgePts = new Map<string, { pts: [number, number][]; w: number }>();
 /** nazwy budynków bez nazwy w OSM */
-const NAMES: Record<string, string> = { '101205499': 'Uniwersytet Wrocławski – Gmach Główny z Aulą Leopoldina', '165880544': 'Sky Tower' };
+const NAMES: Record<string, string> = { '310621710': 'Wzgórze Partyzantów – taras z kolumnadą', '101205499': 'Uniwersytet Wrocławski – Gmach Główny z Aulą Leopoldina', '165880544': 'Sky Tower' };
 /** modele bez budynku (konstrukcje): punkt [lat, lon], wielkość obrysu do ukrycia [m] */
 const POINTS: { model: string; name: string; lat: number; lon: number; r: number }[] = [
   { model: 'iglica', name: 'Iglica', lat: 51.107537, lon: 17.075414, r: 4 },
