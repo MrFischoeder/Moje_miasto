@@ -36,6 +36,9 @@ export class TransitView {
   readonly group = new THREE.Group();
   private fill = new Dyn(); private lines = new Dyn(); private glass = new Dyn();
   private colors = new Map<number, [RGB, RGB]>();
+  private mats: (THREE.MeshBasicMaterial | THREE.LineBasicMaterial)[] = [];
+  /** materiały bez oświetlenia: przyciemnienie nocą (wnętrza pojazdów lekko jaśniejsze – oświetlenie w środku) */
+  setLight(day: number): void { const k = .3 + .7 * day; for (const m of this.mats) m.color.setScalar(k); }
   private signs = new Map<string, THREE.Sprite>();
   /** ostatnio widziane kursy (minimapa, HUD) */
   visible: ActiveTrip[] = [];
@@ -50,6 +53,7 @@ export class TransitView {
     // szyby: półprzezroczyste (widać pasażerów), bez zapisu głębi
     const g = new THREE.Mesh(this.glass.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide }));
     g.renderOrder = 2; m.frustumCulled = l.frustumCulled = g.frustumCulled = false; this.group.add(m, l, g);
+    this.mats = [m.material as THREE.MeshBasicMaterial, l.material as THREE.LineBasicMaterial, g.material as THREE.MeshBasicMaterial];
   }
 
   /** Przebudowa dla pojazdów w promieniu R od (x, z); `hide` = kurs, którym jedzie gracz w widoku z wnętrza. */

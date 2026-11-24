@@ -52,6 +52,9 @@ export class TileMaterials {
   readonly solid = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   readonly line = new THREE.LineBasicMaterial({ vertexColors: true });
 
+  /** Linie (oznakowanie jezdni, szyny) nie są oświetlane przez scenę: przyciemniane wg jasności dnia, żeby nocą nie świeciły. */
+  setLight(day: number): void { const k = .16 + .84 * day; this.flatLine.color.setScalar(k); this.line.color.setScalar(k); }
+
   setXray(on: boolean): void {
     this.xray = on;
     this.build.opacity = on ? .25 : 1; this.edge.opacity = on ? .35 : 1;
