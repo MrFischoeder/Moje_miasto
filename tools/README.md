@@ -16,6 +16,17 @@ npx tsx tools/pokaz-wnetrz.ts > docs/wnetrza/pokaz.json      # prawdziwe budynki
 npx tsx tools/plany-wnetrz.ts docs/wnetrza/pokaz.json docs/wnetrza/plany.html   # plany pięter (SVG)
 ```
 
+## Teren bez NMT: Copernicus z maską OSM (tools/dem-refine.ts)
+
+```bash
+npm run fetch-dem -- --city wroclaw          # rastry Copernicus do .cache/dem
+npx tsx tools/dem-refine.ts --city wroclaw   # model zgrubny 30 m + dokładne kafle 5 m przy wodzie i na Starym Mieście
+```
+
+Budynki i lasy z OSM są maskowane (teren pod nimi uzupełniany z otwartych miejsc), w gęstej zabudowie mocniejsze
+odcięcie dachów, w parkach słabsze (wzgórza zostają). Szczyty z OSM (natural=peak z ele) są punktami kontrolnymi.
+Rzeki i kanały: lustro wody z pomiaru nad wodą, co najmniej 2,5 m poniżej brzegu, skarpa przy linii brzegu.
+
 ## Teren z NMT (GUGiK, LiDAR, siatka 1 m)
 
 Dokładny teren dla gry: kafle 500 m z wysokościami co 2 m (dokładność rzędu centymetrów) w `client/public/terrain/<miasto>/`.

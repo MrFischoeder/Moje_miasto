@@ -41,7 +41,8 @@ def want_rel(t):
 def want_node(t):
     return (t.get('railway') in ('subway_entrance', 'station', 'tram_stop') or t.get('public_transport') == 'station'
             or t.get('highway') in HW_NODE or 'crossing' in t or 'shop' in t or 'amenity' in t or 'craft' in t or 'office' in t
-            or 'addr:housenumber' in t or t.get('historic') in ('monument', 'memorial') or t.get('tourism') == 'artwork')
+            or 'addr:housenumber' in t or t.get('historic') in ('monument', 'memorial') or t.get('tourism') == 'artwork'
+            or (t.get('natural') == 'peak' and 'ele' in t))  # szczyty z wysokością: punkty kontrolne terenu
 
 def is_station(t):
     return ((t.get('railway') == 'station' and t.get('station') == 'subway') or (t.get('public_transport') == 'station' and t.get('subway') == 'yes')
