@@ -24,6 +24,8 @@ export interface CityData {
   area?: [number, number, number, number];
   /** punkt startu [lat, lon] dla miast bez metra */
   sp?: [number, number];
+  /** Stare Miasto [lat, lon, promień m]: kamienice bez scalania w kwartały, szablon kamienicy w grze */
+  stare?: [number, number, number];
 }
 
 export type CityKey = 'wroclaw' | 'warszawa' | 'londyn';

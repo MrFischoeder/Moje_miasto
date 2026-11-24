@@ -8,6 +8,8 @@ import { gunzipSync } from 'node:zlib';
 import pc from 'polygon-clipping';
 import type { Flat, TileBuilding, TileData, TileIndex, TileRoad } from '../shared/src/tiles/types';
 import { writeTiles } from './lib/common';
+import { CITIES, type CityKey } from '../shared/src/data/cities';
+import { makeProj } from '../shared/src/data/projection';
 
 const ROOT = new URL('..', import.meta.url).pathname, argv = process.argv.slice(2);
 const city = argv[argv.indexOf('--city') + 1] || 'warszawa';
@@ -50,10 +52,14 @@ const band = (lv: number) => BANDS.reduce((b, v) => Math.abs(v - lv) < Math.abs(
 
 const stats = { b0: 0, b1: 0, v0: 0, v1: 0, r0: 0, r1: 0, a0: 0, a1: 0, merged: 0, kept: 0 };
 
+/** Stare Miasto (data/cities.json, pole stare): budynki zostają osobno, z prawdziwym obrysem (kamienice) */
+const ST = CITIES[city as CityKey]?.stare, stareC = ST ? makeProj(CITIES[city as CityKey].o)(ST[0], ST[1]) : null;
+const inStare = (o: XZ[]) => { if (!ST || !stareC) return false; const cx = o.reduce((s, p) => s + p[0], 0) / o.length, cz = o.reduce((s, p) => s + p[1], 0) / o.length; return Math.hypot(cx - stareC[0], cz - stareC[1]) < ST[2]; };
+
 function simplifyTile(t: TileData): TileData {
   const shopB = new Set(t.poi.filter(p => p.c === 'shop' && SHOP_POI.includes(p.t) && p.b != null).map(p => p.b!));
   const info = t.b.map(b => { const o = ring(b.o); return { b, o, A: area(o), H: b.h - b.mh }; });
-  const important = (q: typeof info[0]) => !q.b.part && (q.H >= 35 || (q.b.lv ?? 0) >= 12 || !!q.b.name || !!q.b.wd || !!q.b.hist || !!q.b.rs || KEEP_T.includes(q.b.t) || shopB.has(q.b.id) || q.A > 6000);
+  const important = (q: typeof info[0]) => !q.b.part && (inStare(q.o) || q.H >= 35 || (q.b.lv ?? 0) >= 12 || !!q.b.name || !!q.b.wd || !!q.b.hist || !!q.b.rs || KEEP_T.includes(q.b.t) || shopB.has(q.b.id) || q.A > 6000);
   const impPolys = info.filter(important).map(q => q.o);
   const inside = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
   const out: TileBuilding[] = [], idMap = new Map<number, number>(), cand: typeof info = [];

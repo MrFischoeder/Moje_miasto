@@ -15,6 +15,10 @@ import { addRoof, defaultRoofH } from './roofs';
 import { BUILDERS, centroidFlat, insideFlat, MODELS } from './models/index';
 import { makeSink } from './models/sink';
 import { buildMonument } from './models/monuments';
+import { buildGable, frontEdge, KAM_T, kamColors } from './models/kamienica';
+import { CITIES, type CityKey } from '@miasto/shared/data/cities';
+import { makeProj } from '@miasto/shared/data/projection';
+import { obb } from '@miasto/shared/interiors/geom';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
@@ -296,26 +300,45 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   };
   // kościoły: obrysy świątyń; części w ich obrębie (wieże, nawy) dostają okna kościelne i cegłę
   const churchRings = t.b.filter(b => !b.part && CHURCH.includes(b.t)).map(b => toXZ(b.o));
+  // Stare Miasto: szablon kamienicy (data/cities.json, pole stare)
+  const ST = CITIES[t.city as CityKey]?.stare, stC = ST ? makeProj(CITIES[t.city as CityKey].o)(ST[0], ST[1]) : null;
+  const roadPts: number[] = []; if (stC) for (const r of t.r) if (r.k !== 'steps') for (let i = 0; i < r.p.length; i += 2) roadPts.push(r.p[i], r.p[i + 1]);
+  const BSK = { tri: (a: number[], b2: number[], c: number[], col: RGB, n?: number[]) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad };
   for (const b of t.b) {
     if (!b.part && coveredByParts(toXZ(b.o))) continue;
     if (byModel(b)) continue;
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
     const fc0 = classify(b, t.city);
     const isChurch = CHURCH.includes(b.t) || (!!b.part && (b.bm === 'brick' || b.t === 'tower' || b.t === 'church' || (b.lv == null && !!(b.bc || b.rc || b.rs)))) || (!!b.part && churchRings.some(r => { const o = toXZ(b.o); let x = 0, z = 0; for (const p of o) { x += p[0]; z += p[1]; } return insideXZ(r, x / o.length, z / o.length); }));
+    // kamienica: w obrębie Starego Miasta, zwykły budynek o rozmiarach kamienicy
+    const ctr = stC ? centroidFlat(b.o) : null;
+    const kam = !!stC && !!ctr && (!b.part || b.mh < 1) && !isChurch && !b.rs?.match(/pyramidal|dome|onion|cone/) && (KAM_T.includes(b.t) || !!b.part) && Math.hypot(ctr[0] - stC[0], ctr[1] - stC[1]) < ST![2] && Math.abs(area2(toXZ(b.o))) / 2 < 1800 && b.h - b.mh < 32 && !(b.i?.length);
+    const kc = kam ? kamColors(fc0.seed) : null;
     const fc = isChurch ? churchFacade(fc0, b) : fc0;
     const cat = fc.typ ?? (b.t === 'office' ? 'office' : HOUSE.includes(b.t) ? 'house' : INDUSTRY.includes(b.t) ? 'industrial' : SHOPS.includes(b.t) ? 'sklep' : 'inne');
     const pal = FACADE[cat] ?? FACADE.inne, base0 = pal[Math.floor(fc.seed * 9973) % pal.length], j = .94 + fc.seed * .1;
     // kolory: z OSM (building:colour, roof:colour), z materiału albo z palety typu budynku
     const mat = b.bm ?? (isChurch && !b.bc ? 'brick' : undefined); // kościół bez opisu: cegła
     const wall0 = b.bc ? hex(b.bc) : mat && MAT_COL[mat] ? MAT_COL[mat][Math.floor(fc.seed * 9973) % MAT_COL[mat].length] : base0;
-    const col: RGB = [wall0[0] * j, wall0[1] * j, wall0[2] * j];
+    const col: RGB = kc && !b.bc ? kc.wall : [wall0[0] * j, wall0[1] * j, wall0[2] * j]; // kamienica: kolor z OSM albo pastel
     // wieża kościoła bez opisanego dachu: hełm ostrosłupowy
     const rs = b.rs ?? (isChurch && isTower(b) ? 'pyramidal' : undefined);
     const shaped = !!rs && !holes.length, tower = rs === 'pyramidal' || rs === 'cone' || rs === 'onion' || rs === 'dome' || rs === 'round';
     const roof0 = b.rc ? hex(b.rc) : shaped ? (tower ? (b.hist ? PAL.copper : PAL.roofDark) : (b.hist || b.bm === 'brick' || HOUSE.includes(b.t) ? PAL.tiles : PAL.roofDark)) : PAL.roof;
     const roof: RGB = [roof0[0] * j, roof0[1] * j, roof0[2] * j];
     let wallTop = h;
-    if (shaped) {
+    let kfc = fc, gable: { a: XZ; c: XZ; n: [number, number]; y0: number; rh: number } | null = null;
+    if (kam && kc) { // dach szczytem do frontu, okna kamienicy, ozdobny szczyt
+      const fi = frontEdge(outer, roadPts, { c: stC!, inner: 58, outer: 145 }), a = outer[fi], c = outer[(fi + 1) % outer.length], fw = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      const ccw0 = area2(outer) > 0, dx = (c[0] - a[0]) / fw, dz = (c[1] - a[1]) / fw, n: [number, number] = ccw0 ? [dz, -dx] : [-dz, dx];
+      const fr = obb(outer), across = !!fr && Math.abs(dx * fr.ux + dz * fr.uz) > .7;
+      const rh = Math.max(3.5, Math.min(9, fw * .55, (h - mh) * .45)); wallTop = h - rh * .35; // część dachu ponad wysokością z OSM
+      const roofK: RGB = b.rc ? hex(b.rc) : kc.roof;
+      addRoof(B, outer, wallTop, rh, 'gabled', across, roofK, col);
+      const lvl = Math.max(2, Math.min(7, b.lv ?? Math.round((wallTop - mh) / 3.6))), lh = (wallTop - mh - .4) / lvl;
+      kfc = { ...fc, levels: lvl, levelH: lh, raise: .4, spacing: 2.7, ww: 1.15, wh: Math.min(2.3, lh * .56), sill: lh * .26 };
+      gable = { a, c, n, y0: wallTop - base, rh };
+    } else if (shaped) {
       let rh = b.rh ?? defaultRoofH(rs!, outer, b.h - b.mh); rh = Math.min(rh, Math.max(.5, h - mh - .5)); wallTop = h - rh;
       addRoof(B, outer, wallTop, rh, rs!, b.ro === 'across', roof, col);
     } else fillPoly(B, outer, holes, h, roof);
@@ -330,13 +353,14 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         // kolejność wierzchołków zgodna z normalną na zewnątrz (obrysy bywają w obu kierunkach)
         if (ccw) B.quad([c[0], mh, c[1]], [a[0], mh, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
         else B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
-        if (!isChurch) wallWindows(WIN, a, c, nrm, base, mh, wallTop, fc.levelH, fc.spacing, fc.ww, fc.wh, fc.raise, fc.sill, fc.levels, fc.seed);
+        if (!isChurch) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
-          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, fc.levelH); FB.push(fc.spacing, fc.ww, fc.wh, fc.raise); FC.push(fc.sill, fc.levels, fc.seed, matId + (isChurch ? 4 : 0));
+          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(kfc.spacing, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 4 : 0));
         }
       }
     }
+    if (gable && kc) { facPad(); buildGable(makeSink(BSK, base, kfc.seed), gable.a, gable.c, gable.n, gable.y0, gable.rh, kc.style, kc.wall, kfc.seed); facPad(); }
   }
 
   for (const m of models) {
