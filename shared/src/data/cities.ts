@@ -20,9 +20,13 @@ export interface CityData {
   ent?: [number, number, number][];
   /** stacje z prawdziwą pozycją z OSM */
   osm?: number[];
+  /** obszar mapy [płd., zach., płn., wsch.] (stopnie), gdy miasto nie ma metra wyznaczającego obszar */
+  area?: [number, number, number, number];
+  /** punkt startu [lat, lon] dla miast bez metra */
+  sp?: [number, number];
 }
 
-export type CityKey = 'warszawa' | 'londyn';
+export type CityKey = 'wroclaw' | 'warszawa' | 'londyn';
 export const CITIES = raw as unknown as Record<CityKey, CityData>;
 export const CITY_KEYS = Object.keys(CITIES) as CityKey[];
 

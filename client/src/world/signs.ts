@@ -27,7 +27,7 @@ function plateMat(name: string, city: string): THREE.MeshLambertMaterial {
   let m = PLATES.get(name); if (m) return m;
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 134; const x = cv.getContext('2d')!;
   x.fillStyle = '#f2f1ec'; x.fillRect(0, 0, 512, 134); x.fillStyle = '#c8102e'; x.fillRect(0, 118, 512, 16); x.strokeStyle = '#1a1a1a'; x.lineWidth = 4; x.strokeRect(2, 2, 508, 130);
-  const pre = city === 'warszawa' && !/^(al\.|aleja|aleje|plac|pl\.|rondo|most|skwer|bulwar|wybrzeże|trakt|osiedle)/i.test(name) ? 'ul. ' : '';
+  const pre = (city === 'warszawa' || city === 'wroclaw') && !/^(al\.|aleja|aleje|plac|pl\.|rondo|most|skwer|bulwar|wybrzeże|trakt|osiedle)/i.test(name) ? 'ul. ' : '';
   x.fillStyle = '#141414'; x.textBaseline = 'middle'; x.textAlign = 'center';
   let fs = 62; const text = pre + name; x.font = `700 ${fs}px ${FONT}`; while (x.measureText(text).width > 470 && fs > 22) { fs -= 2; x.font = `700 ${fs}px ${FONT}`; }
   x.fillText(text, 256, 60);

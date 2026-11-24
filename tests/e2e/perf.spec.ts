@@ -6,7 +6,7 @@ type G = { __game: any }; // eslint-disable-line @typescript-eslint/no-explicit-
 test('licznik wydajności i suwaki aut i pieszych', async ({ page }) => {
   test.setTimeout(120_000);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect.poll(() => page.evaluate(() => { const g = (window as unknown as G).__game; return !!g.session?.player() && !!g.transitVisible !== undefined; }), { timeout: 30_000 }).toBe(true);
   await page.evaluate(() => (window as unknown as G).__game.session.setTime(61200, 1)); // 17:00, szczyt
   await page.keyboard.press('p');

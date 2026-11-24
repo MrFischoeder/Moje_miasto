@@ -1,13 +1,15 @@
 // Wersja jednoplikowa (gra bez serwera, otwierana z dysku): teren, kafle centrum, rozkłady komunikacji i lotniska
-// Warszawy (ok. 4 km wokół Świętokrzyskiej) i Londynu (ok. 3 km wokół Oxford Circus), wbudowane jako data URL.
+// Wrocławia (ok. 4 km wokół Rynku), Warszawy (ok. 3 km wokół Świętokrzyskiej) i Londynu (ok. 2 km wokół Oxford Circus), jako data URL.
 // Kafle wybiera tools/embed-tiles.mjs (client/embedded/<miasto>/).
+import wroclaw from '../../public/terrain/wroclaw.bin.gz?url';
 import warszawa from '../../public/terrain/warszawa.bin.gz?url';
 import londyn from '../../public/terrain/londyn.bin.gz?url';
 import warszawaTransit from '../../public/transit/warszawa.json.gz?url';
 import londynTransit from '../../public/transit/londyn.json.gz?url';
+import wroclawAir from '../../public/air/wroclaw.json?url';
 import warszawaAir from '../../public/air/warszawa.json?url';
 import londynAir from '../../public/air/londyn.json?url';
-export const EMBEDDED_TERRAIN: Record<string, string> = { warszawa, londyn };
+export const EMBEDDED_TERRAIN: Record<string, string> = { wroclaw, warszawa, londyn };
 const tiles = import.meta.glob('../../embedded/*/*.json.gz', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 /** miasto -> nazwa kafla (x_y) -> data URL */
 export const EMBEDDED_TILES: Record<string, Record<string, string>> = {};
@@ -18,4 +20,4 @@ for (const [path, url] of Object.entries(tiles)) {
 /** rozkłady jazdy */
 export const EMBEDDED_TRANSIT: Record<string, string> = { warszawa: warszawaTransit, londyn: londynTransit };
 /** lotniska */
-export const EMBEDDED_AIR: Record<string, string> = { warszawa: warszawaAir, londyn: londynAir };
+export const EMBEDDED_AIR: Record<string, string> = { wroclaw: wroclawAir, warszawa: warszawaAir, londyn: londynAir };

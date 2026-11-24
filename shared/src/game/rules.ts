@@ -16,6 +16,7 @@ export interface GameEvent { pid: number; text: string; kind: 'crime' | 'arrest'
 
 /** Waluta, cena biletu jednorazowego, najmniejsza grzywna, utrata przy śmierci. */
 export const MONEY: Record<string, { cur: string; fare: number; fine: number; death: number }> = {
+  wroclaw: { cur: 'zł', fare: 4.6, fine: 100, death: 100 },
   warszawa: { cur: 'zł', fare: 4.4, fine: 100, death: 100 },
   londyn: { cur: '£', fare: 1.75, fine: 50, death: 50 },
 };

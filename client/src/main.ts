@@ -3,7 +3,7 @@ import '@fontsource/chakra-petch/400.css';
 import '@fontsource/chakra-petch/600.css';
 import '@fontsource/chakra-petch/700.css';
 import './style.css';
-import { cityAt, type CityKey } from '@miasto/shared/data/cities';
+import { CITIES, cityAt, type CityKey } from '@miasto/shared/data/cities';
 import type { SaveState } from '@miasto/shared/sim/types';
 import { Game, type GameUI } from './game/game';
 import { parseOsmText } from './osm/parse';
@@ -15,7 +15,7 @@ const canvas = $<HTMLCanvasElement>('c'), mini = $<HTMLCanvasElement>('mini'), m
 if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
 const SAVE_KEY = 'moje-miasto.save';
 
-const nearestIndex = (g: Game) => { const w = g.world!; return w.nearestStation(g.pose.x, g.pose.z).i; };
+const nearestIndex = (g: Game) => { const w = g.world!; return w.stations.length ? w.nearestStation(g.pose.x, g.pose.z).i : -1; };
 const openMenu = () => { menu.classList.remove('hide'); if (game.world) stSel.value = String(nearestIndex(game)); game.input.releasePointer(); };
 const closeMenu = () => menu.classList.add('hide');
 
@@ -24,7 +24,7 @@ function info(g: Game): void {
   const b = v.streamer.hasTiles ? ` · budynki: ${v.buildingCount}` + (g.fromFile ? '' : ` · kafelki: ${st.visible}/${st.indexed}`) : ' · bez budynków';
   const on = g.online && s ? ` · sieć: ${s.players.size} graczy` : '';
   const tr = g.transit ? ` · komunikacja: ${g.transitDots().length} w pobliżu` : '';
-  $('info').textContent = `${w.stations.length} stacji · ${w.metro.tunnels.length} tuneli` + b + (w.osmStations ? ` · stacje z OSM: ${w.osmStations}` : '') + tr + on;
+  $('info').textContent = (w.stations.length ? `${w.stations.length} stacji · ${w.metro.tunnels.length} tuneli` : 'bez metra') + b + (w.osmStations ? ` · stacje z OSM: ${w.osmStations}` : '') + tr + on;
 }
 
 // ---------- czat ----------
@@ -64,7 +64,7 @@ const ui: GameUI = {
     $('cityName').textContent = city.name.toUpperCase();
     info(g);
     $('note').textContent = city.note;
-    $('cityW').className = k === 'warszawa' ? '' : 'ghost'; $('cityL').className = k === 'londyn' ? '' : 'ghost';
+    $('cityWr').className = k === 'wroclaw' ? '' : 'ghost'; $('cityW').className = k === 'warszawa' ? '' : 'ghost'; $('cityL').className = k === 'londyn' ? '' : 'ghost';
     stSel.innerHTML = w.stations.map(s => [s.name, s.i] as [string, number]).sort((a, b) => a[0].localeCompare(b[0], 'pl'))
       .map(([n, i]) => `<option value="${i}">${n} (${[...w.stations[i].lines.keys()].map(l => city.lines[l].n).join(', ')})</option>`).join('');
     stSel.value = String(nearestIndex(g));
@@ -103,6 +103,7 @@ $('heliBtn').onclick = () => game.action('modeHeli');
 $('camBtn').onclick = () => game.action('camera');
 $('menuBtn').onclick = openMenu;
 $('chatBtn').onclick = openChat;
+$('cityWr').onclick = () => { game.loadCity('wroclaw', null); closeMenu(); };
 $('cityW').onclick = () => { game.loadCity('warszawa', null); closeMenu(); };
 $('cityL').onclick = () => { game.loadCity('londyn', null); closeMenu(); };
 $('goBtn').onclick = () => { game.goStation(+stSel.value, false); closeMenu(); };
@@ -173,7 +174,7 @@ const applyTime = () => {
   game.session?.setTime(timeSel.value === 'now' ? null : +timeSel.value, +speedSel.value);
 };
 timeSel.onchange = applyTime; speedSel.onchange = applyTime;
-$('newW').onclick = () => create('warszawa'); $('newL').onclick = () => create('londyn');
+$('newWr').onclick = () => create('wroclaw'); $('newW').onclick = () => create('warszawa'); $('newL').onclick = () => create('londyn');
 
 // wydajność: wnętrza budynków (zapamiętane w przeglądarce)
 const intChk = $<HTMLInputElement>('intChk');
@@ -252,7 +253,9 @@ setInterval(() => {
   perfLogN.textContent = `zapisano ${perfLog.length} s`;
 }, 1000);
 
-game.loadCity('warszawa' as CityKey, null); closeMenu();
+// Wrocław: główna mapa; inne miasto na start: ?miasto=warszawa
+const startCity = new URLSearchParams(location.search).get('miasto') ?? '';
+game.loadCity((startCity in CITIES ? startCity : 'wroclaw') as CityKey, null); closeMenu();
 
 // uchwyt dla testów i konsoli
 (window as unknown as { __game: Game }).__game = game;

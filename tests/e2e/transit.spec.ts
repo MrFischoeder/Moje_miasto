@@ -6,8 +6,8 @@ type G = { __game: any }; // eslint-disable-line @typescript-eslint/no-explicit-
 test('metro M1: wsiadanie w Centrum, przejazd, wysiadanie na następnej stacji', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.route(/\/tiles\/(warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'x', size: 500, tiles: [], generated: '', source: 'test' }) }));
-  await page.goto('/');
+  await page.route(/\/tiles\/(wroclaw|warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'x', size: 500, tiles: [], generated: '', source: 'test' }) }));
+  await page.goto('/?miasto=warszawa');
   await expect.poll(() => page.evaluate(() => { const g = (window as unknown as G).__game; return !!g.transit && !!g.session?.player(); }), { timeout: 30_000 }).toBe(true);
   // 7:30, czas ×10
   await page.evaluate(() => (window as unknown as G).__game.session.setTime(27000, 10));

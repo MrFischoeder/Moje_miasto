@@ -1,6 +1,6 @@
 // Zegar gry: czas lokalny miasta (strefa czasowa), typ dnia rozkładu. Serwer jest źródłem czasu;
 // klient dostaje przesunięcie przy dołączeniu. Skala czasu > 1 przyspiesza dobę (testy, później opcja gry).
-export const CITY_TZ: Record<string, string> = { warszawa: 'Europe/Warsaw', londyn: 'Europe/London' };
+export const CITY_TZ: Record<string, string> = { wroclaw: 'Europe/Warsaw', warszawa: 'Europe/Warsaw', londyn: 'Europe/London' };
 
 /** Typ dnia rozkładu: 0 dzień powszedni, 1 sobota, 2 niedziela. */
 export type DayType = 0 | 1 | 2;

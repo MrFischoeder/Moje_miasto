@@ -8,8 +8,8 @@ const g = <T>(page: Page, f: (g: any) => T) => page.evaluate(`(${f.toString()})(
 
 async function joinAs(page: Page, nick: string, session: string): Promise<void> {
   // test sieci, nie miasta: bez kafli (renderowanie programowe w testach jest wolne)
-  await page.route(/\/tiles\/(warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'warszawa', size: 500, tiles: [], generated: '', source: 'test' }) }));
-  await page.goto('/');
+  await page.route(/\/tiles\/(wroclaw|warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'warszawa', size: 500, tiles: [], generated: '', source: 'test' }) }));
+  await page.goto('/?miasto=warszawa');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await page.locator('#menuBtn').click();
   await page.locator('#nick').fill(nick); await page.locator('#nick').dispatchEvent('change');

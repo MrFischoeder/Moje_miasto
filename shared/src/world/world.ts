@@ -4,7 +4,7 @@
 import { CITIES, type CityData, type CityKey } from '../data/cities';
 import { makeProj, normName, type Proj } from '../data/projection';
 import type { Tags } from '../osm/features';
-import { tileKey, type Flat, type TileData } from '../tiles/types';
+import { TILE_SIZE, tileKey, type Flat, type TileData } from '../tiles/types';
 import { CAR_PTS, PolyIndex, type XZ } from './collision';
 import { RegionIndex, type Region, type Support, type Surface } from './regions';
 import { buildMetroLayout, type MetroLayout, type Station } from './metro/layout';
@@ -133,7 +133,24 @@ export class World implements Surface {
   }
 
   /** Pozycja na peronie stacji (teleport). */
+  /** Nazwa miejsca do HUD: stacja metra (do 1,5 km) albo najbliższa ulica z nazwą (miasta bez metra). */
+  placeName(x: number, z: number): string {
+    const s = this.stations.length ? this.nearestStation(x, z) : null;
+    if (s && (this.city.lines.length && (s.x - x) ** 2 + (s.z - z) ** 2 < 1500 ** 2)) return s.name;
+    let best = '', bd = 300 ** 2;
+    const tx = Math.floor(x / TILE_SIZE), tz = Math.floor(z / TILE_SIZE);
+    for (let i = tx - 1; i <= tx + 1; i++) for (let j = tz - 1; j <= tz + 1; j++) {
+      const t = this.tiles.get(tileKey(i, j)); if (!t) continue;
+      for (const r of t.r) { if (!r.n) continue; for (let q = 0; q < r.p.length; q += 2) { const d = (r.p[q] - x) ** 2 + (r.p[q + 1] - z) ** 2; if (d < bd) { bd = d; best = r.n; } } }
+    }
+    return best || s?.name || '—';
+  }
+
   platformPose(s: Station): Pose {
+    if (!s) { // miasto bez metra: stały punkt startu (np. płyta Rynku), przodem na zachód
+      const [x, z] = this.city.sp ? makeProj(this.city.o)(this.city.sp[0], this.city.sp[1]) : [0, 0];
+      return { x, z, y: this.ground(x, z), yaw: Math.PI / 2, pitch: 0, reg: null };
+    }
     const h = s.halls[0]; const off = h.island ? (h.W - 7 > 1.2 ? 0 : 2) : -(h.W - 2);
     return { x: s.x - h.uz * off + h.ux * 3, z: s.z + h.ux * off + h.uz * 3, y: h.y, yaw: Math.atan2(-h.ux, -h.uz), pitch: 0, reg: h.reg };
   }

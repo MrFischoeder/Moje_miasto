@@ -6,7 +6,7 @@ import type { Station, Hall } from '../world/metro/layout';
 import type { Timetable } from './timetable';
 
 /** Ruch prawostronny (Warszawa) albo lewostronny (Londyn) na torach. */
-const SIDE: Record<string, number> = { warszawa: 1, londyn: -1 };
+const SIDE: Record<string, number> = { wroclaw: 1, warszawa: 1, londyn: -1 };
 
 export function attachMetroPaths(tt: Timetable, world: World): { ok: number; failed: number } {
   const byName = new Map<string, Station[]>();

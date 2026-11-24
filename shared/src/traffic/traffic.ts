@@ -19,7 +19,7 @@ interface Car { e: Entity; edge: Edge; lane: number; s: number; v: number; v0: n
 /** Natężenie ruchu wg godziny (0..1): szczyty 7–9 i 15–18, noc ~10%. */
 export const DENSITY = [.12, .08, .06, .06, .08, .2, .5, .9, 1, .8, .65, .6, .62, .65, .7, .85, 1, .95, .8, .6, .45, .35, .25, .18];
 /** Strona ruchu: 1 prawostronny, -1 lewostronny. */
-const SIDE: Record<string, number> = { warszawa: 1, londyn: -1 };
+const SIDE: Record<string, number> = { wroclaw: 1, warszawa: 1, londyn: -1 };
 /** Cykl sygnalizacji [s]: zielone grupy 1, żółte, zielone grupy 2, żółte. */
 const CYCLE = 60, GREEN = 27, AMBER = 3;
 export const SPAWN_R = [140, 380], DESPAWN_R = 480, MAX_PER_PLAYER = 70, HIDE_R = 200;

@@ -11,7 +11,7 @@ const srv = new GameServer({
   dataFile: join(ROOT, 'server/data/players.json'), staticDir: existsSync(DEFAULT_STATIC) ? DEFAULT_STATIC : null,
   log: s => console.log(new Date().toISOString().slice(11, 19), s),
 });
-srv.createSession('warszawa'); srv.createSession('londyn');
+srv.createSession('wroclaw'); srv.createSession('warszawa'); srv.createSession('londyn');
 const port = await srv.listen();
 console.log(`Serwer gry: http://localhost:${port}  (WebSocket /ws, lobby /api/sessions, statystyki /api/stats)`);
 if (!srv.opt.staticDir) console.log('Gra nie jest zbudowana: uruchom `npm run build` albo `npm run dev` i podaj adres serwera w menu.');

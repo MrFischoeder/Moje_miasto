@@ -6,7 +6,7 @@ type G = { __game: any }; // eslint-disable-line @typescript-eslint/no-explicit-
 test('przejęcie auta NPC i piesi na chodnikach', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect.poll(() => page.evaluate(() => { const g = (window as unknown as G).__game; return !!g.transit && !!g.session?.player(); }), { timeout: 30_000 }).toBe(true);
   await page.evaluate(() => (window as unknown as G).__game.session.setTime(61200, 1)); // 17:00
   await page.evaluate(() => { const g = (window as unknown as G).__game; g.goStation(g.world.stations.find((s: { name: string }) => s.name === 'Świętokrzyska').i, true); });

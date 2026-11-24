@@ -7,7 +7,7 @@ const ID = 30302703, DOOR = [-61.11, -373.84]; // Złota 6
 test('wejście do bloku: drzwi w fasadzie, klatka schodowa w HUD', async ({ page }) => {
   test.setTimeout(120_000);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect.poll(() => page.evaluate(() => !!(window as unknown as G).__game.session?.player()), { timeout: 30_000 }).toBe(true);
   const go = () => page.evaluate(([x, z]) => (window as unknown as G).__game.session.sendCommand({ type: 'teleport', x, z }), DOOR);
   await go(); await page.waitForTimeout(3000); await go();
@@ -33,7 +33,7 @@ test('wejście do bloku: drzwi w fasadzie, klatka schodowa w HUD', async ({ page
 test('przełącznik wnętrz: wyłączenie usuwa wnętrza (klient i serwer), gracz w środku wychodzi na ulicę', async ({ page }) => {
   test.setTimeout(120_000);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect.poll(() => page.evaluate(() => !!(window as unknown as G).__game.session?.player()), { timeout: 30_000 }).toBe(true);
   const go = () => page.evaluate(([x, z]) => (window as unknown as G).__game.session.sendCommand({ type: 'teleport', x, z }), DOOR);
   await go(); await page.waitForTimeout(3000); await go();

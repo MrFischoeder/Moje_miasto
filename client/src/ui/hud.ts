@@ -3,7 +3,7 @@ import type { Entity, Mode } from '@miasto/shared/sim/types';
 import type { World } from '@miasto/shared/world/world';
 
 export function locText(world: World, mode: Mode, e: Entity): string {
-  const near = () => world.nearestStation(e.x, e.z).name, city = world.city;
+  const near = () => world.placeName(e.x, e.z), city = world.city;
   if (mode === 'car') return `Samochód · ${Math.round(Math.abs(e.speed) * 3.6)} km/h · najbliżej: ${near()}`;
   if (mode === 'heli') return `Helikopter · ${Math.round(e.y - world.ground(e.x, e.z))} m · ${Math.round(Math.hypot(e.vx, e.vz) * 3.6)} km/h · nad: ${near()}`;
   const r = e.reg >= 0 ? world.regions.get(e.reg) : null; if (!r) return 'Ulica · najbliżej: ' + near();

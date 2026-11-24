@@ -88,6 +88,21 @@ npm run fetch-osm -- --city warszawa --offline --area metro                     
 npm run update-stations -- --city warszawa --from .cache/osm/warszawa/stations.json
 ```
 
+**Wrocław (główna mapa, bez metra)** – obszar z pola `area` w `data/cities.json` (od Leśnicy do Długołęki, od Szymanowa
+do Suchego Dworu i Siechnicy), wycinek BBBike Wroclaw:
+
+```bash
+curl -o .cache/pbf/Wroclaw.osm.pbf https://download.bbbike.org/osm/bbbike/Wroclaw/Wroclaw.osm.pbf
+python3 tools/pbf-extract.py --city wroclaw --pbf .cache/pbf/Wroclaw.osm.pbf
+npx tsx tools/fetch-osm.ts --city wroclaw --offline --area bbox     # kafle -> potem przenieś do tiles-pelne/wroclaw
+npx tsx tools/simplify-tiles.ts --city wroclaw
+npm run fetch-dem -- --city wroclaw
+python3 tools/airports.py --city wroclaw --pbf .cache/pbf/Wroclaw.osm.pbf
+```
+
+Wrocław: 2519 kafli (22,5 × 27 km), budynki 208 tys. → 86 tys. po uproszczeniu, 21 MB. Start na płycie Rynku (pole `sp`).
+Inne miasto na start: adres gry z `?miasto=warszawa` albo `?miasto=londyn`.
+
 W repo: Warszawa – cały obszar metra (+1 km, 1230 kafli, 33 MB), Londyn – centrum w promieniu 6 km (576 kafli, 20 MB);
 dane z wycinków BBBike z 14.11.2026. Pozycje stacji i wejść z OSM: Warszawa 38/41 (bez trzech stacji „w budowie”),
 Londyn 266/268 (bez Amersham i Chesham, poza wycinkiem).

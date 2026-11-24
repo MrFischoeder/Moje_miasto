@@ -8,7 +8,7 @@ const regionKind = (page: Page) => page.evaluate(() => {
   return e.reg >= 0 ? g.world.regions.list[e.reg].kind : 'street';
 });
 
-const noTiles = (page: Page) => page.route(/\/tiles\/(warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'x', size: 500, tiles: [], generated: '', source: 'test' }) }));
+const noTiles = (page: Page) => page.route(/\/tiles\/(wroclaw|warszawa|londyn)\/index\.json/, r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, city: 'x', size: 500, tiles: [], generated: '', source: 'test' }) }));
 
 test('miasto i metro: smoke', async ({ page }) => {
   await noTiles(page); // metro i przełączanie miast; kafle sprawdzają osobne testy
@@ -16,7 +16,7 @@ test('miasto i metro: smoke', async ({ page }) => {
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await expect(page.locator('#info')).toContainText('41 stacji · 40 tuneli');
   await expect(page.locator('#loc')).toContainText('Peron Świętokrzyska');
@@ -61,7 +61,7 @@ test('miasto i metro: smoke', async ({ page }) => {
 test('wczytanie pliku OSM: budynki i stacja z OSM', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await page.locator('#fileIn').setInputFiles('tests/fixtures/swietokrzyska.json');
   await expect(page.locator('#info')).toContainText('budynki: 40 · stacje z OSM: 1', { timeout: 30_000 });
@@ -77,7 +77,7 @@ test('kafelki przez HTTP: doładowanie wokół gracza, kolizje, zwalnianie', asy
     const name = new URL(route.request().url()).pathname.split('/').pop()!;
     try { await route.fulfill({ path: `tests/fixtures/tiles/warszawa/${name}` }); } catch { await route.fulfill({ status: 404, body: '' }); }
   });
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   // gracz na Świętokrzyskiej (start): kafelki w promieniu 600 m pod ziemią / 900 m na ulicy
   await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.visible), { timeout: 20_000 }).toBeGreaterThan(3);
@@ -96,12 +96,21 @@ test('kafelki przez HTTP: doładowanie wokół gracza, kolizje, zwalnianie', asy
 test('prawdziwe kafle Warszawy z OSM: budynki wokół Świętokrzyskiej', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
+  await page.goto('/?miasto=warszawa');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.indexed), { timeout: 20_000 }).toBeGreaterThan(1000);
   await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.buildingCount), { timeout: 60_000 }).toBeGreaterThan(1000); // uproszczona mapa: kwartały zamiast pojedynczych kamienic
   // stacja z prawdziwą pozycją i wejściami z OSM
   const st = await page.evaluate(() => { const s = (window as unknown as G).__game.world.stations.find((x: { name: string }) => x.name === 'Świętokrzyska'); return { exits: s.exitGeoms.length }; });
   expect(st.exits).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test('Wrocław: główna mapa na start, bez metra', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await expect(page.locator('#cityName')).toHaveText('WROCŁAW', { timeout: 30_000 });
+  await expect.poll(() => page.evaluate(() => !!(window as unknown as { __game: { session?: { player(): unknown } } }).__game.session?.player()), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('#info')).toContainText('bez metra');
   expect(errors).toEqual([]);
 });

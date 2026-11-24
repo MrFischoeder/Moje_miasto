@@ -309,8 +309,8 @@ export class Simulation {
     if (from === 'walk') {
       const w = this.entity(p.walker); let x = w.x, z = w.z, yaw = w.yaw; const under = W.underground(w.x, w.z, w.y);
       if (under) {
-        const s = W.nearestStation(w.x, w.z), t = s.tops[0];
-        if (t) { x = t[0] + t[2][0] * 5; z = t[1] + t[2][1] * 5; yaw = Math.atan2(-t[2][0], -t[2][1]); } else { x = s.x; z = s.z; }
+        const s = W.nearestStation(w.x, w.z), t = s?.tops[0];
+        if (t) { x = t[0] + t[2][0] * 5; z = t[1] + t[2][1] * 5; yaw = Math.atan2(-t[2][0], -t[2][1]); } else if (s) { x = s.x; z = s.z; }
       }
       if (m === 'car') [x, z] = W.freeSpot(x, z, yaw);
       const v = this.personal(p, m);

@@ -13,7 +13,7 @@ import { args, cityArg, ensureProxyEnv, ROOT, unproj } from './lib/common';
 
 ensureProxyEnv();
 const a = args(), key = cityArg(a), city = CITIES[key], proj = makeProj(city.o), step = +(a.step || 30);
-const pts = city.st.map(s => proj(s[1], s[2])), M = 2500;
+const A = city.area, pts = A ? [proj(A[2], A[1]), proj(A[0], A[3])] : city.st.map(s => proj(s[1], s[2])), M = 2500; // obszar mapy albo obszar metra
 const x0 = Math.floor((Math.min(...pts.map(p => p[0])) - M) / step) * step, z0 = Math.floor((Math.min(...pts.map(p => p[1])) - M) / step) * step;
 const nx = Math.ceil((Math.max(...pts.map(p => p[0])) + M - x0) / step) + 1, nz = Math.ceil((Math.max(...pts.map(p => p[1])) + M - z0) / step) + 1;
 const [la1, lo0] = unproj(city.o, x0, z0), [la0, lo1] = unproj(city.o, x0 + nx * step, z0 + nz * step);

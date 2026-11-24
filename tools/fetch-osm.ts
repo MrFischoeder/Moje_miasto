@@ -26,6 +26,9 @@ if (a.area === 'metro' || a.area === 'all') {
   const pts = city.st.map(s => proj(s[1], s[2]));
   x0 = Math.min(...pts.map(p => p[0])) - 1000; x1 = Math.max(...pts.map(p => p[0])) + 1000;
   z0 = Math.min(...pts.map(p => p[1])) - 1000; z1 = Math.max(...pts.map(p => p[1])) + 1000;
+} else if (a.area === 'bbox' || a.bbox) { // prostokąt [płd., zach., płn., wsch.] z --bbox albo z data/cities.json (pole area)
+  const [s, w, nn, e] = a.bbox ? a.bbox.split(',').map(Number) : city.area!;
+  const p0 = proj(nn, w), p1 = proj(s, e); x0 = p0[0]; z0 = p0[1]; x1 = p1[0]; z1 = p1[1];
 } else { const r = +(a.radius || 2000); x0 = -r; z0 = -r; x1 = r; z1 = r; }
 const c0 = Math.floor(x0 / CHUNK), c1 = Math.floor((x1 - 1) / CHUNK), d0 = Math.floor(z0 / CHUNK), d1 = Math.floor((z1 - 1) / CHUNK);
 const total = (c1 - c0 + 1) * (d1 - d0 + 1);
