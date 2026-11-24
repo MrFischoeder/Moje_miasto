@@ -203,6 +203,27 @@ perfChk.checked = load('mm.licznik', 0) === 1; perfEl.hidden = !perfChk.checked;
 const setPerf = (on: boolean) => { perfChk.checked = on; perfEl.hidden = !on; save('mm.licznik', on ? '1' : '0'); game.perf.take(); };
 perfChk.onchange = () => setPerf(perfChk.checked);
 addEventListener('keydown', e => { if (e.code === 'KeyP' && !(document.activeElement instanceof HTMLInputElement)) setPerf(!perfChk.checked); });
+// dziennik wydajności: jedna linia na sekundę, póki licznik jest włączony
+const LOG_MAX = 3 * 3600, perfLogN = $('perfLogN');
+const perfLog: string[] = (() => { try { return (localStorage.getItem('mm.perflog') ?? '').split('\n').filter(Boolean); } catch { return []; } })();
+function gpuName(): string {
+  try { const gl = game.ctx.renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER)); } catch { return '?'; }
+}
+function savePerfLog(): void {
+  const head = [`Moje miasto – dziennik wydajności, zapisano ${new Date().toLocaleString('pl-PL')}`,
+    `Przeglądarka: ${navigator.userAgent}`, `Karta graficzna: ${gpuName()}`, `Ekran: ${innerWidth}x${innerHeight}, skala ${devicePixelRatio}`,
+    `Ustawienia: auta ${carRng.value}, piesi ${pedRng.value}, wnętrza ${$<HTMLInputElement>('intChk').checked ? 'tak' : 'nie'}`, '',
+    ['czas', 'fps', 'klatka_ms', 'najgorsza_ms', 'cpu_ms', 'gpu_ms', 'rysowanie_ms', 'interfejs_ms', 'komunikacja_ms', 'auta_ms', 'kafle_ms',
+      'wywolania', 'trojkaty', 'auta_npc', 'piesi_npc', 'komunikacja', 'kafle', 'symulacja_ms', 'symulacja_maks_ms', 'tryb', 'x', 'z'].join('\t')];
+  const a = document.createElement('a'), d = new Date(), p2 = (n: number) => String(n).padStart(2, '0');
+  a.href = URL.createObjectURL(new Blob([[...head, ...perfLog].join('\r\n') + '\r\n'], { type: 'text/plain;charset=utf-8' }));
+  a.download = `moje-miasto-wydajnosc-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}.txt`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  perfLog.length = 0; try { localStorage.removeItem('mm.perflog'); } catch { /* */ }
+  perfLogN.textContent = 'pobrano plik, dziennik wyczyszczony';
+}
+$('perfSave').onclick = savePerfLog;
+addEventListener('keydown', e => { if (e.code === 'KeyL' && !(document.activeElement instanceof HTMLInputElement)) savePerfLog(); });
 const ms = (v: number) => v.toFixed(1).padStart(5) + ' ms', k = (v: number) => v >= 1000 ? Math.round(v / 1000) + ' tys.' : String(v);
 setInterval(() => {
   if (perfEl.hidden) return;
@@ -220,6 +241,15 @@ setInterval(() => {
   if (st) lines.push(`Symulacja (wątek gry): krok ${st.tickMs.toFixed(1)} ms, maks. ${st.tickMsMax.toFixed(0)} ms (budżet 33 ms)`, `  aut ${st.cars}, pieszych ${st.peds}, radiowozów ${st.police}, wnętrz ${st.interiors}`);
   else if (game.online) lines.push('Symulacja: na serwerze sieciowym');
   perfEl.textContent = lines.join('\n');
+  // zapis co sekundę (dziennik w pamięci i w przeglądarce, do pobrania jako .txt)
+  const cam = game.ctx.camera.position, part = (n: string) => (r.parts.find(([p]) => p.startsWith(n))?.[1] ?? 0).toFixed(1);
+  perfLog.push([new Date().toLocaleTimeString('pl-PL'), r.fps.toFixed(0), r.frameAvg.toFixed(1), r.frameMax.toFixed(0), r.cpuAvg.toFixed(1),
+    Math.max(0, r.frameAvg - r.cpuAvg).toFixed(1), part('rysowanie'), part('interfejs'), part('komunikacja'), part('auta'), part('kafle'),
+    d.calls, d.tris, cars, peds, game.transitVisible, game.view ? [...game.view.streamer.loadedTiles()].length : 0,
+    st ? st.tickMs.toFixed(1) : '-', st ? st.tickMsMax.toFixed(0) : '-', game.mode, cam.x.toFixed(0), cam.z.toFixed(0)].join('\t'));
+  if (perfLog.length > LOG_MAX) perfLog.splice(0, perfLog.length - LOG_MAX);
+  if (perfLog.length % 10 === 0) try { localStorage.setItem('mm.perflog', perfLog.join('\n')); } catch { /* brak miejsca */ }
+  perfLogN.textContent = `zapisano ${perfLog.length} s`;
 }, 1000);
 
 game.loadCity('warszawa' as CityKey, null); closeMenu();

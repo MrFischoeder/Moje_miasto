@@ -22,7 +22,7 @@ export const DENSITY = [.12, .08, .06, .06, .08, .2, .5, .9, 1, .8, .65, .6, .62
 const SIDE: Record<string, number> = { warszawa: 1, londyn: -1 };
 /** Cykl sygnalizacji [s]: zielone grupy 1, żółte, zielone grupy 2, żółte. */
 const CYCLE = 60, GREEN = 27, AMBER = 3;
-export const SPAWN_R = [140, 380], DESPAWN_R = 480, MAX_PER_PLAYER = 70;
+export const SPAWN_R = [140, 380], DESPAWN_R = 480, MAX_PER_PLAYER = 70, HIDE_R = 200;
 
 export class Traffic {
   readonly graph = new RoadGraph();
@@ -91,7 +91,12 @@ export class Traffic {
       c.v = Math.max(0, c.v + Math.max(-9, acc) * dt);
       c.s += c.v * dt;
       while (c.s > c.edge.len) {
-        const nx = c.next ?? this.pickNext(c.edge); if (!nx) { this.remove(c); break; }
+        const nx = c.next ?? this.pickNext(c.edge) ?? this.uTurn(c.edge);
+        if (!nx) { // ślepy koniec bez zawracania: auto stoi i znika dopiero poza wzrokiem gracza
+          c.s = c.edge.len; c.v = 0;
+          if (!players.some(p => Math.hypot(p.x - c.e.x, p.z - c.e.z) < HIDE_R)) this.remove(c);
+          break;
+        }
         c.s -= c.edge.len; c.edge = nx; c.lane = Math.min(c.lane, nx.lanes - 1); c.next = null; c.v0 = nx.speed * (0.9 + (c.e.id % 7) * .03);
       }
       if (!this.cars.has(c.e.id)) continue;
@@ -123,6 +128,9 @@ export class Traffic {
     let r = this.R() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < outs.length; i++) { r -= w[i]; if (r <= 0) return outs[i]; }
     return outs[outs.length - 1];
   }
+
+  /** Zawrócenie na ślepym końcu drogi (krawędź w przeciwną stronę tej samej ulicy). */
+  private uTurn(e: Edge): Edge | null { return (this.graph.out.get(e.to) || []).find(o => o.to === e.from) ?? null; }
 
   private trySpawn(p: { x: number; z: number }): boolean {
     const E = this.graph.edges;
