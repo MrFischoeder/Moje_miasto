@@ -12,6 +12,8 @@ import { MAX_SEG } from '../geometry';
 import { classify, type BuildingClass } from '@miasto/shared/interiors/facade';
 import { TileWindows, WindowMaterials, wallWindows } from './physWindows';
 import { addRoof, defaultRoofH } from './roofs';
+import { BUILDERS, centroidFlat, insideFlat, MODELS } from './models/index';
+import { makeSink } from './models/sink';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
@@ -284,10 +286,14 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     return A >= .5 * Math.abs(area2(o)) / 2;
   };
   const WIN: number[] = [];
+  // własne modele landmarków: budynki w ich obrysie zastępuje model
+  const models = MODELS[t.city] ?? [];
+  const byModel = (b: TileBuilding) => { if (!models.length) return false; const [x, z] = centroidFlat(b.o); return models.some(m => insideFlat(m.ring, x, z)); };
   // kościoły: obrysy świątyń; części w ich obrębie (wieże, nawy) dostają okna kościelne i cegłę
   const churchRings = t.b.filter(b => !b.part && CHURCH.includes(b.t)).map(b => toXZ(b.o));
   for (const b of t.b) {
     if (!b.part && coveredByParts(toXZ(b.o))) continue;
+    if (byModel(b)) continue;
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
     const fc0 = classify(b, t.city);
     const isChurch = CHURCH.includes(b.t) || (!!b.part && (b.bm === 'brick' || b.t === 'tower' || b.t === 'church' || (b.lv == null && !!(b.bc || b.rc || b.rs)))) || (!!b.part && churchRings.some(r => { const o = toXZ(b.o); let x = 0, z = 0; for (const p of o) { x += p[0]; z += p[1]; } return insideXZ(r, x / o.length, z / o.length); }));
@@ -326,6 +332,13 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         }
       }
     }
+  }
+
+  for (const m of models) {
+    const [x, z] = centroidFlat(m.ring); if (Math.floor(x / t.size) !== t.x || Math.floor(z / t.size) !== t.y) continue;
+    const ring = toXZ(m.ring), base = world ? world.baseOf(ring) : 0; facPad();
+    const sink = makeSink({ tri: (a, b2, c, col, n) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad }, base, .37);
+    BUILDERS[m.model]?.(sink, m.frame); facPad();
   }
 
   // --- tereny ---
