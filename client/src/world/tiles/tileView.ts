@@ -12,6 +12,9 @@ import { MAX_SEG } from '../geometry';
 import { classify, type BuildingClass } from '@miasto/shared/interiors/facade';
 import { TileWindows, WindowMaterials, wallWindows } from './physWindows';
 import { addRoof, defaultRoofH } from './roofs';
+import { balconies, styledRoof, WALL_COL } from './styleRoofs';
+import { styleOf, type BStyle } from '@miasto/shared/world/style';
+import { windowSlots } from '@miasto/shared/interiors/facade';
 import { BUILDERS, centroidFlat, insideFlat, MODELS } from './models/index';
 import { makeSink } from './models/sink';
 import { buildMonument } from './models/monuments';
@@ -86,6 +89,15 @@ function churchFacade(fc: BuildingClass, b: TileBuilding): BuildingClass {
   const edges = ring.map((p, i) => { const q = ring[(i + 1) % ring.length]; return Math.hypot(q[0] - p[0], q[1] - p[1]); }).sort((a, b) => a - b), med = edges[edges.length >> 1];
   if (tower) { const lh = Math.min(14, Math.max(8, H / 4)), sp = Math.max(1, Math.min(3.2, med - .65)); return { ...fc, levels: Math.max(1, Math.floor(b.h / lh)), levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.1, sp * .6), wh: Math.min(4, lh * .35), sill: lh * .5 }; }
   const lh = Math.max(6, Math.min(22, H * .85)), sp = Math.max(2, Math.min(4.8, med - .65)); return { ...fc, levels: 1, levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.8, sp * .45), wh: lh * .62, sill: lh * .2 };
+}
+/** balustrady balkonów bloków */
+const BALC: RGB[] = [[.92, .92, .9], [.7, .72, .74], [.86, .62, .42], [.55, .7, .82], [.9, .84, .6], [.62, .78, .62]];
+/** styl budynku bez danych z potoku kafli (np. starsze kafle): tylko cechy samego budynku */
+function styleLocal(b: TileBuilding, o: XZ[], holes: XZ[][], c: [number, number] | null): BStyle {
+  const f = obb(o), A = Math.abs(area2(o)) / 2; let P = 0; for (let i = 0; i < o.length; i++) { const q = o[(i + 1) % o.length]; P += Math.hypot(q[0] - o[i][0], q[1] - o[i][1]); }
+  const cx = o.reduce((s, p) => s + p[0], 0) / o.length, cz = o.reduce((s, p) => s + p[1], 0) / o.length;
+  return styleOf({ t: b.t, lv: b.lv ?? Math.max(1, Math.round((b.h - b.mh) / 3.2)), lvTag: b.lv != null, A, W: f.W, D: f.D, rect: A / Math.max(1, f.W * f.D), dEff: 2 * A / Math.max(1, P), mE: P / o.length,
+    holes: holes.length, members: 1, attached: false, yr: b.yr, hist: !!b.hist, rs: b.rs, dc: c ? Math.hypot(cx - c[0], cz - c[1]) : 99999 }).st;
 }
 /** kolory ścian wg building:material (kilka odcieni) */
 const MAT_COL: Record<string, RGB[]> = {
@@ -323,7 +335,11 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     const pal = FACADE[cat] ?? FACADE.inne, base0 = pal[Math.floor(fc.seed * 9973) % pal.length], j = .94 + fc.seed * .1;
     // kolory: z OSM (building:colour, roof:colour), z materiału albo z palety typu budynku
     const mat = b.bm ?? (isChurch && !b.bc ? 'brick' : undefined); // kościół bez opisu: cegła
-    const wall0 = b.bc ? hex(b.bc) : mat && MAT_COL[mat] ? MAT_COL[mat][Math.floor(fc.seed * 9973) % MAT_COL[mat].length] : base0;
+    // styl budynku (kafle z tools/simplify-tiles.ts; bez niego – rozpoznanie z samego budynku); Londyn: dotychczasowy wygląd
+    const pl = t.city !== 'londyn';
+    const st: BStyle | undefined = !pl || b.part || isChurch || kam ? undefined : b.st ?? styleLocal(b, outer, holes, stC);
+    const stPal = st && WALL_COL[st];
+    const wall0 = b.bc ? hex(b.bc) : mat && MAT_COL[mat] ? MAT_COL[mat][Math.floor(fc.seed * 9973) % MAT_COL[mat].length] : stPal ? stPal[Math.floor(fc.seed * 7919) % stPal.length] : base0;
     const col: RGB = kc && !b.bc ? kc.wall : [wall0[0] * j, wall0[1] * j, wall0[2] * j]; // kamienica: kolor z OSM albo pastel
     // wieża kościoła bez opisanego dachu: hełm ostrosłupowy
     const rs = b.rs ?? (isChurch && isTower(b) ? 'pyramidal' : undefined);
@@ -331,6 +347,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     const roof0 = b.rc ? hex(b.rc) : shaped ? (tower ? (b.hist ? PAL.copper : PAL.roofDark) : (b.hist || b.bm === 'brick' || HOUSE.includes(b.t) ? PAL.tiles : PAL.roofDark)) : PAL.roof;
     const roof: RGB = [roof0[0] * j, roof0[1] * j, roof0[2] * j];
     let wallTop = h;
+    let stLevels: { lv: number; lh: number } | null = null;
     let kfc = fc, gable: { a: XZ; c: XZ; n: [number, number]; y0: number; rh: number } | null = null;
     if (kam && kc) { // dach szczytem do frontu, okna kamienicy, ozdobny szczyt
       const fi = frontEdge(outer, roadPts, { c: stC!, inner: 58, outer: 145 }), a = outer[fi], c = outer[(fi + 1) % outer.length], fw = Math.hypot(c[0] - a[0], c[1] - a[1]);
@@ -342,12 +359,26 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       const lvl = Math.max(2, Math.min(7, b.lv ?? Math.round((wallTop - mh) / 3.6))), lh = (wallTop - mh - .4) / lvl;
       kfc = { ...fc, levels: lvl, levelH: lh, raise: .4, spacing: 2.7, ww: 1.15, wh: Math.min(2.3, lh * .56), sill: lh * .26 };
       gable = { a, c, n, y0: wallTop - base, rh };
+    } else if (st && (!rs || rs === 'flat')) {
+      const lv = b.lv ?? Math.max(1, Math.round((b.h - b.mh) / 3.1)), lh = (b.h - b.mh) / lv, fr = obb(outer);
+      const setback = st === 'wsp' && lv >= 5 && !holes.length && fr.D > 12 && Math.abs(area2(outer)) / 2 > .9 * fr.W * fr.D && fc.seed > .45;
+      const fillTop = (y: number, k: RGB) => fillPoly(B, outer, holes, y, k);
+      const top = setback ? h - lh : h;
+      wallTop = styledRoof(B, fillTop, { st, outer, holes, top, base, lv, levelH: lh, seed: fc.seed, wall: col, roof: b.rc ? hex(b.rc) : undefined, flat: rs === 'flat' });
+      if (setback) { // cofnięte ostatnie piętro (taras dookoła)
+        const sk = makeSink(BSK, base, fc.seed), m = 1.8, { ox, oz, ux, uz, W, D } = fr, P = (u: number, v: number): XZ => [ox + ux * u - uz * v, oz + uz * u + ux * v];
+        const ring: XZ[] = [P(m, m), P(W - m, m), P(W - m, D - m), P(m, D - m)];
+        facPad(); sk.box(ring[0], ring[1], ring[2], ring[3], top - base, h - base - .05, col, { levelH: lh, spacing: 2.2, ww: 1.8, wh: Math.min(2.2, lh - .5), sill: .3, raise: top - base, levels: 1, mat: 0, arch: false }); facPad();
+        styledRoof(B, (y, k) => fillPoly(B, ring, [], y, k), { st, outer: ring, holes: [], top: h, base, lv, levelH: lh, seed: fc.seed, wall: col, flat: true });
+      }
+      stLevels = { lv, lh };
     } else if (shaped) {
       let rh = b.rh ?? defaultRoofH(rs!, outer, b.h - b.mh); rh = Math.min(rh, Math.max(.5, h - mh - .5)); wallTop = h - rh;
       addRoof(B, outer, wallTop, rh, rs!, b.ro === 'across', roof, col);
     } else fillPoly(B, outer, holes, h, roof);
     facPad();
-    const matId = mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
+    const matId = st === 'blok' && !mat ? 3 : mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
+    const balc: [XZ, XZ, number, number, number][] = [];
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
       const ccw = area2(ring) > 0 !== isHole, n = ring.length;
       for (let i = 0; i < n; i++) {
@@ -358,11 +389,16 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         if (ccw) B.quad([c[0], mh, c[1]], [a[0], mh, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
         else B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
         if (!isChurch) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
+        if (st === 'blok' && !isHole && stLevels && stLevels.lv >= 4 && nrm[2] > -.25) balc.push([a, c, nrm[0], nrm[2], m]);
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
           FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(kfc.spacing, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 4 : 0));
         }
       }
+    }
+    if (balc.length) { // balkony bloku na ścianach od strony słonecznej (nie od północy)
+      const bc = BALC[Math.floor(fc.seed * 6151) % BALC.length];
+      for (const [a, c, nx, nz, m] of balc) balconies(B, a, c, nx, nz, base, kfc.raise, kfc.levelH, Math.min(kfc.levels, stLevels!.lv), windowSlots(m, kfc), bc, fc.seed);
     }
     if (gable && kc) { facPad(); buildGable(makeSink(BSK, base, kfc.seed), gable.a, gable.c, gable.n, gable.y0, gable.rh, kc.style, kc.wall, kfc.seed); facPad(); }
   }

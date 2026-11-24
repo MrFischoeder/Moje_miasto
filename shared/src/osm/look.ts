@@ -2,8 +2,9 @@
 // Wynik trafia do kafla (pola rs, rh, ro, rc, bc, bm), a gra buduje z tego bryłę dachu i kolor ścian.
 import type { Tags } from './features';
 import { num, ROOF_LEVEL_H } from './heights';
+import { yearOf } from '../world/style';
 
-const SHAPES = new Set(['gabled', 'hipped', 'half-hipped', 'pyramidal', 'dome', 'onion', 'cone', 'skillion', 'mansard', 'gambrel', 'round', 'saltbox']);
+const SHAPES = new Set(['gabled', 'hipped', 'half-hipped', 'pyramidal', 'dome', 'onion', 'cone', 'skillion', 'mansard', 'gambrel', 'round', 'saltbox', 'flat']);
 const MATERIAL: Record<string, string> = {
   brick: 'brick', bricks: 'brick', stone: 'stone', sandstone: 'stone', limestone: 'stone', granite: 'stone', marble: 'stone',
   plaster: 'plaster', concrete: 'concrete', glass: 'glass', metal: 'metal', steel: 'metal', copper: 'copper', wood: 'wood', timber_framing: 'wood',
@@ -24,12 +25,12 @@ export function colorHex(v?: string): string | undefined {
   return NAMED[s];
 }
 
-export interface Look { rs?: string; rh?: number; ro?: 'across'; rc?: string; bc?: string; bm?: string; wd?: string; hist?: 1 }
+export interface Look { rs?: string; rh?: number; ro?: 'across'; rc?: string; bc?: string; bm?: string; wd?: string; hist?: 1; yr?: number }
 
 export function lookOf(t: Tags, h: number, mh: number): Look {
   const out: Look = {};
   const shape = t['roof:shape']; if (shape && SHAPES.has(shape)) out.rs = shape;
-  if (out.rs) {
+  if (out.rs && out.rs !== 'flat') {
     let rh = num(t['roof:height']); if (rh == null && t['roof:levels'] != null) rh = (num(t['roof:levels']) || 0) * ROOF_LEVEL_H;
     if (rh != null && rh > 0) out.rh = Math.round(Math.min(rh, (h - mh) * .9) * 10) / 10;
     if (t['roof:orientation'] === 'across') out.ro = 'across';
@@ -37,6 +38,7 @@ export function lookOf(t: Tags, h: number, mh: number): Look {
   const rc = colorHex(t['roof:colour'] || t['roof:color']); if (rc) out.rc = rc;
   const bc = colorHex(t['building:colour'] || t['building:color'] || t.colour); if (bc) out.bc = bc;
   const bm = MATERIAL[(t['building:material'] || '').toLowerCase()]; if (bm) out.bm = bm;
+  const yr = yearOf(t.start_date || t.construction_date); if (yr) out.yr = yr;
   if (t.wikidata) out.wd = t.wikidata;
   if (t.historic || t.heritage || t['building:architecture'] === 'gothic') out.hist = 1;
   return out;

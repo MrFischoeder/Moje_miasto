@@ -39,7 +39,15 @@ for (int i = 0; i < ${MAX_DOORS}; i++) {
 }
 // faktura muru: cegła (1) albo ciosy kamienne (2); spoiny wygaszane z odległością
 float matW = mod(vFacC.w, 4.0), arch = step(3.5, vFacC.w);
-if (matW > 0.5 && vFacA.z > 0.5) {
+if (matW > 2.5 && vFacA.z > 0.5 && vFacB.x > 0.5) {
+  // wielka płyta: spoiny poziome co kondygnację i pionowe między oknami
+  float spP = vFacB.x, nP = max(1.0, floor((vFacA.z - 0.6) / spP)), offP = (vFacA.z - nP * spP) * 0.5;
+  float fu = fract((vFacA.x - offP) / spP), fv = fract((vFacA.y - vFacB.w) / vFacA.w);
+  float wu = fwidth(vFacA.x) / spP, wv = fwidth(vFacA.y) / vFacA.w, g = 0.012;
+  float mu = 1.0 - smoothstep(g - wu, g + wu, min(fu, 1.0 - fu)), mv = 1.0 - smoothstep(g * 2.0 - wv, g * 2.0 + wv, min(fv, 1.0 - fv));
+  float far = 1.0 - smoothstep(0.03, 0.12, max(wu, wv));
+  diffuseColor.rgb *= 1.0 - max(mu, mv) * 0.35 * far;
+} else if (matW > 0.5 && vFacA.z > 0.5) {
   float st = matW > 1.5 ? 1.0 : 0.5;                  // wysokość warstwy [m] (powiększona: styl low-poly)
   float bl = st * 2.2, row = floor(vFacA.y / st);
   float u = vFacA.x / bl + 0.5 * mod(row, 2.0), fu = fract(u), fv = fract(vFacA.y / st);

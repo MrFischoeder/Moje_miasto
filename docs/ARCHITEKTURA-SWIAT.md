@@ -126,3 +126,22 @@ Pokaz 9 szablonów na prawdziwych budynkach: `docs/wnetrza/plany.png` (plany pi�
 - **Układ PL-1992** (`shared/src/data/pl1992.ts`): odwzorowanie Gaussa–Krügera na GRS80; w Warszawie błąd przeliczenia < 1 mm.
 - Do zrobienia po wgraniu danych: kontrola wysokości w znanych punktach (np. skarpa przy Zamku i Wiśle), dopasowanie wysokości
   budynków do NMPT (model pokrycia), dokładny teren w wersji jednoplikowej.
+
+## Style budynków i dachy (`shared/src/world/style.ts`, `client/src/world/tiles/styleRoofs.ts`)
+
+OSM rzadko podaje datę budowy (we Wrocławiu ~700 z 218 tys. budynków), więc styl rozpoznaje `tools/simplify-tiles.ts`
+z typu budynku, liczby kondygnacji, kształtu obrysu (wypełnienie prostokąta, głębokość efektywna 2·pole/obwód,
+średnia długość krawędzi), dziedzińców, styku z sąsiadami i odległości od centrum; niepewne budynki mieszkalne
+przejmują styl dominujący wśród pewnych w promieniu ~250–750 m. Wynik: pole `st` w kaflu.
+
+| styl | rozpoznanie | dach i detale |
+|---|---|---|
+| `kam` kamienice / przedwojenne | kwartały z podwórzami, pierzeje z oficynami, zabytki, rok < 1945 | strome, dachówka; na kwartałach dach „kopertowy” wzdłuż obrysu, kominy co ~13 m, lukarny |
+| `dom` domy, wille | domy, małe niskie budynki | dwu- lub czterospadowy, komin, czasem lukarna |
+| `pow` powojenne niskie | 2–4 kondygnacje, prosty prostokąt | dwuspadowy, dachówka lub eternit, rząd kominów |
+| `blok` wielka płyta | prostokątne „płyty” i łamane „wężowce” o głębokości 9–17 m, punktowce ≥ 9 kondygnacji | płaski z attyką, maszynownie wind (≥ 9 kondygnacji) lub wyjścia na dach z drzwiami nad klatkami, wywiewki, anteny; spoiny płyt, balkony od strony słonecznej, pastelowe elewacje |
+| `wsp` współczesne | nieregularne bryły, rok ≥ 1993 | płaski, wyjście na dach, cofnięte ostatnie piętro z tarasem, jasne elewacje |
+| `biuro`, `pub`, `przem` | typ budynku | płaski z attyką, klimatyzatory, wyjście na dach; hale ze świetlikami |
+
+Bloki bez opisanej liczby kondygnacji (domyślne 9 m) dostają 5 kondygnacji (krótkie segmenty 4).
+Wyjścia na dach mają drzwi; to miejsca na przyszłe wejścia na dachy.

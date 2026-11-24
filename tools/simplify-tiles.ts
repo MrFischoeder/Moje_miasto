@@ -11,6 +11,8 @@ import { writeTiles } from './lib/common';
 import { normalizeRoads } from './lib/roads';
 import { CITIES, type CityKey } from '../shared/src/data/cities';
 import { makeProj } from '../shared/src/data/projection';
+import { obb } from '../shared/src/interiors/geom';
+import { smoothStyles, styleOf, type BStyle } from '../shared/src/world/style';
 
 const ROOT = new URL('..', import.meta.url).pathname, argv = process.argv.slice(2);
 const city = argv[argv.indexOf('--city') + 1] || 'warszawa';
@@ -51,7 +53,8 @@ const SHOP_POI = ['convenience', 'supermarket', 'discount'];
 const BANDS = [1, 2, 3, 5, 8, 11, 14, 18, 24];
 const band = (lv: number) => BANDS.reduce((b, v) => Math.abs(v - lv) < Math.abs(b - lv) ? v : b, BANDS[0]);
 
-const stats = { b0: 0, b1: 0, v0: 0, v1: 0, r0: 0, r1: 0, a0: 0, a1: 0, merged: 0, kept: 0 };
+const stats = { b0: 0, b1: 0, v0: 0, v1: 0, r0: 0, r1: 0, a0: 0, a1: 0, merged: 0, kept: 0, st: {} as Record<string, number> };
+const nearEdge0 = (o: XZ[], x: number, z: number, e: number) => { for (let i = 0; i < o.length; i++) { const [ax, az] = o[i], [bx, bz] = o[(i + 1) % o.length], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); if (Math.hypot(ax + dx * u - x, az + dz * u - z) < e) return true; } return false; };
 
 /** Stare Miasto (data/cities.json, pole stare): budynki zostają osobno, z prawdziwym obrysem (kamienice) */
 const ST = CITIES[city as CityKey]?.stare, stareC = ST ? makeProj(CITIES[city as CityKey].o)(ST[0], ST[1]) : null;
@@ -60,10 +63,25 @@ const inStare = (o: XZ[]) => { if (!ST || !stareC) return false; const cx = o.re
 function simplifyTile(t: TileData): TileData {
   const shopB = new Set(t.poi.filter(p => p.c === 'shop' && SHOP_POI.includes(p.t) && p.b != null).map(p => p.b!));
   const info = t.b.map(b => { const o = ring(b.o); return { b, o, A: area(o), H: b.h - b.mh }; });
-  const important = (q: typeof info[0]) => !q.b.part && (inStare(q.o) || q.H >= 35 || (q.b.lv ?? 0) >= 12 || !!q.b.name || !!q.b.wd || !!q.b.hist || !!q.b.rs || KEEP_T.includes(q.b.t) || shopB.has(q.b.id) || q.A > 6000);
+  const important = (q: typeof info[0]) => !q.b.part && (inStare(q.o) || q.H >= 35 || (q.b.lv ?? 0) >= 12 || !!q.b.name || !!q.b.wd || !!q.b.hist || (!!q.b.rs && q.b.rs !== 'flat') || KEEP_T.includes(q.b.t) || shopB.has(q.b.id) || q.A > 6000);
   const impPolys = info.filter(important).map(q => q.o);
   const inside = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
+  // styk z innym budynkiem (zabudowa zwarta): wspólne lub bliskie krawędzie
+  const attached = new Set<number>();
+  { const G0 = 4, gr = new Map<string, number[]>(), base = info.filter(q => !q.b.part);
+    base.forEach((q, i) => { for (const [x, z] of q.o) { const k = Math.floor(x / G0) + ',' + Math.floor(z / G0); let l = gr.get(k); if (!l) gr.set(k, l = []); if (l[l.length - 1] !== i) l.push(i); } });
+    base.forEach((q, i) => { if (attached.has(q.b.id)) return; for (const [x, z] of q.o) for (let a = -1; a <= 1; a++) for (let c = -1; c <= 1; c++) for (const j of gr.get((Math.floor(x / G0) + a) + ',' + (Math.floor(z / G0) + c)) || []) {
+      if (j !== i && nearEdge0(base[j].o, x, z, .6)) { attached.add(q.b.id); attached.add(base[j].b.id); return; }
+    } }); }
   const out: TileBuilding[] = [], idMap = new Map<number, number>(), cand: typeof info = [];
+  const styled: { b: TileBuilding; x: number; z: number; st: BStyle; sure: boolean; res: boolean; lv: number; lvTag: boolean; W: number }[] = [];
+  const setStyle = (b: TileBuilding, o: XZ[], members: number, att: boolean, lvTag: boolean, rs?: string) => {
+    if (b.part) return;
+    const f = obb(o), A = area(o), Pm = o.reduce((s, p, i) => s + Math.hypot(o[(i + 1) % o.length][0] - p[0], o[(i + 1) % o.length][1] - p[1]), 0), cx = o.reduce((s, p) => s + p[0], 0) / o.length, cz = o.reduce((s, p) => s + p[1], 0) / o.length;
+    const lv = b.lv ?? Math.max(1, Math.round((b.h - b.mh) / 3.2));
+    const r = styleOf({ t: b.t, lv, lvTag, A, W: f.W, D: f.D, rect: A / Math.max(1, f.W * f.D), dEff: 2 * A / Math.max(1, Pm), mE: Pm / o.length, holes: b.i?.length ?? 0, members, attached: att, yr: b.yr, hist: !!b.hist, rs, dc: stareC ? Math.hypot(cx - stareC[0], cz - stareC[1]) : 99999 });
+    styled.push({ b, x: cx, z: cz, ...r, lvTag, W: f.W, res: ['apartments', 'residential', 'yes', 'dormitory', 'flats'].includes(b.t), lv });
+  };
   for (const q of info) {
     stats.b0++; stats.v0 += q.o.length;
     const cx = q.o.reduce((s, p) => s + p[0], 0) / q.o.length, cz = q.o.reduce((s, p) => s + p[1], 0) / q.o.length;
@@ -71,7 +89,7 @@ function simplifyTile(t: TileData): TileData {
       if (q.H >= 35 || impPolys.some(o => inside(o, cx, cz))) { out.push({ ...q.b, o: flat(dpRing(q.o, .4)) }); stats.kept++; }
       continue;
     }
-    if (important(q)) { out.push({ ...q.b, o: flat(dpRing(q.o, .4)), ...(q.b.i ? { i: q.b.i.map(h => flat(dpRing(ring(h), .4))) } : {}) }); idMap.set(q.b.id, q.b.id); stats.kept++; continue; }
+    if (important(q)) { const nb: TileBuilding = { ...q.b, o: flat(dpRing(q.o, .4)), ...(q.b.i ? { i: q.b.i.map(h => flat(dpRing(ring(h), .4))) } : {}) }; out.push(nb); setStyle(nb, q.o, 1, attached.has(q.b.id), q.b.lv != null, q.b.rs); idMap.set(q.b.id, q.b.id); stats.kept++; continue; }
     if (q.A < 30 || (DROP_T.includes(q.b.t) && q.A < 400)) continue; // drobnica
     cand.push(q);
   }
@@ -91,13 +109,18 @@ function simplifyTile(t: TileData): TileData {
   const groups = new Map<number, typeof cand>(); cand.forEach((q, i) => { const r = find(i); let l = groups.get(r); if (!l) groups.set(r, l = []); l.push(q); });
   for (const g of groups.values()) {
     // wysokość: mediana ważona powierzchnią, liczba kondygnacji w pasmach, wysokość kondygnacji z budynków
-    const lvH = g.map(q => ({ A: q.A, lv: q.b.lv ?? Math.max(1, Math.round(q.H / 3.1)), lh: q.H / (q.b.lv ?? Math.max(1, Math.round(q.H / 3.1))) })).sort((a, b) => a.lv - b.lv);
+    const tagged = g.filter(q => q.b.lv != null), src = tagged.length && tagged.reduce((s, q) => s + q.A, 0) >= .3 * g.reduce((s, q) => s + q.A, 0) ? tagged : g;
+    const lvH = src.map(q => ({ A: q.A, lv: q.b.lv ?? Math.max(1, Math.round(q.H / 3.1)), lh: q.H / (q.b.lv ?? Math.max(1, Math.round(q.H / 3.1))) })).sort((a, b) => a.lv - b.lv);
     const tot = lvH.reduce((s, q) => s + q.A, 0); let acc = 0, med = lvH[0];
     for (const q of lvH) { acc += q.A; if (acc >= tot / 2) { med = q; break; } }
     const lv = band(med.lv), lh = Math.max(2.8, Math.min(4, Math.round(med.lh * 10) / 10)), h = Math.round(lv * lh * 10) / 10;
     const types = new Map<string, number>(); for (const q of g) types.set(q.b.t, (types.get(q.b.t) ?? 0) + q.A);
     const t0 = [...types.entries()].sort((a, b) => b[1] - a[1])[0][0], main = g.reduce((a, q) => q.A > a.A ? q : a, g[0]);
     const id = Math.min(...g.map(q => q.b.id)); for (const q of g) idMap.set(q.b.id, id);
+    // kształt dachu z OSM (płaski / stromy), jeśli opisana większość powierzchni; najstarszy rok budowy
+    const rsA = new Map<string, number>(); for (const q of g) if (q.b.rs) { const k = q.b.rs === 'flat' ? 'flat' : 'gabled'; rsA.set(k, (rsA.get(k) ?? 0) + q.A); }
+    const rsTop = [...rsA.entries()].sort((a, b) => b[1] - a[1])[0], rsG = rsTop && rsTop[1] >= g.reduce((s, q) => s + q.A, 0) / 2 ? rsTop[0] : undefined;
+    const yrs = g.map(q => q.b.yr).filter((v): v is number => v != null), yr = yrs.length ? Math.min(...yrs) : undefined;
     let parts: XZ[][][];
     if (g.length === 1) parts = [[main.o, ...(main.b.i ?? []).map(ring)]];
     else {
@@ -107,9 +130,14 @@ function simplifyTile(t: TileData): TileData {
     parts.forEach((poly, k) => {
       const o = dpRing(poly[0], 1.5); if (o.length < 3 || area(o) < 30) return;
       const holes = poly.slice(1).filter(hh => area(hh) > 100).map(hh => flat(dpRing(hh, 1.5)));
-      out.push({ id: k ? id * 10 + k : id, o: flat(o), ...(holes.length ? { i: holes } : {}), h, mh: 0, t: t0, lv, ...(main.b.a ? { a: main.b.a } : {}) });
+      const nb: TileBuilding = { id: k ? id * 10 + k : id, o: flat(o), ...(holes.length ? { i: holes } : {}), h, mh: 0, t: t0, lv, ...(main.b.a ? { a: main.b.a } : {}), ...(yr ? { yr } : {}), ...(rsG ? { rs: rsG } : {}) };
+      out.push(nb); setStyle(nb, o, g.length, g.length > 1 || g.some(q => attached.has(q.b.id)), g.some(q => q.b.lv != null), rsG);
     });
   }
+  smoothStyles(styled); for (const q of styled) {
+    q.b.st = q.st;
+    // blok bez opisanej liczby kondygnacji (domyślne 9 m): typowe 5 kondygnacji (krótkie segmenty 4)
+    if (q.st === 'blok' && !q.lvTag && q.lv < 4) { q.b.lv = q.W >= 30 ? 5 : 4; q.b.h = Math.round((q.b.lv * 2.8 + .6) * 10) / 10; } stats.st[q.st] = (stats.st[q.st] ?? 0) + 1; }
   for (const b of out) { stats.b1++; stats.v1 += b.o.length / 2; }
   // --- drogi: bez drobnych ścieżek i dojazdów; mniej punktów, węzły grafu zachowane ---
   const roads: TileRoad[] = [], deg = new Map<number, number>();
@@ -151,5 +179,6 @@ for (const f of readdirSync(src)) {
 const rn = normalizeRoads(tiles); console.log(`ulice: ${rn.roads} odcinków, wyrównane krótkie: ${rn.absorbed}, płynne zwężenia: ${rn.tapers}`);
 const ix = writeTiles(city, tiles, dst, idx.source + ' · uproszczone (tools/simplify-tiles.ts)');
 const kb = (a: number) => (a / 1024 / 1024).toFixed(1) + ' MB';
+console.log('style:', JSON.stringify(stats.st));
 console.log(`budynki ${stats.b0} → ${stats.b1} (ważne zachowane: ${stats.kept}, połączone w kwartały: ${stats.merged}); wierzchołki budynków ${stats.v0} → ${stats.v1}`);
 console.log(`drogi ${stats.r0} → ${stats.r1}; tereny ${stats.a0} → ${stats.a1}; rozmiar ${kb(idx.tiles.reduce((s, q) => s + q[2], 0))} → ${kb(ix.tiles.reduce((s, q) => s + q[2], 0))}`);

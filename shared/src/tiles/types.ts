@@ -25,6 +25,8 @@ export interface TileBuilding {
   rs?: string; rh?: number; ro?: 'across'; rc?: string; bc?: string; bm?: string;
   /** Wikidata (landmarki), zabytek */
   wd?: string; hist?: 1;
+  /** rok budowy (start_date), styl budynku (shared/world/style.ts, liczony w tools/simplify-tiles.ts) */
+  yr?: number; st?: import('../world/style').BStyle;
 }
 
 export type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'living' | 'pedestrian' | 'footway' | 'cycleway' | 'path' | 'steps' | 'track';

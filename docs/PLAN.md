@@ -28,7 +28,8 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
          ławki przy alejkach w parkach, wiaty przystanków z rozkładów; metro i pawilony w nowym stylu
    - [x] tabliczki z nazwami ulic na ścianach narożnych budynków przy skrzyżowaniach (zamiast napisów w powietrzu)
    - [x] światło latarni na terenie, jezdniach, chodnikach i ścianach (najbliższe 40 latarni, nocą)
-   - [ ] kształty dachów, drzewa z OSM (`natural=tree`, szpalery) po ponownym pobraniu danych, kosze, słupki, znaki
+   - [x] dachy wg stylu budynku (kamienice, domy, powojenne, bloki z wielkiej płyty, współczesne, biura, hale)
+   - [ ] drzewa z OSM (`natural=tree`, szpalery) po ponownym pobraniu danych, kosze, słupki, znaki
    - [x] budowa kafli (z obiektami) w osobnym wątku: na wątku głównym zostaje składanie (typowo ~9 ms)
    - [x] uproszczona mapa Warszawy (kwartały, ujednolicone wysokości, bez drobnicy); pełne kafle w tiles-pelne/
    - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd)
