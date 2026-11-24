@@ -9,6 +9,7 @@ const dir = join(ROOT, 'client/public/tiles-pelne', city);
 /** budynki z własnym modelem: Wikidata -> model */
 const MODELS: Record<string, string> = {
   Q910225: 'ratusz', Q910211: 'katedra', Q155743: 'hala', Q2320729: 'piasek',
+  Q428443: 'dworzec', Q1093429: 'halatargowa', Q11741013: 'kolegiata', Q1336270: 'opera', Q1330584: 'elzbieta', Q6972777: 'nfm',
   // bez Wikidata w obrysie: identyfikator budynku OSM
   '101205499': 'uniwersytet', '165880544': 'skytower',
 };

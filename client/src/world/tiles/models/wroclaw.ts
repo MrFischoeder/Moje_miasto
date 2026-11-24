@@ -168,3 +168,108 @@ export function buildSkyTower(S: ModelSink, f: Frame, ring?: XZ[]): void {
   addRoof(S, inner, S.base + 203, 9, 'skillion', true, WHITE, GLASS);
   for (let k = 0; k < 6; k++) { const u = W * (.12 + k * .15); S.box(P(u - .3, D * .05), P(u + .3, D * .05), P(u + .3, D * .1), P(u - .3, D * .1), 195, 212, WHITE, null); }
 }
+
+// ======================= partia 2 =======================
+const CREAM: RGB = [.9, .84, .68], CREAM2: RGB = [.84, .78, .62], SLATE: RGB = [.32, .34, .38], WOOD: RGB = [.28, .22, .18];
+
+/** blanki (krenelaż) wzdłuż wielokąta na wysokości y */
+function battlements(S: ModelSink, ring: XZ[], y: number, col: RGB, step = 2.4): void {
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.floor(L / step)), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+    for (let k = 0; k < n; k += 2) {
+      const t0 = k * L / n, t1 = (k + 1) * L / n, p0: XZ = [a[0] + ux * t0, a[1] + uz * t0], p1: XZ = [a[0] + ux * t1, a[1] + uz * t1];
+      S.box(p0, p1, [p1[0] - uz * .6, p1[1] + ux * .6], [p0[0] - uz * .6, p0[1] + ux * .6], y, y + 1.2, col, null);
+    }
+  }
+}
+const local = (c: XZ, f: Frame) => (u: number, v: number): XZ => [c[0] + f.ux * u - f.uz * v, c[1] + f.uz * u + f.ux * v];
+
+/** Dworzec Wrocław Główny: neogotycki, jasny tynk, krenelaż, wieżyczki przy hali głównej i wieże narożne */
+export function buildDworzec(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f, v0 = D * .2, v1 = D * .8;
+  const tudor: Fac = { levelH: 6.5, spacing: 3.6, ww: 1.8, wh: 3.6, sill: 1.4, raise: 0, levels: 2, mat: 0, arch: true };
+  const body = rect(P, W * .04, v0, W * .96, v1);
+  walls(S, body, 0, 13, CREAM, tudor); S.slab(body, 13, 13.3, CREAM2); battlements(S, body, 13.3, CREAM2);
+  const hall = rect(P, W * .4, v0 - 2, W * .6, v1 + 2); // hala główna, wyższa, z wielkimi oknami
+  walls(S, hall, 0, 22, CREAM, { levelH: 20, spacing: 5, ww: 3.2, wh: 12, sill: 5, raise: 0, levels: 1, mat: 0, arch: true });
+  addRoof(S, hall, S.base + 22, 6, 'gabled', true, SLATE, CREAM); battlements(S, hall, 22, CREAM2);
+  for (const u of [W * .4, W * .6]) for (const v of [v0 - 2, v1 + 2]) { // ośmioboczne wieżyczki
+    const o = ngon(P(u, v), 2.6, 8); walls(S, o, 0, 30, CREAM2, { levelH: 7, spacing: 1.2, ww: .6, wh: 2.5, sill: 3, raise: 0, levels: 4, mat: 0, arch: true });
+    battlements(S, ngon(P(u, v), 2.9, 8), 30, CREAM2, 1.6); addRoof(S, o, S.base + 30.5, 4, 'pyramidal', false, SLATE, CREAM2);
+  }
+  for (const u of [W * .04, W * .96 - 9]) { // wieże narożne
+    const t = rect(P, u, v1 - 9, u + 9, v1 + 1); walls(S, t, 0, 20, CREAM2, tudor); battlements(S, t, 20, CREAM2); S.slab(t, 19.8, 20, CREAM2);
+  }
+}
+
+/** Hala Targowa: ceglana, szczyty schodkowe na krótkich bokach, wysoki dach z świetlikiem na kalenicy, wieżyczki */
+export function buildHalaTargowa(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f, vm = D / 2;
+  const body = rect(P, W * .03, D * .06, W * .97, D * .94);
+  walls(S, body, 0, 13, BRICK, gothic(12, 4.2, 2.4));
+  addRoof(S, body, S.base + 13, 15, 'gabled', false, SLATE, BRICK);
+  S.box(P(W * .1, vm - 2), P(W * .9, vm - 2), P(W * .9, vm + 2), P(W * .1, vm + 2), 26, 29, [.6, .7, .75], null); // świetlik
+  for (const [u, s] of [[W * .03, -1], [W * .97, 1]] as [number, number][]) { // szczyty schodkowe
+    const hw = D * .44;
+    for (let k = 0; k < 5; k++) { const w = hw * (1 - k / 5), y0 = 13 + k * 3.2; S.box(P(u - s * .4, vm - w), P(u + s * .3, vm - w), P(u + s * .3, vm + w), P(u - s * .4, vm + w), y0, y0 + 3.2, BRICK2, gothic(3.2, 2.4, 1)); S.spire(P(u + s * .1, vm - w + .5), y0 + 3.2, .35, 2, BRICK2); S.spire(P(u + s * .1, vm + w - .5), y0 + 3.2, .35, 2, BRICK2); }
+  }
+  for (const c of body) { const o = ngon(c, 1.6, 8); walls(S, o, 0, 17, BRICK2, null); addRoof(S, o, S.base + 17, 5, 'pyramidal', false, SLATE, BRICK2); }
+}
+
+/** Kolegiata św. Krzyża: ceglana, wysoki dach, transept, wieża z miedzianą iglicą */
+export function buildKolegiata(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f, vm = D / 2;
+  const nave = rect(P, W * .05, vm - D * .26, W * .78, vm + D * .26);
+  walls(S, nave, 0, 24, BRICK, gothic(22, 4, 2)); addRoof(S, nave, S.base + 24, 18, 'gabled', false, TILE, BRICK);
+  const tr = rect(P, W * .42, D * .04, W * .6, D * .96);
+  walls(S, tr, 0, 24, BRICK, gothic(22, 3.6, 2)); addRoof(S, tr, S.base + 24, 16, 'gabled', true, TILE, BRICK);
+  const ch = rect(P, W * .78, vm - D * .22, W * .9, vm + D * .22);
+  walls(S, ch, 0, 22, BRICK, gothic(20, 3.4, 1.8)); addRoof(S, ch, S.base + 22, 14, 'gabled', false, TILE, BRICK);
+  const ac = P(W * .9, vm); walls(S, ngon(ac, D * .22, 8, Math.atan2(f.uz, f.ux)), 0, 22, BRICK, gothic(20, 2.6, 1.4)); addRoof(S, ngon(ac, D * .22, 8, Math.atan2(f.uz, f.ux)), S.base + 22, 11, 'cone', false, TILE, BRICK);
+  const tc = P(W * .51, D * .94 + 4.5), t = rect(local(tc, f), -4.5, -4.5, 4.5, 4.5);
+  walls(S, t, 0, 44, BRICK2, { levelH: 11, spacing: 2.4, ww: 1.1, wh: 5, sill: 3, raise: 0, levels: 4, mat: 1, arch: true });
+  addRoof(S, ngon(tc, 4.4, 8, Math.PI / 8), S.base + 44, 26, 'pyramidal', false, COPPER, BRICK2); S.spire(tc, 70, .12, 2, GOLD);
+}
+
+/** Opera Wrocławska: klasycystyczna, jasna, portyk kolumnowy z frontonem, wieża sceniczna */
+export function buildOpera(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f;
+  const classic: Fac = { levelH: 6.2, spacing: 3.4, ww: 1.6, wh: 3.6, sill: 1.2, raise: .8, levels: 3, mat: 2, arch: false };
+  const body = rect(P, W * .04, D * .12, W * .96, D * .88);
+  walls(S, body, 0, 20, CREAM, classic); S.slab(body.map(p => p), 20, 20.6, WHITE); addRoof(S, body, S.base + 20.6, 6, 'hipped', false, SLATE, CREAM);
+  const stage = rect(P, W * .6, D * .25, W * .9, D * .75); walls(S, stage, 20, 29, CREAM2, null); addRoof(S, stage, S.base + 29, 3, 'gabled', false, SLATE, CREAM2);
+  // portyk od strony placu (v = D * .88): 6 kolumn, belkowanie, fronton
+  const pv = D * .88, u0 = W * .36, u1 = W * .64;
+  S.box(P(u0, pv), P(u1, pv), P(u1, pv + 5), P(u0, pv + 5), 0, 1.2, WHITE, null);
+  for (let k = 0; k < 6; k++) { const u = u0 + 1 + (u1 - u0 - 2) * k / 5; const c = ngon(P(u, pv + 3.6), .55, 8); walls(S, c, 1.2, 14, WHITE, null); }
+  S.box(P(u0, pv), P(u1, pv), P(u1, pv + 5), P(u0, pv + 5), 14, 15.8, WHITE, null);
+  addRoof(S, rect(P, u0, pv, u1, pv + 5), S.base + 15.8, 4, 'gabled', true, SLATE, WHITE);
+}
+
+/** Bazylika św. Elżbiety: gotycka bazylika z wieżą 91,5 m (renesansowy hełm) */
+export function buildElzbieta(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f, vm = D / 2;
+  const nave = rect(P, W * .2, vm - D * .2, W * .92, vm + D * .2);
+  walls(S, nave, 0, 30, BRICK, gothic(28, 4.4, 2.1)); addRoof(S, nave, S.base + 30, 17, 'gabled', false, TILE, BRICK);
+  for (const s of [-1, 1]) { const a = rect(P, W * .2, vm + s * D * .2, W * .9, vm + s * D * .46); walls(S, a, 0, 16, BRICK2, gothic(15, 4.4, 1.9)); addRoof(S, a, S.base + 16, 6, 'skillion', false, TILE, BRICK2); }
+  const ac = P(W * .92, vm), apse = ngon(ac, D * .2, 8, Math.atan2(f.uz, f.ux)); walls(S, apse, 0, 28, BRICK, gothic(26, 2.8, 1.5)); addRoof(S, apse, S.base + 28, 12, 'cone', false, TILE, BRICK);
+  const tc = P(W * .11, vm), t = rect(local(tc, f), -6.5, -6.5, 6.5, 6.5);
+  walls(S, t, 0, 66, BRICK, { levelH: 13, spacing: 3, ww: 1.4, wh: 7, sill: 3.5, raise: 0, levels: 5, mat: 1, arch: true });
+  for (const c of t) S.spire(c, 66, .6, 4, BRICK2);
+  S.slab(ngon(tc, 6.2, 8, Math.PI / 8), 66, 66.6, DARK);
+  const o1 = ngon(tc, 5, 8, Math.PI / 8); walls(S, o1, 66.6, 71, COPPER, null);
+  addRoof(S, o1, S.base + 71, 7, 'onion', false, COPPER, COPPER);
+  walls(S, ngon(tc, 1.8, 8, Math.PI / 8), 78, 81.5, COPPER, null);
+  addRoof(S, ngon(tc, 2, 8, Math.PI / 8), S.base + 81.5, 4, 'onion', false, COPPER, COPPER);
+  addRoof(S, ngon(tc, .3, 6), S.base + 85.5, 6, 'cone', false, GOLD, GOLD);
+}
+
+/** Narodowe Forum Muzyki: ciemna bryła z rytmem pionowych żeber, ścięta, nadwieszona */
+export function buildNFM(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f;
+  const body = rect(P, W * .05, D * .08, W * .95, D * .92);
+  walls(S, body, 0, 28, WOOD, { levelH: 7, spacing: 2, ww: .5, wh: 6, sill: .5, raise: 0, levels: 4, mat: 0, arch: false });
+  addRoof(S, body, S.base + 28, 6, 'skillion', false, DARK, WOOD);
+  for (let u = W * .07; u < W * .94; u += 3.1) for (const v of [D * .08, D * .92]) { const s = v < D / 2 ? -1 : 1; S.box(P(u - .25, v), P(u + .25, v), P(u + .25, v + s * .7), P(u - .25, v + s * .7), 0, 26 + Math.sin(u * .2) * 4, [.62, .5, .32], null); }
+  S.box(P(W * .3, D * .92), P(W * .7, D * .92), P(W * .7, D + 4), P(W * .3, D + 4), 8, 10, WOOD, null); // daszek nad wejściem
+}
