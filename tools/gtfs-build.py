@@ -20,7 +20,12 @@ city = json.load(open(os.path.join(ROOT, 'data/cities.json'), encoding='utf-8'))
 o_lat, o_lon = city['o']
 KX, KY = math.cos(math.radians(o_lat)) * 111320, 110540
 proj = lambda la, lo: ((lo - o_lon) * KX, -(la - o_lat) * KY)
-pts = [proj(s[1], s[2]) for s in city['st']]
+# obszar: sieć metra albo pole area (miasta bez metra, np. Wrocław) – wtedy bez dodatkowego marginesu
+if city.get('area'):
+    s_, w_, n_, e_ = city['area']; pts = [proj(n_, w_), proj(s_, e_)]
+    if a.margin == 6000: a.margin = 500
+else:
+    pts = [proj(s[1], s[2]) for s in city['st']]
 BX0, BX1 = min(p[0] for p in pts), max(p[0] for p in pts)
 BZ0, BZ1 = min(p[1] for p in pts), max(p[1] for p in pts)
 def inside(x, z, m): return BX0 - m <= x <= BX1 + m and BZ0 - m <= z <= BZ1 + m

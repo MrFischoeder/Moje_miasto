@@ -4,6 +4,7 @@
 import wroclaw from '../../public/terrain/wroclaw.bin.gz?url';
 import warszawa from '../../public/terrain/warszawa.bin.gz?url';
 import londyn from '../../public/terrain/londyn.bin.gz?url';
+import wroclawTransit from '../../public/transit/wroclaw.json.gz?url';
 import warszawaTransit from '../../public/transit/warszawa.json.gz?url';
 import londynTransit from '../../public/transit/londyn.json.gz?url';
 import wroclawAir from '../../public/air/wroclaw.json?url';
@@ -18,6 +19,6 @@ for (const [path, url] of Object.entries(tiles)) {
   (EMBEDDED_TILES[m[1]] ??= {})[m[2]] = url;
 }
 /** rozkłady jazdy */
-export const EMBEDDED_TRANSIT: Record<string, string> = { warszawa: warszawaTransit, londyn: londynTransit };
+export const EMBEDDED_TRANSIT: Record<string, string> = { wroclaw: wroclawTransit, warszawa: warszawaTransit, londyn: londynTransit };
 /** lotniska */
 export const EMBEDDED_AIR: Record<string, string> = { wroclaw: wroclawAir, warszawa: warszawaAir, londyn: londynAir };
