@@ -37,18 +37,32 @@ export class Phone {
   private current: (() => void) | null = null; // odświeżenie otwartego ekranu
   private vf = h('div'); private toastEl = h('div');
   private toastT = 0;
+  /** sprzątanie po aparacie (nasłuch spustu) */
+  private camOff: (() => void) | null = null;
   onUnread: (n: number) => void = () => {};
 
   constructor(private game: Game) {
     this.el.id = 'phone';
-    const bar = h('div', 'bar'); bar.append(this.clock, h('div', 'ico', '<span>▂▄▆█</span><span>5G</span><div class="batt"><i></i></div>'));
+    const bar = h('div', 'bar'), x = h('button', 'close', '✕'); x.title = 'Schowaj telefon (C / Esc)'; x.onclick = e => { e.stopPropagation(); this.toggle(false); };
+    const ico = h('div', 'ico', '<span>▂▄▆█</span><span>5G</span><div class="batt"><i></i></div>'); ico.append(x); bar.append(this.clock, ico);
     const homebar = h('div', 'homebar', '<i></i>'); homebar.onclick = () => this.home();
     this.screen.append(h('div', 'island'), bar, this.view, homebar); this.el.append(this.screen);
     this.vf.id = 'viewfinder'; this.toastEl.id = 'phoneToast';
     document.body.append(this.el, this.vf, this.toastEl);
     try { this.photos = JSON.parse(localStorage.getItem('mm.zdjecia') || '[]'); } catch { this.photos = []; }
     for (const n of NPCS) this.conv(n.id, n.name, n.color);
-    this.el.addEventListener('keydown', e => { if (e.key === 'Escape') this.toggle(false); e.stopPropagation(); });
+    // klawisze w telefonie: Esc i C (poza polem tekstowym) zamykają go; inne klawisze sterują grą, chyba że piszemy
+    this.el.addEventListener('keydown', e => {
+      const t = e.target as HTMLElement, typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
+      if (e.key === 'Escape' || (e.code === 'KeyC' && !typing)) { e.preventDefault(); e.stopPropagation(); this.toggle(false); return; }
+      if (typing) e.stopPropagation();
+    });
+    // Esc zamyka telefon także wtedy, gdy fokus nie jest w telefonie (klik w ikonę, w grę)
+    addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || !this.open) return;
+      const t = e.target as HTMLElement | null; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && !this.el.contains(t)) return; // czat
+      this.toggle(false);
+    });
     setInterval(() => { if (this.open) { this.tick(); } }, 1000);
     this.home();
   }
@@ -56,7 +70,8 @@ export class Phone {
   get isOpen(): boolean { return this.open; }
   toggle(on = !this.open): void {
     this.open = on; this.el.classList.toggle('open', on);
-    if (on) { this.game.input.releasePointer(); this.tick(); this.current?.(); } else this.vf.classList.remove('open');
+    if (on) { this.game.input.releasePointer(); this.tick(); this.current?.(); }
+    else { this.vf.classList.remove('open'); this.camOff?.(); this.camOff = null; (document.activeElement as HTMLElement | null)?.blur?.(); }
   }
 
   // ---------- dane ----------
@@ -266,9 +281,9 @@ export class Phone {
       gal.textContent = `🖼️ Zdjęcia (${this.photos.length})`;
     };
     const key = (e: KeyboardEvent) => { if (e.code === 'Space' && this.vf.classList.contains('open')) { e.preventDefault(); take(); } };
-    const leave = (then: () => void) => { this.vf.classList.remove('open'); removeEventListener('keydown', key, true); this.el.classList.add('open'); this.open = true; then(); };
+    const leave = (then: () => void) => { this.vf.classList.remove('open'); removeEventListener('keydown', key, true); this.camOff = null; this.el.classList.add('open'); this.open = true; then(); };
     shot.onclick = take; back.onclick = () => leave(() => this.home()); gal.onclick = () => leave(() => this.gallery());
-    addEventListener('keydown', key, true);
+    addEventListener('keydown', key, true); this.camOff = () => removeEventListener('keydown', key, true);
   }
 
   private addPhoto(url: string): void {
