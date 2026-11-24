@@ -289,7 +289,11 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   const WIN: number[] = [];
   // własne modele landmarków: budynki w ich obrysie zastępuje model
   const models = MODELS[t.city] ?? [];
-  const byModel = (b: TileBuilding) => { if (!models.length) return false; const [x, z] = centroidFlat(b.o); return models.some(m => insideFlat(m.ring, x, z)); };
+  const byModel = (b: TileBuilding) => {
+    if (!models.length) return false;
+    const [x, z] = centroidFlat(b.o);
+    return models.some(m => m.id === b.id || insideFlat(m.ring, x, z) || (() => { for (let i = 0; i < b.o.length; i += 2) if (!insideFlat(m.ring, b.o[i], b.o[i + 1])) return false; return true; })());
+  };
   // kościoły: obrysy świątyń; części w ich obrębie (wieże, nawy) dostają okna kościelne i cegłę
   const churchRings = t.b.filter(b => !b.part && CHURCH.includes(b.t)).map(b => toXZ(b.o));
   for (const b of t.b) {
@@ -339,7 +343,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     const [x, z] = centroidFlat(m.ring); if (Math.floor(x / t.size) !== t.x || Math.floor(z / t.size) !== t.y) continue;
     const ring = toXZ(m.ring), base = world ? world.baseOf(ring) : 0; facPad();
     const sink = makeSink({ tri: (a, b2, c, col, n) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad }, base, .37);
-    BUILDERS[m.model]?.(sink, m.frame); facPad();
+    BUILDERS[m.model]?.(sink, m.frame, ring); facPad();
   }
   // pomniki, rzeźby, krasnale (własne modele z punktów OSM)
   const BS = { tri: (a: number[], b2: number[], c: number[], col: RGB, n?: number[]) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad };

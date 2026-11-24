@@ -3,10 +3,14 @@
 import wroclaw from '../../../../../data/landmarks/wroclaw.json';
 import type { ModelSink, Frame } from './sink';
 import { buildRatusz } from './ratusz';
+import { buildHala, buildIglica, buildKatedra, buildPiasek, buildSkyTower, buildUniwersytet } from './wroclaw';
 
 export interface LandmarkModel { model: string; name: string; id: number; frame: Frame; ring: number[] }
 export const MODELS: Record<string, LandmarkModel[]> = { wroclaw: (wroclaw as unknown as { models: LandmarkModel[] }).models };
-export const BUILDERS: Record<string, (S: ModelSink, f: Frame) => void> = { ratusz: buildRatusz };
+export const BUILDERS: Record<string, (S: ModelSink, f: Frame, ring: [number, number][]) => void> = {
+  ratusz: buildRatusz, katedra: buildKatedra, hala: buildHala, iglica: buildIglica, piasek: buildPiasek, uniwersytet: buildUniwersytet,
+  skytower: (S, f, ring) => buildSkyTower(S, f, ring),
+};
 
 export function insideFlat(o: number[], x: number, z: number): boolean {
   let s = false; const n = o.length / 2;
