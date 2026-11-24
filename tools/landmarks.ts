@@ -1,7 +1,7 @@
 // Landmarki miasta: ranking z kafli (Wikidata, zabytek, świątynia, wysokość, powierzchnia, pomniki z nazwą)
 // i ramy (prostokąt opisany) dla budynków z własnym modelem. Wynik: data/landmarks/<miasto>.json, docs/landmarki-<miasto>.md
 //   npx tsx tools/landmarks.ts --city wroclaw
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'; import { join } from 'node:path'; import { gunzipSync } from 'node:zlib';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'; import { join } from 'node:path'; import { gunzipSync } from 'node:zlib';
 import { obb } from '../shared/src/interiors/geom';
 import type { TileData } from '../shared/src/tiles/types';
 const ROOT = new URL('..', import.meta.url).pathname, argv = process.argv.slice(2), city = argv[argv.indexOf('--city') + 1] || 'wroclaw';
@@ -16,7 +16,9 @@ const MODELS: Record<string, string> = {
   '101205499': 'uniwersytet', '165880544': 'skytower',
 };
 /** mosty z własnym modelem: nazwa jezdni na moście (małe litery) -> model */
-const BRIDGES: Record<string, string> = { 'most grunwaldzki': 'grunwaldzki' };
+const BRIDGES: Record<string, string> = {}; // (stary sposób: oś z jezdni; mosty biorą się teraz z obrysów, tools/bridges.py)
+/** mosty z własnym modelem (nazwa z obrysu man_made=bridge, małe litery); pozostałe: szablon wg bridge:structure */
+const BRIDGE_MODELS: Record<string, string> = { 'most grunwaldzki': 'grunwaldzki', 'most zwierzyniecki': 'zwierzyniecki', 'most tumski': 'tumski', 'most piaskowy': 'piaskowy', 'most pokoju': 'pokoju', 'most pomorski północny': 'pomorski', 'most pomorski środkowy': 'pomorski', 'most pomorski południowy': 'pomorski' };
 const bridgePts = new Map<string, { pts: [number, number][]; w: number }>();
 /** nazwy budynków bez nazwy w OSM */
 const NAMES: Record<string, string> = { '101205499': 'Uniwersytet Wrocławski – Gmach Główny z Aulą Leopoldina', '165880544': 'Sky Tower' };
@@ -54,6 +56,14 @@ for (const [nm, e] of bridgePts) { // oś mostu: najdalsze punkty jezdni
   const L = best, ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, D = Math.max(15, e.w + 6), nx = -uz, nz = ux, h = D / 2 + 3;
   models.push({ model: BRIDGES[nm], name: nm, id: 0, frame: { ox: a[0], oz: a[1], ux, uz, W: L, D },
     ring: [a[0] - nx * h, a[1] - nz * h, b[0] - nx * h, b[1] - nz * h, b[0] + nx * h, b[1] + nz * h, a[0] + nx * h, a[1] + nz * h].map(v => Math.round(v * 10) / 10) });
+}
+{ // obrysy mostów z tools/bridges.py
+  const mf = join(ROOT, 'data/landmarks', `${city}-mosty.json`);
+  if (existsSync(mf)) for (const b of JSON.parse(readFileSync(mf, 'utf8')) as { name: string; s: string; id: number; frame: { ox: number; oz: number; ux: number; uz: number; W: number; D: number } }[]) {
+    const f = b.frame, nx = -f.uz, nz = f.ux, h = f.D / 2, bx = f.ox + f.ux * f.W, bz = f.oz + f.uz * f.W;
+    models.push({ model: BRIDGE_MODELS[b.name.toLowerCase()] ?? 'most:' + b.s, name: b.name || 'most', id: 0, frame: f,
+      ring: [f.ox - nx * h, f.oz - nz * h, bx - nx * h, bz - nz * h, bx + nx * h, bz + nz * h, f.ox + nx * h, f.oz + nz * h].map(v => Math.round(v * 10) / 10) });
+  }
 }
 for (const q of POINTS) { // konstrukcje: kwadrat wokół punktu (układ gry jak w makeProj)
   const cities = JSON.parse(readFileSync(join(ROOT, 'data/cities.json'), 'utf8')), o = cities[city].o, kx = Math.cos(o[0] * Math.PI / 180) * 111320;
