@@ -30,8 +30,10 @@ export class TransitSystem {
   /** Punkt ścieżki z wysokością (powierzchnia: teren albo most; metro: z tunelu). */
   pose(p: Pattern, s: number, out: VehiclePose = { x: 0, y: 0, z: 0, yaw: 0 }): VehiclePose {
     const q = { x: 0, y: 0, z: 0, yaw: 0 }; p.pointAt(s, q);
-    out.x = q.x; out.z = q.z; out.yaw = q.yaw;
-    out.y = Number.isNaN(q.y) ? this.world.surfaceAt(q.x, q.z, 1e6) : q.y;
+    // autobus jedzie prawym pasem (trasa biegnie osią jezdni z OSM); tramwaje i pociągi: osobne tory w danych
+    const lane = p.kind === 'bus' ? 1.7 : 0;
+    out.x = q.x + Math.cos(q.yaw) * lane; out.z = q.z - Math.sin(q.yaw) * lane; out.yaw = q.yaw;
+    out.y = Number.isNaN(q.y) ? this.world.surfaceAt(out.x, out.z, 1e6) : q.y;
     return out;
   }
 

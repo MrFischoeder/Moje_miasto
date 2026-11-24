@@ -99,7 +99,7 @@ npx tsx tools/simplify-tiles.ts --city wroclaw
 npm run fetch-dem -- --city wroclaw
 python3 tools/airports.py --city wroclaw --pbf .cache/pbf/Wroclaw.osm.pbf
 # rozkłady MPK (GTFS, portal Otwarty Wrocław: open-data.cui.wroclaw.pl/hdb/ft/6/ – najnowszy plik na górze listy)
-python3 tools/gtfs-build.py --city wroclaw --feed .cache/gtfs/wroclaw_new.zip
+python3 tools/gtfs-build.py --city wroclaw --feed .cache/gtfs/wroclaw_new.zip --pbf .cache/pbf/Wroclaw.osm.pbf   # --pbf: trasy dopasowane do dróg i torów z OSM (tools/lib/mapmatch.py)
 ```
 
 Wrocław: 2519 kafli (22,5 × 27 km), budynki 208 tys. → 86 tys. po uproszczeniu, 21 MB. Start na płycie Rynku (pole `sp`).

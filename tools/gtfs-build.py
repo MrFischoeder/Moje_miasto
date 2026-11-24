@@ -14,6 +14,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--city', required=True)
 ap.add_argument('--feed', action='append', required=True)
 ap.add_argument('--margin', type=float, default=6000, help='margines wokół obszaru metra [m]')
+ap.add_argument('--pbf', default=None, help='wycinek OSM PBF: dopasowanie tras do dróg i torów (tools/lib/mapmatch.py)')
 ap.add_argument('--bus-radius', type=float, default=None, help='autobusy tylko w promieniu [m] od środka miasta (duże sieci)')
 a = ap.parse_args()
 city = json.load(open(os.path.join(ROOT, 'data/cities.json'), encoding='utf-8'))[a.city]
@@ -87,6 +88,13 @@ def project_stops(shape, cd, stops_xy):
     for i in range(1, len(out)): out[i] = max(out[i], out[i - 1])
     return out
 
+NETS = None
+if a.pbf:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+    import mapmatch
+    m_ = a.margin + 1500; NETS = mapmatch.load(a.pbf, proj, (BX0 - m_, BZ0 - m_, BX1 + m_, BZ1 + m_))
+    print('sieci OSM: ' + ', '.join(f'{k} {len(n.xy)} węzłów' for k, n in NETS.items()), flush=True)
+MATCH_CACHE, MATCH_STATS = {}, {}
 t0 = time.time()
 DAYS = ['powszedni', 'sobota', 'niedziela']
 routes_out, stops_out, stop_index = [], [], {}
@@ -196,6 +204,11 @@ for feed in a.feed:
             if shape is None or len(shape) < 2: shape = simplify(stops_xy, .5)
             cd = cumdist(shape)
             dist = project_stops(shape, cd, stops_xy)
+            net = NETS and NETS.get('bus' if kind == 'bus' else 'tram' if kind == 'tram' else 'rail' if kind == 'rail' else '')
+            if net is not None and len(net.xy):
+                new, frac = mapmatch.match(net, shape, cd, stops_xy, dist, rmax=45 if kind == 'bus' else 35, cache=MATCH_CACHE, key=kind)
+                st_ = MATCH_STATS.setdefault(kind, [0, 0.0]); st_[0] += 1; st_[1] += frac
+                if len(new) >= 2: shape = simplify(new, .4); cd = cumdist(shape); dist = project_stops(shape, cd, stops_xy)
             # kształt przycięty do części kursu (od pierwszego do ostatniego przystanku)
             pattern_index[pk] = len(patterns)
             patterns.append({'r': ri, 's': sids, 'h': head, 'shape': shape, 'cd': cd, 'd': dist, 'prof': {}, 'trips': []})
@@ -211,6 +224,7 @@ for feed in a.feed:
                 while t < f1: starts.append(t); t += hw
         for s0 in starts: p['trips'].append([s0, pi, mask]); total_trips += 1
     print(f'  linii {len(routes_out)}, wzorców {len(patterns)}, kursów {total_trips} ({time.time() - t0:.0f} s)', flush=True)
+    for k_, (n_, f_) in MATCH_STATS.items(): print(f'  dopasowanie do sieci OSM: {k_} {n_} wzorców, średnio {100 * f_ / n_:.0f}% odcinków po drogach/torach', flush=True)
     del st, trips, shapes_raw
 
 # --- zapis ---

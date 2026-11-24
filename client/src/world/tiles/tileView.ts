@@ -22,6 +22,7 @@ import { buildGable, frontEdge, KAM_T, kamColors } from './models/kamienica';
 import { CITIES, type CityKey } from '@miasto/shared/data/cities';
 import { makeProj } from '@miasto/shared/data/projection';
 import { obb } from '@miasto/shared/interiors/geom';
+import { partsCover } from '@miasto/shared/tiles/parts';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
@@ -302,13 +303,9 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   const FA: number[] = [], FB: number[] = [], FC: number[] = [];
   const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0, 0); } };
   // obrys budynku złożonego z części (building:part) nie jest rysowany: części go zastępują (inaczej ściany się nakładają i migoczą)
-  const partInfo = t.b.filter(b => b.part).map(b => { const o = toXZ(b.o); return { c: o.reduce((s, p) => [s[0] + p[0] / o.length, s[1] + p[1] / o.length], [0, 0]), A: Math.abs(area2(o)) / 2 }; });
   const insideXZ = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
-  const coveredByParts = (o: XZ[]) => {
-    if (!partInfo.length) return false;
-    let A = 0; for (const p of partInfo) if (insideXZ(o, p.c[0], p.c[1])) A += p.A;
-    return A >= .5 * Math.abs(area2(o)) / 2;
-  };
+  const coveredByParts = (o: XZ[]) => coverF(o.flat());
+  const coverF = partsCover(t);
   const WIN: number[] = [];
   // własne modele landmarków: budynki w ich obrysie zastępuje model
   const models = MODELS[t.city] ?? [];

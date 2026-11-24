@@ -2,6 +2,7 @@
 // leniwie (parter + piętra wokół gracza w budynku), regiony chodzenia i przeszkody mebli dodawane do świata.
 // Serwer i klient robią to samo z tych samych danych, więc wnętrza są identyczne bez przesyłania przez sieć.
 import { tileKey, type TileBuilding, type TileData } from '../tiles/types';
+import { partsCover } from '../tiles/parts';
 import { DCELL, type Region, type RegionIndex } from '../world/regions';
 import { cellKey, CELL } from '../world/grid';
 import { nOf, toLocal, toWorld } from './geom';
@@ -33,8 +34,9 @@ export class Interiors {
 
   addTile(t: TileData): void {
     const k = tileKey(t.x, t.y); if (this.byTile.has(k)) return; const list: Cand[] = [];
+    const covered = partsCover(t); // budynek zastąpiony częściami (inna wysokość): bez wnętrza, żeby nie wystawało ponad dach
     for (const b of t.b) {
-      if (b.part || b.mh >= 2 || !hasInterior(b, t)) continue;
+      if (b.part || b.mh >= 2 || covered(b.o) || !hasInterior(b, t)) continue;
       let a = Infinity, b2 = -Infinity, c = Infinity, d = -Infinity;
       for (let i = 0; i < b.o.length; i += 2) { a = Math.min(a, b.o[i]); b2 = Math.max(b2, b.o[i]); c = Math.min(c, b.o[i + 1]); d = Math.max(d, b.o[i + 1]); }
       const cand: Cand = { b, t, a, b2, c, d }; list.push(cand);
