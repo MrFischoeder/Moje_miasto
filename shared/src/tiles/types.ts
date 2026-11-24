@@ -21,6 +21,10 @@ export interface TileBuilding {
   /** adres „ulica numer” */
   a?: string;
   name?: string;
+  /** wygląd z OSM (shared/osm/look.ts): kształt dachu, wysokość dachu [m], dach w poprzek, kolor dachu, kolor ścian, materiał ścian */
+  rs?: string; rh?: number; ro?: 'across'; rc?: string; bc?: string; bm?: string;
+  /** Wikidata (landmarki), zabytek */
+  wd?: string; hist?: 1;
 }
 
 export type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential' | 'service' | 'living' | 'pedestrian' | 'footway' | 'cycleway' | 'path' | 'steps' | 'track';
@@ -78,6 +82,8 @@ export interface TilePoi {
   t: string;
   x: number; z: number;
   n?: string; brand?: string; wd?: string;
+  /** wysokość [m] (pomniki) */
+  h?: number;
   /** budynek, w którym leży punkt */
   b?: number;
   a?: string;

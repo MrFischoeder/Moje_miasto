@@ -4,6 +4,7 @@
 import { makeProj, type Proj } from '../data/projection';
 import type { LonLat, Tags } from '../osm/features';
 import { heightOf, num } from '../osm/heights';
+import { lookOf, monumentKind } from '../osm/look';
 import { multipolygon } from '../osm/assemble';
 import type { RawOsm, RawWay } from '../osm/raw';
 import { pip, type XZ } from '../world/collision';
@@ -104,7 +105,7 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
     tt.b.push({
       id, o: flat(outer), ...(inner.length ? { i: inner.map(flat) } : {}), h: r1(h), mh: r1(mh), t: t.building || t['building:part'] || 'yes',
       ...(lv != null ? { lv } : {}), ...(t['building:part'] && !t.building ? { part: 1 as const } : {}),
-      ...(addr(t) ? { a: addr(t) } : {}), ...(t.name ? { name: t.name } : {}),
+      ...(addr(t) ? { a: addr(t) } : {}), ...(t.name ? { name: t.name } : {}), ...lookOf(t, h, mh),
     });
     buildingTiles.set(id, tt);
   };
@@ -216,6 +217,12 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
     return null;
   };
   const addPoi = (id: number, t: Tags, p: XZ, building?: number) => {
+    const mk = monumentKind(t);
+    if (mk) { // pomnik / rzeźba (punkt): rodzaj w t, nazwa w n
+      const tm = tile(...tileOf(p[0], p[1])); if (!tm) return;
+      tm.poi.push({ id, c: 'pomnik', t: mk, x: r1(p[0]), z: r1(p[1]), ...(t.name ? { n: t.name } : {}), ...(t.wikidata ? { wd: t.wikidata } : {}), ...(t.height ? { h: num(t.height) ?? undefined } : {}) });
+      return;
+    }
     const c = t.shop ? 'shop' : t.amenity ? 'amenity' : t.craft ? 'craft' : t.office ? 'office' : null; if (!c) return;
     if (c === 'amenity' && BORING_AMENITY.has(t.amenity)) return;
     const tt = tile(...tileOf(p[0], p[1])); if (!tt) return;
@@ -227,11 +234,11 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
   };
   for (const n of raw.nodes.values()) {
     const t = n.tags; if (!t) continue; const p = proj(n.lat, n.lon);
-    if (t.shop || t.amenity || t.craft || t.office) addPoi(n.id, t, p);
+    if (t.shop || t.amenity || t.craft || t.office || monumentKind(t)) addPoi(n.id, t, p);
     else if (t['addr:housenumber']) { const tt = tile(...tileOf(p[0], p[1])); const b = tt && inBuilding(tt, p[0], p[1]); if (b && !b.a) b.a = addr(t); }
   }
   for (const w of raw.ways.values()) {
-    const t = w.tags; if (!t || !(t.shop || t.amenity || t.craft || t.office) || areaKind(t) === 'parking') continue;
+    const t = w.tags; if (!t || !(t.shop || t.amenity || t.craft || t.office || monumentKind(t)) || areaKind(t) === 'parking') continue;
     const pts = raw.wayCoords(w).map(([lo, la]) => proj(la, lo)); if (pts.length < 3) continue;
     let cx = 0, cz = 0; for (const [x, z] of pts) { cx += x; cz += z; }
     addPoi(w.id, t, [cx / pts.length, cz / pts.length], isBuilding(t) && buildingTiles.has(w.id) ? w.id : undefined);

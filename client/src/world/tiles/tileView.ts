@@ -2,15 +2,16 @@
 // mosty, tory, przejścia dla pieszych i sygnalizacja. Wszystko scalone w kilka meshy i linii na kafelek.
 // ZASADA: odcinki i trójkąty do 20 m (długie znikają blisko kamery na niektórych GPU).
 import * as THREE from 'three';
-import type { RGB } from '@miasto/shared/util/rng';
+import { hex, type RGB } from '@miasto/shared/util/rng';
 import { toXZ, type World } from '@miasto/shared/world/world';
 import { deckY } from '@miasto/shared/world/bridges';
 import type { XZ } from '@miasto/shared/world/collision';
 import { isVehicleRoad } from '@miasto/shared/tiles/build';
-import type { AreaKind, TileData, TileRoad } from '@miasto/shared/tiles/types';
+import type { AreaKind, TileBuilding, TileData, TileRoad } from '@miasto/shared/tiles/types';
 import { MAX_SEG } from '../geometry';
-import { classify } from '@miasto/shared/interiors/facade';
+import { classify, type BuildingClass } from '@miasto/shared/interiors/facade';
 import { TileWindows, WindowMaterials, wallWindows } from './physWindows';
+import { addRoof, defaultRoofH } from './roofs';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
@@ -63,6 +64,27 @@ const CURB = .15;
 const HOUSE = ['house', 'detached', 'semidetached_house', 'terrace', 'bungalow', 'farm'];
 const INDUSTRY = ['industrial', 'warehouse', 'service', 'garage', 'garages', 'hangar', 'manufacture', 'shed', 'roof', 'carport'];
 const SHOPS = ['retail', 'commercial', 'supermarket', 'kiosk'];
+const CHURCH = ['church', 'cathedral', 'chapel', 'basilica', 'monastery'];
+/** Okna świątyni: w nawie wysokie i rzadkie (jedna „kondygnacja”), w wieży kilka otworów dzwonnicy. */
+function isTower(b: TileBuilding): boolean {
+  const r = toXZ(b.o); let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const [x, z] of r) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const s = Math.min(x1 - x0, z1 - z0); return b.h - b.mh > 2.2 * s && s < 22;
+}
+function churchFacade(fc: BuildingClass, b: TileBuilding): BuildingClass {
+  const H = b.h - b.mh, ring = toXZ(b.o); let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const [x, z] of ring) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const short = Math.min(x1 - x0, z1 - z0), tower = H > 2.2 * short && short < 22;
+  // ściany wieloboków (wieże, prezbiteria) bywają krótkie: odstęp okien dopasowany do typowej długości ściany
+  const edges = ring.map((p, i) => { const q = ring[(i + 1) % ring.length]; return Math.hypot(q[0] - p[0], q[1] - p[1]); }).sort((a, b) => a - b), med = edges[edges.length >> 1];
+  if (tower) { const lh = Math.min(14, Math.max(8, H / 4)), sp = Math.max(1, Math.min(3.2, med - .65)); return { ...fc, levels: Math.max(1, Math.floor(b.h / lh)), levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.1, sp * .6), wh: Math.min(4, lh * .35), sill: lh * .5 }; }
+  const lh = Math.max(6, Math.min(22, H * .85)), sp = Math.max(2, Math.min(4.8, med - .65)); return { ...fc, levels: 1, levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.8, sp * .45), wh: lh * .62, sill: lh * .2 };
+}
+/** kolory ścian wg building:material (kilka odcieni) */
+const MAT_COL: Record<string, RGB[]> = {
+  brick: [[.62, .3, .22], [.56, .27, .2], [.66, .34, .24]], stone: [[.74, .7, .62], [.68, .64, .56]], plaster: [[.86, .82, .72], [.82, .78, .7]],
+  concrete: [[.66, .66, .64]], glass: [[.5, .62, .7]], metal: [[.6, .62, .64]], copper: [[.42, .6, .52]], wood: [[.55, .4, .28]],
+};
 
 /** Dane geometrii (zwykłe tablice: liczone w wątku kafli, przesyłane bez kopiowania). */
 type Attrs = Record<string, { array: Float32Array; size: number }>;
@@ -252,7 +274,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
 
   // --- budynki: ściany, dach, krawędzie (dach, podstawa, narożniki > 25°) ---
   const FA: number[] = [], FB: number[] = [], FC: number[] = [];
-  const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0); } };
+  const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0, 0); } };
   // obrys budynku złożonego z części (building:part) nie jest rysowany: części go zastępują (inaczej ściany się nakładają i migoczą)
   const partInfo = t.b.filter(b => b.part).map(b => { const o = toXZ(b.o); return { c: o.reduce((s, p) => [s[0] + p[0] / o.length, s[1] + p[1] / o.length], [0, 0]), A: Math.abs(area2(o)) / 2 }; });
   const insideXZ = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
@@ -262,14 +284,32 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     return A >= .5 * Math.abs(area2(o)) / 2;
   };
   const WIN: number[] = [];
+  // kościoły: obrysy świątyń; części w ich obrębie (wieże, nawy) dostają okna kościelne i cegłę
+  const churchRings = t.b.filter(b => !b.part && CHURCH.includes(b.t)).map(b => toXZ(b.o));
   for (const b of t.b) {
     if (!b.part && coveredByParts(toXZ(b.o))) continue;
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
-    const fc = classify(b, t.city);
+    const fc0 = classify(b, t.city);
+    const isChurch = CHURCH.includes(b.t) || (!!b.part && (b.bm === 'brick' || b.t === 'tower' || b.t === 'church' || (b.lv == null && !!(b.bc || b.rc || b.rs)))) || (!!b.part && churchRings.some(r => { const o = toXZ(b.o); let x = 0, z = 0; for (const p of o) { x += p[0]; z += p[1]; } return insideXZ(r, x / o.length, z / o.length); }));
+    const fc = isChurch ? churchFacade(fc0, b) : fc0;
     const cat = fc.typ ?? (b.t === 'office' ? 'office' : HOUSE.includes(b.t) ? 'house' : INDUSTRY.includes(b.t) ? 'industrial' : SHOPS.includes(b.t) ? 'sklep' : 'inne');
     const pal = FACADE[cat] ?? FACADE.inne, base0 = pal[Math.floor(fc.seed * 9973) % pal.length], j = .94 + fc.seed * .1;
-    const col: RGB = [base0[0] * j, base0[1] * j, base0[2] * j], roof: RGB = [PAL.roof[0] * j, PAL.roof[1] * j, PAL.roof[2] * j];
-    fillPoly(B, outer, holes, h, roof); facPad();
+    // kolory: z OSM (building:colour, roof:colour), z materiału albo z palety typu budynku
+    const mat = b.bm ?? (isChurch && !b.bc ? 'brick' : undefined); // kościół bez opisu: cegła
+    const wall0 = b.bc ? hex(b.bc) : mat && MAT_COL[mat] ? MAT_COL[mat][Math.floor(fc.seed * 9973) % MAT_COL[mat].length] : base0;
+    const col: RGB = [wall0[0] * j, wall0[1] * j, wall0[2] * j];
+    // wieża kościoła bez opisanego dachu: hełm ostrosłupowy
+    const rs = b.rs ?? (isChurch && isTower(b) ? 'pyramidal' : undefined);
+    const shaped = !!rs && !holes.length, tower = rs === 'pyramidal' || rs === 'cone' || rs === 'onion' || rs === 'dome' || rs === 'round';
+    const roof0 = b.rc ? hex(b.rc) : shaped ? (tower ? (b.hist ? PAL.copper : PAL.roofDark) : (b.hist || b.bm === 'brick' || HOUSE.includes(b.t) ? PAL.tiles : PAL.roofDark)) : PAL.roof;
+    const roof: RGB = [roof0[0] * j, roof0[1] * j, roof0[2] * j];
+    let wallTop = h;
+    if (shaped) {
+      let rh = b.rh ?? defaultRoofH(rs!, outer, b.h - b.mh); rh = Math.min(rh, Math.max(.5, h - mh - .5)); wallTop = h - rh;
+      addRoof(B, outer, wallTop, rh, rs!, b.ro === 'across', roof, col);
+    } else fillPoly(B, outer, holes, h, roof);
+    facPad();
+    const matId = mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
       const ccw = area2(ring) > 0 !== isHole, n = ring.length;
       for (let i = 0; i < n; i++) {
@@ -277,12 +317,12 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         const nrm = ccw ? [dz / m, 0, -dx / m] : [-dz / m, 0, dx / m];
         const n0 = B.P.length / 3;
         // kolejność wierzchołków zgodna z normalną na zewnątrz (obrysy bywają w obu kierunkach)
-        if (ccw) B.quad([c[0], mh, c[1]], [a[0], mh, a[1]], [a[0], h, a[1]], [c[0], h, c[1]], col, nrm);
-        else B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], h, c[1]], [a[0], h, a[1]], col, nrm);
-        wallWindows(WIN, a, c, nrm, base, mh, h, fc.levelH, fc.spacing, fc.ww, fc.wh, fc.raise, fc.sill, fc.levels, fc.seed);
+        if (ccw) B.quad([c[0], mh, c[1]], [a[0], mh, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
+        else B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
+        if (!isChurch) wallWindows(WIN, a, c, nrm, base, mh, wallTop, fc.levelH, fc.spacing, fc.ww, fc.wh, fc.raise, fc.sill, fc.levels, fc.seed);
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
-          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, fc.levelH); FB.push(fc.spacing, fc.ww, fc.wh, fc.raise); FC.push(fc.sill, fc.levels, fc.seed);
+          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, fc.levelH); FB.push(fc.spacing, fc.ww, fc.wh, fc.raise); FC.push(fc.sill, fc.levels, fc.seed, matId + (isChurch ? 4 : 0));
         }
       }
     }
@@ -385,7 +425,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   const add = (lines: boolean, mat: MatName, order: number, a: Attrs) => layers.push({ lines, mat, order, a });
   if (!B.empty) {
     facPad(); const a = B.attrs();
-    a.aFacA = { array: new Float32Array(FA), size: 4 }; a.aFacB = { array: new Float32Array(FB), size: 4 }; a.aFacC = { array: new Float32Array(FC), size: 3 };
+    a.aFacA = { array: new Float32Array(FA), size: 4 }; a.aFacB = { array: new Float32Array(FB), size: 4 }; a.aFacC = { array: new Float32Array(FC), size: 4 };
     add(false, 'build', 0, a);
   }
   if (!BE.empty) { const a = BE.attrs(); delete a.color; add(true, 'edge', 0, a); }

@@ -10,7 +10,7 @@ export const PAL = {
   ballast: [.42, .38, .34] as RGB, sleeper: [.3, .22, .16] as RGB, rail: [.55, .56, .58] as RGB, tramBed: [.3, .44, .22] as RGB,
   water: [.22, .45, .65] as RGB, bank: [.45, .43, .4] as RGB, deck: [.45, .45, .46] as RGB, railing: [.75, .75, .78] as RGB,
   park: [.3, .46, .22] as RGB, forest: [.19, .34, .16] as RGB, cemetery: [.28, .38, .24] as RGB, pitch: [.27, .48, .26] as RGB,
-  parking: [.4, .41, .42] as RGB, square: [.6, .58, .54] as RGB, roof: [.36, .36, .38] as RGB, pole: [.3, .32, .34] as RGB,
+  parking: [.4, .41, .42] as RGB, square: [.6, .58, .54] as RGB, roof: [.36, .36, .38] as RGB, roofDark: [.3, .3, .33] as RGB, tiles: [.6, .27, .18] as RGB, copper: [.42, .62, .52] as RGB, pole: [.3, .32, .34] as RGB,
 };
 
 /** Kolory elewacji wg typu budynku (warianty losowane z ziarna budynku). */

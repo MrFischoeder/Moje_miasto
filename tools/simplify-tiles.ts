@@ -53,7 +53,7 @@ const stats = { b0: 0, b1: 0, v0: 0, v1: 0, r0: 0, r1: 0, a0: 0, a1: 0, merged: 
 function simplifyTile(t: TileData): TileData {
   const shopB = new Set(t.poi.filter(p => p.c === 'shop' && SHOP_POI.includes(p.t) && p.b != null).map(p => p.b!));
   const info = t.b.map(b => { const o = ring(b.o); return { b, o, A: area(o), H: b.h - b.mh }; });
-  const important = (q: typeof info[0]) => !q.b.part && (q.H >= 35 || (q.b.lv ?? 0) >= 12 || !!q.b.name || KEEP_T.includes(q.b.t) || shopB.has(q.b.id) || q.A > 6000);
+  const important = (q: typeof info[0]) => !q.b.part && (q.H >= 35 || (q.b.lv ?? 0) >= 12 || !!q.b.name || !!q.b.wd || !!q.b.hist || !!q.b.rs || KEEP_T.includes(q.b.t) || shopB.has(q.b.id) || q.A > 6000);
   const impPolys = info.filter(important).map(q => q.o);
   const inside = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
   const out: TileBuilding[] = [], idMap = new Map<number, number>(), cand: typeof info = [];

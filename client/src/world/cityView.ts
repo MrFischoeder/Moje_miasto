@@ -1,5 +1,6 @@
 // Widok miasta: podziemia (zawsze całe), grunt i kafelki doładowywane wokół gracza.
 import * as THREE from 'three';
+import { makeProj } from '@miasto/shared/data/projection';
 import { TILE_SIZE } from '@miasto/shared/tiles/types';
 import type { World } from '@miasto/shared/world/world';
 import { buildMetroObjects } from './metro';
@@ -21,6 +22,10 @@ export class CityView {
     let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
     for (const s of world.stations) { a = Math.min(a, s.x); b = Math.max(b, s.x); c = Math.min(c, s.z); d = Math.max(d, s.z); }
     for (const t of world.tiles.values()) { a = Math.min(a, t.x * TILE_SIZE); b = Math.max(b, (t.x + 1) * TILE_SIZE); c = Math.min(c, t.y * TILE_SIZE); d = Math.max(d, (t.y + 1) * TILE_SIZE); }
+    if (!Number.isFinite(a)) { // miasto bez metra (Wrocław): grunt na obszarze mapy z data/cities.json
+      const A = world.city.area, pr = makeProj(world.city.o);
+      if (A) { const [x0, z0] = pr(A[2], A[1]), [x1, z1] = pr(A[0], A[3]); a = x0; b = x1; c = z0; d = z1; } else { a = c = -2000; b = d = 2000; }
+    }
     const f = (v: number) => Math.floor(v / TILE_SIZE);
     this.ground = new GroundGrid(f(a - 800), f(c - 800), f(b + 800), f(d + 800), world.metro.holes, xray, world.terrain ? world.ground : null, world.terrain?.step, (x, y) => !!world.terrain?.hasFine(x, y));
     this.group.add(this.ground.mesh, this.ground.lines);
