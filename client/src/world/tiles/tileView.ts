@@ -14,6 +14,7 @@ import { TileWindows, WindowMaterials, wallWindows } from './physWindows';
 import { addRoof, defaultRoofH } from './roofs';
 import { BUILDERS, centroidFlat, insideFlat, MODELS } from './models/index';
 import { makeSink } from './models/sink';
+import { buildMonument } from './models/monuments';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
@@ -340,6 +341,10 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     const sink = makeSink({ tri: (a, b2, c, col, n) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad }, base, .37);
     BUILDERS[m.model]?.(sink, m.frame); facPad();
   }
+  // pomniki, rzeźby, krasnale (własne modele z punktów OSM)
+  const BS = { tri: (a: number[], b2: number[], c: number[], col: RGB, n?: number[]) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad };
+  for (const p of t.poi) if (p.c === 'pomnik') { buildMonument(makeSink(BS, g ? g(p.x, p.z) : 0, .5), p.x, p.z, p.t, p.n ?? ''); }
+  facPad();
 
   // --- tereny ---
   const tileBox = (q: XZ, r: XZ) => {

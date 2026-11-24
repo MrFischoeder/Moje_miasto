@@ -94,6 +94,7 @@ export class Signs {
         }
       }
       for (const p of t.poi) {
+        if (p.c === 'pomnik' && (p.t === 'dwarf' || !p.n)) continue; // krasnale i bezimienne: bez tabliczek
         const text = signText(p), sub = p.a;
         this.list.push({ x: p.x, z: p.z, y: ground(p.x, p.z), make: () => { const sp = sprite(sub ? [text, sub] : [text], 'rgba(0,0,0,.8)', '#fff', p.c === 'shop' ? '#ffbe5a' : '#7dffb0', 4); sp.position.y = 3.4; return sp; } });
       }

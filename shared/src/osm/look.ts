@@ -52,7 +52,7 @@ export function monumentKind(t: Tags): string | null {
   }
   if (t.tourism === 'artwork') {
     const a = t.artwork_type || '';
-    if (['statue', 'sculpture', 'bust', 'installation', 'fountain'].includes(a)) return a;
+    if (['statue', 'sculpture', 'bust', 'installation', 'fountain', 'dwarf'].includes(a)) return a; // dwarf: wrocławskie krasnale
     return null;
   }
   return null;

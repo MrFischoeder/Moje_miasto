@@ -19,8 +19,8 @@ for (const f of readdirSync(dir).filter(f => f.endsWith('.json.gz'))) {
     const r = ring(b.o); let A = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; A += p[0] * q[1] - q[0] * p[1]; } A = Math.abs(A / 2);
     const cx = r.reduce((s, p) => s + p[0], 0) / r.length, cz = r.reduce((s, p) => s + p[1], 0) / r.length;
     const church = CHURCH.includes(b.t);
-    const score = (b.wd ? 4 : 0) + (b.hist ? 3 : 0) + (church ? 3 : 0) + Math.min(6, b.h / 15) + Math.min(4, A / 2500);
-    if (score < 6) continue;
+    const score = (b.wd ? 4 : 0) + (b.hist ? 4 : 0) + (church ? (b.hist ? 3 : .5) : 0) + Math.min(6, b.h / 15) + Math.min(4, A / 2500);
+    if (score < 7) continue;
     rows.push({ name: b.name, kind: church ? 'świątynia' : b.t, score, x: Math.round(cx), z: Math.round(cz), wd: b.wd, h: b.h, id: b.id });
     if (b.wd && MODELS[b.wd]) { const fr = obb(r)!; models.push({ model: MODELS[b.wd], name: b.name, id: b.id, frame: fr, ring: b.o }); }
   }

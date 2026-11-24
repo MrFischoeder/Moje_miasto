@@ -53,54 +53,54 @@ Ranking z danych OSM (Wikidata, zabytek, świątynia, wysokość, powierzchnia; 
 | 47 | Dworzec Wrocław Świebodzki | yes | 9 m | kształty, dachy i kolory z OSM |
 | 48 | dawna wieża ciśnień | yes | 46 m | kształty, dachy i kolory z OSM |
 | 49 | Wieża ciśnień Na Grobli | water_tower | 40 m | kształty, dachy i kolory z OSM |
-| 50 | Kredka | dormitory | 85 m | kształty, dachy i kolory z OSM |
-| 51 | Kościół Świętego Stanisława Kostki | świątynia | 32 m | kształty z OSM + styl gotycki (cegła, ostrołuki, hełmy) |
-| 52 | Muzeum Narodowe | civic | 9 m | kształty, dachy i kolory z OSM |
-| 53 | Kościół pw. Ducha Świętego | świątynia | 32 m | kształty z OSM + styl gotycki (cegła, ostrołuki, hełmy) |
-| 54 | Arsenał Miejski | civic | 16 m | kształty, dachy i kolory z OSM |
-| 55 | Hala Targowa | retail | 8 m | kształty, dachy i kolory z OSM |
-| 56 | Kościół Świętego Karola Boromeusza | świątynia | 20 m | kształty z OSM + styl gotycki (cegła, ostrołuki, hełmy) |
-| 57 | Ku czci Zwierząt Rzeźnych | pomnik |  | własny model pomnika |
-| 58 | Krzesło | pomnik |  | własny model pomnika |
-| 59 | Zesłańcom Sybiru | pomnik |  | własny model pomnika |
-| 60 | W hołdzie patriotom różnych narodowości straconych w latach 1939-1945 | pomnik |  | własny model pomnika |
-| 61 | Pomnik Bohaterów Getta Warszawskiego | pomnik |  | własny model pomnika |
-| 62 | Ignacy Jan Paderewski | pomnik |  | własny model pomnika |
-| 63 | Fontanna Niedźwiadek | pomnik |  | własny model pomnika |
-| 64 | Aleksander hrabia Fredro | pomnik |  | własny model pomnika |
-| 65 | Bolesław Chrobry | pomnik |  | własny model pomnika |
-| 66 | Ofiarom Stalinizmu | pomnik |  | własny model pomnika |
-| 67 | Bojownikom o wyzwolenie narodowe i społeczne | pomnik |  | własny model pomnika |
-| 68 | Pomnik Anonimowego Przechodnia | pomnik |  | własny model pomnika |
-| 69 | Pomnik Pamięci Ofiar Nocy Kryształowej | pomnik |  | własny model pomnika |
-| 70 | Pogodynka | pomnik |  | własny model pomnika |
-| 71 | Oskar Lange | pomnik |  | własny model pomnika |
-| 72 | Figura Matki Boskiej z Dzieciątkiem i Świętego Jana Nepomucena | pomnik |  | własny model pomnika |
-| 73 | Pomnik Zwycięstwa Żołnierza Polskiego | pomnik |  | własny model pomnika |
-| 74 | Pociąg do nieba | pomnik |  | własny model pomnika |
-| 75 | Fryderyk Chopin | pomnik |  | własny model pomnika |
-| 76 | Jagusia | pomnik |  | własny model pomnika |
-| 77 | Pomnik Wspólnej Pamięci | pomnik |  | własny model pomnika |
-| 78 | Pomnik Żołnierzy Wojska Polskiego | pomnik |  | własny model pomnika |
-| 79 | Cmentarz Żołnierzy Polskich | pomnik |  | własny model pomnika |
-| 80 | Szermierz | pomnik |  | własny model pomnika |
-| 81 | Angelus | pomnik |  | własny model pomnika |
-| 82 | Święty Jan Nepomucen | pomnik |  | własny model pomnika |
-| 83 | Pomnik ofiar I wojny światowej | pomnik |  | własny model pomnika |
-| 84 | Powodzianka | pomnik |  | własny model pomnika |
-| 85 | Żywy pomnik "Arena" | pomnik |  | własny model pomnika |
-| 86 | Pomnik ku czci Chińczyków z Tian’anmen | pomnik |  | własny model pomnika |
-| 87 | Kapliczka Dompniga | pomnik |  | własny model pomnika |
-| 88 | Mikołaj Kopernik | pomnik |  | własny model pomnika |
-| 89 | Amor na Pegazie | pomnik |  | własny model pomnika |
-| 90 | Beboczka Krista | pomnik |  | własny model pomnika |
-| 91 | Madonna z Dzieciątkiem | pomnik |  | własny model pomnika |
-| 92 | Pomnik ofiar UPA | pomnik |  | własny model pomnika |
-| 93 | Pomnik ku czci Polaków walczących o niepodległość | pomnik |  | własny model pomnika |
-| 94 | Pomnik Ofiar Zbrodni Katyńskiej | pomnik |  | własny model pomnika |
-| 95 | Pomnik Kardynała Bolesława Kominka | pomnik |  | własny model pomnika |
-| 96 | Joseph von Eichendorff | pomnik |  | własny model pomnika |
-| 97 | Głaz Galla Anonima | pomnik |  | własny model pomnika |
-| 98 | Pomnik wyzwolenia Wrocławia | pomnik |  | własny model pomnika |
-| 99 | Juliusz Słowacki | pomnik |  | własny model pomnika |
-| 100 | chaczkar | pomnik |  | własny model pomnika |
+| 50 | Muzeum Narodowe | civic | 9 m | kształty, dachy i kolory z OSM |
+| 51 | Arsenał Miejski | civic | 16 m | kształty, dachy i kolory z OSM |
+| 52 | Hala Targowa | retail | 8 m | kształty, dachy i kolory z OSM |
+| 53 | Kredka | dormitory | 85 m | kształty, dachy i kolory z OSM |
+| 54 | Park Hotel | hotel | 22 m | kształty, dachy i kolory z OSM |
+| 55 | Kameleon | commercial | 19 m | kształty, dachy i kolory z OSM |
+| 56 | Feniks | retail | 19 m | kształty, dachy i kolory z OSM |
+| 57 | Nowa Giełda | yes | 15 m | kształty, dachy i kolory z OSM |
+| 58 | Stara Giełda | commercial | 14 m | kształty, dachy i kolory z OSM |
+| 59 | Kamienica Pod Złotą Palmą | yes | 21 m | kształty, dachy i kolory z OSM |
+| 60 | Kamienica pod Błękitnym Słońcem | yes | 19 m | kształty, dachy i kolory z OSM |
+| 61 | Kamienica Pod Gryfami | yes | 22 m | kształty, dachy i kolory z OSM |
+| 62 | Kamienica Pod Złotym Orłem | yes | 20 m | kształty, dachy i kolory z OSM |
+| 63 | Kamienica Dwór Polski | yes | 20 m | kształty, dachy i kolory z OSM |
+| 64 | Zamek w Leśnicy | castle | 18 m | kształty, dachy i kolory z OSM |
+| 65 | Baszta Niedźwiadka | yes | 22 m | kształty, dachy i kolory z OSM |
+| 66 | Kamienica pod Półksiężycem | yes | 20 m | kształty, dachy i kolory z OSM |
+| 67 | Kamienica Pod Złotym Pokojem | yes | 20 m | kształty, dachy i kolory z OSM |
+| 68 | kamienica Pod Złotym Pelikanem | yes | 20 m | kształty, dachy i kolory z OSM |
+| 69 | Kamienica Pod Złotym Słońcem | yes | 15 m | kształty, dachy i kolory z OSM |
+| 70 | Kamienica Pod Siedmioma Elektorami | yes | 18 m | kształty, dachy i kolory z OSM |
+| 71 | Kamienica Pod Złotą Kotwicą | yes | 19 m | kształty, dachy i kolory z OSM |
+| 72 | Pałac Wallenberg-Pachalych | yes | 12 m | kształty, dachy i kolory z OSM |
+| 73 | Kamienica Szwedzka Sień | yes | 19 m | kształty, dachy i kolory z OSM |
+| 74 | Opera Wrocławska | civic | 0 m | kształty, dachy i kolory z OSM |
+| 75 | Kamienica Pod Złotym Jeleniem | yes | 18 m | kształty, dachy i kolory z OSM |
+| 76 | Pałac Królewski | yes | 9 m | kształty, dachy i kolory z OSM |
+| 77 | Ratusz | townhall | 9 m | własny model |
+| 78 | Dworzec Wrocław Nadodrze | train_station | 9 m | kształty, dachy i kolory z OSM |
+| 79 | kamienica Pod Złotą Trójcą | apartments | 15 m | kształty, dachy i kolory z OSM |
+| 80 | Pałac Schaffgotschów | palace | 10 m | kształty, dachy i kolory z OSM |
+| 81 | Klub Lekarza | yes | 12 m | kształty, dachy i kolory z OSM |
+| 82 | Biurowiec -Miastoprojekt | yes | 9 m | kształty, dachy i kolory z OSM |
+| 83 | Kamienica Pod Złotym Pucharem | yes | 13 m | kształty, dachy i kolory z OSM |
+| 84 | Ku czci Zwierząt Rzeźnych | pomnik |  | własny model pomnika |
+| 85 | Krzesło | pomnik |  | własny model pomnika |
+| 86 | Zesłańcom Sybiru | pomnik |  | własny model pomnika |
+| 87 | W hołdzie patriotom różnych narodowości straconych w latach 1939-1945 | pomnik |  | własny model pomnika |
+| 88 | Pomnik Bohaterów Getta Warszawskiego | pomnik |  | własny model pomnika |
+| 89 | Krasnale Filharmonii Wrocławskiej | pomnik |  | własny model pomnika |
+| 90 | Ignacy Jan Paderewski | pomnik |  | własny model pomnika |
+| 91 | Fontanna Niedźwiadek | pomnik |  | własny model pomnika |
+| 92 | Aleksander hrabia Fredro | pomnik |  | własny model pomnika |
+| 93 | Bolesław Chrobry | pomnik |  | własny model pomnika |
+| 94 | Ofiarom Stalinizmu | pomnik |  | własny model pomnika |
+| 95 | Bojownikom o wyzwolenie narodowe i społeczne | pomnik |  | własny model pomnika |
+| 96 | Pomnik Anonimowego Przechodnia | pomnik |  | własny model pomnika |
+| 97 | Pomnik Pamięci Ofiar Nocy Kryształowej | pomnik |  | własny model pomnika |
+| 98 | Pogodynka | pomnik |  | własny model pomnika |
+| 99 | Oskar Lange | pomnik |  | własny model pomnika |
+| 100 | Figura Matki Boskiej z Dzieciątkiem i Świętego Jana Nepomucena | pomnik |  | własny model pomnika |
