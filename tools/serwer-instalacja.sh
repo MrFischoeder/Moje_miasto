@@ -64,12 +64,44 @@ else
   case "$L80" in
     nginx*) KIND=nginx ;;
     apache2*|httpd*) KIND=apache ;;
+    caddy*) KIND=caddy ;;
     "") KIND=nginx; echo "Na porcie 80 nic nie działa: instaluję nginx."; apt-get install -y -qq nginx >/dev/null; systemctl enable --now nginx >/dev/null 2>&1 || true ;;
     *) die "Port 80 zajmuje program '$L80' (nie nginx/Apache/Plesk). Napisz to Claude'owi – trzeba dopasować instalację." ;;
   esac
   echo "Serwer WWW: $KIND"
   DOCROOT="/var/www/$FQDN"; mkdir -p "$DOCROOT"
-  if [ $KIND = nginx ]; then
+  if [ $KIND = caddy ]; then
+    # Caddy: własny blok strony w Caddyfile (HTTPS Caddy załatwia sam); kopia zapasowa i sprawdzenie przed przeładowaniem
+    command -v docker >/dev/null 2>&1 && docker ps --format '{{.Image}} {{.Ports}}' 2>/dev/null | grep -qi 'caddy' && die "Caddy działa w Dockerze – napisz to Claude'owi (trzeba dopisać stronę do konfiguracji kontenera)."
+    systemctl is-active --quiet caddy 2>/dev/null || die "Caddy nie działa jako usługa systemowa 'caddy' – napisz to Claude'owi."
+    CF=$(systemctl show -p ExecStart caddy 2>/dev/null | grep -o -- '--config [^ ;]*' | awk '{print $2}' | head -1 || true)
+    CF=${CF:-/etc/caddy/Caddyfile}
+    [ -f "$CF" ] || die "Nie znalazłem konfiguracji Caddy ($CF) – napisz to Claude'owi."
+    case "$CF" in *.json) die "Caddy używa konfiguracji JSON ($CF) – napisz to Claude'owi.";; esac
+    if grep -q "^$FQDN" "$CF"; then echo "Blok $FQDN już jest w $CF."
+    else
+      cp -a "$CF" "$CF.przed-moje-miasto.$(date +%Y%m%d%H%M%S)"
+      cat >> "$CF" <<CDY
+
+# Moje miasto (gra) – dopisane przez tools/serwer-instalacja.sh
+$FQDN {
+	root * $DOCROOT
+	encode gzip
+	@html path / /index.html
+	header @html Cache-Control "no-cache"
+	file_server
+}
+CDY
+      if ! caddy validate --config "$CF" --adapter caddyfile >/dev/null 2>&1; then
+        B=$(ls -t "$CF".przed-moje-miasto.* | head -1); cp -a "$B" "$CF"
+        die "Caddy nie przyjął konfiguracji – przywróciłem poprzednią, nic się nie zmieniło. Napisz to Claude'owi."
+      fi
+      echo "Dopisano stronę do $CF (kopia zapasowa obok)."
+    fi
+    chmod 755 "$DOCROOT"
+    systemctl reload caddy || die "Przeładowanie Caddy nie wyszło (systemctl status caddy)."
+    echo "HTTPS: Caddy zakłada certyfikat sam przy pierwszym wejściu na stronę."
+  elif [ $KIND = nginx ]; then
     if [ -d /etc/nginx/sites-available ]; then NCONF=/etc/nginx/sites-available/$FQDN; else NCONF=/etc/nginx/conf.d/$FQDN.conf; fi
     if [ ! -f "$NCONF" ]; then
       cat > "$NCONF" <<NGX
@@ -110,7 +142,7 @@ APC
     apache2ctl configtest >/dev/null 2>&1 || die "Konfiguracja Apache ma błąd (apache2ctl configtest). Nic nie przeładowano."
     systemctl reload apache2
   fi
-  if [ $DNS_OK = 1 ]; then
+  if [ $DNS_OK = 1 ] && [ $KIND != caddy ]; then
     command -v certbot >/dev/null || apt-get install -y -qq certbot "python3-certbot-$KIND" >/dev/null
     if certbot --"$KIND" -d "$FQDN" --non-interactive --agree-tos --register-unsafely-without-email --redirect >/dev/null 2>&1; then echo "Certyfikat HTTPS: ok"
     else warn "Certyfikat nie wyszedł (certbot). Spróbuj ponownie za kilka minut, uruchamiając to samo polecenie."; fi
