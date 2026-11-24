@@ -59,6 +59,8 @@ if command -v plesk >/dev/null 2>&1; then
 else
   # serwer bez Pleska: to, co nasłuchuje na porcie 80
   L80=$(ss -ltnpH 'sport = :80' 2>/dev/null | grep -o 'users:(("[^"]*' | head -1 | cut -d'"' -f2 || true)
+  if [ -z "$L80" ] && pgrep -x nginx >/dev/null 2>&1; then L80=nginx; fi
+  if [ -z "$L80" ] && pgrep -x apache2 >/dev/null 2>&1; then L80=apache2; fi
   case "$L80" in
     nginx*) KIND=nginx ;;
     apache2*|httpd*) KIND=apache ;;
@@ -74,7 +76,7 @@ else
 # Moje miasto (gra) – założone przez tools/serwer-instalacja.sh
 server {
     listen 80;
-    listen [::]:80;
+$( [ -e /proc/net/if_inet6 ] && echo '    listen [::]:80;' )
     server_name $FQDN;
     root $DOCROOT;
     index index.html;
@@ -88,7 +90,7 @@ NGX
       [ -d /etc/nginx/sites-enabled ] && ln -sf "$NCONF" /etc/nginx/sites-enabled/
     fi
     nginx -t >/dev/null 2>&1 || die "Konfiguracja nginx ma błąd (nginx -t). Nic nie przeładowano."
-    systemctl reload nginx
+    systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null || nginx
   else
     ACONF=/etc/apache2/sites-available/$FQDN.conf
     if [ ! -f "$ACONF" ]; then
