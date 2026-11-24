@@ -145,3 +145,10 @@ przejmują styl dominujący wśród pewnych w promieniu ~250–750 m. Wynik: pol
 
 Bloki bez opisanej liczby kondygnacji (domyślne 9 m) dostają 5 kondygnacji (krótkie segmenty 4).
 Wyjścia na dach mają drzwi; to miejsca na przyszłe wejścia na dachy.
+
+## Posadowienie budynków na terenie (`World.baseOf` / `World.lowOf`)
+
+Poziom parteru = najwyższy punkt terenu wzdłuż ścian (próbki co ~4 m, nie tylko narożniki), najwyżej 8 m ponad najniższy
+(ochrona przed błędami modelu terenu). Dzięki temu parter i jego okna zawsze są nad gruntem, a kondygnacje, okna,
+wnętrza i kolizje liczone są od tego samego poziomu. Po niższej stronie stoku ściany schodzą do najniższego punktu
+(cokół, ciemniejszy, bez okien). Własne modele landmarków zostają na najniższym punkcie (mają własne cokoły i schody).

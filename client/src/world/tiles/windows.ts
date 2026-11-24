@@ -37,6 +37,8 @@ for (int i = 0; i < ${MAX_DOORS}; i++) {
   vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPos.xz - a.xy;
   if (abs(dot(d, a.zw)) < b.z && abs(dot(d, vec2(-a.w, a.z))) < b.w && vWPos.y > b.x && vWPos.y < b.y) discard;
 }
+// cokół: część ściany poniżej poziomu parteru (budynek na stoku) ciemniejsza, bez okien
+if (vFacA.z > 0.5 && vFacA.y < -0.02) diffuseColor.rgb *= 0.72;
 // faktura muru: cegła (1) albo ciosy kamienne (2); spoiny wygaszane z odległością
 float matW = mod(vFacC.w, 4.0), arch = step(3.5, vFacC.w);
 if (matW > 2.5 && vFacA.z > 0.5 && vFacB.x > 0.5) {

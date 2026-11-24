@@ -59,8 +59,24 @@ export class World implements Surface {
   // ---------- teren ----------
   /** Wysokość gruntu (0 bez modelu terenu). */
   readonly ground = (x: number, z: number): number => this.terrain ? this.terrain.height(x, z) : 0;
-  /** Poziom posadowienia budynku: najniższy punkt terenu pod obrysem. */
-  baseOf(pts: XZ[]): number { if (!this.terrain) return 0; let m = Infinity; for (const [x, z] of pts) m = Math.min(m, this.ground(x, z)); return m; }
+  /**
+   * Poziom parteru budynku: najwyższy punkt terenu wzdłuż ścian (próbki co ~4 m), żeby parter i jego okna zawsze
+   * wychodziły ponad grunt. Na stoku budynek stoi wyżej od strony spadku, różnicę wypełnia cokół (lowOf).
+   * Ograniczenie 8 m ponad najniższy punkt chroni przed błędami modelu terenu (skarpy przy rzekach).
+   */
+  baseOf(pts: XZ[]): number { const [lo, hi] = this.footing(pts); return Math.min(hi, lo + 8); }
+  /** Najniższy punkt terenu wzdłuż ścian (spód cokołu). */
+  lowOf(pts: XZ[]): number { return this.footing(pts)[0]; }
+  private footing(pts: XZ[]): [number, number] {
+    if (!this.terrain || !pts.length) return [0, 0];
+    let lo = Infinity, hi = -Infinity;
+    const at = (x: number, z: number) => { const y = this.ground(x, z); if (y < lo) lo = y; if (y > hi) hi = y; };
+    for (let i = 0; i < pts.length; i++) {
+      const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % pts.length], n = Math.min(40, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 4));
+      for (let k = 0; k < n; k++) at(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n);
+    }
+    return [lo, hi];
+  }
 
   // ---------- kafelki ----------
   addTile(t: TileData): void {

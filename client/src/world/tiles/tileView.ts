@@ -324,6 +324,8 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     if (!b.part && coveredByParts(toXZ(b.o))) continue;
     if (byModel(b)) continue;
     const outer = toXZ(b.o), holes = (b.i || []).map(toXZ), base = world ? world.baseOf(outer) : 0, h = base + b.h, mh = base + b.mh;
+    // cokół: ściany schodzą do najniższego punktu terenu (parter na najwyższym, okna zawsze nad gruntem)
+    const wallBot = b.mh < .5 && world ? Math.min(mh, world.lowOf(outer) - .3) : mh;
     const fc0 = classify(b, t.city);
     const isChurch = CHURCH.includes(b.t) || (!!b.part && (b.bm === 'brick' || b.t === 'tower' || b.t === 'church' || (b.lv == null && !!(b.bc || b.rc || b.rs)))) || (!!b.part && churchRings.some(r => { const o = toXZ(b.o); let x = 0, z = 0; for (const p of o) { x += p[0]; z += p[1]; } return insideXZ(r, x / o.length, z / o.length); }));
     // kamienica: w obrębie Starego Miasta, zwykły budynek o rozmiarach kamienicy
@@ -386,8 +388,8 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         const nrm = ccw ? [dz / m, 0, -dx / m] : [-dz / m, 0, dx / m];
         const n0 = B.P.length / 3;
         // kolejność wierzchołków zgodna z normalną na zewnątrz (obrysy bywają w obu kierunkach)
-        if (ccw) B.quad([c[0], mh, c[1]], [a[0], mh, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
-        else B.quad([a[0], mh, a[1]], [c[0], mh, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
+        if (ccw) B.quad([c[0], wallBot, c[1]], [a[0], wallBot, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
+        else B.quad([a[0], wallBot, a[1]], [c[0], wallBot, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
         if (!isChurch) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
         if (st === 'blok' && !isHole && stLevels && stLevels.lv >= 4 && nrm[2] > -.25) balc.push([a, c, nrm[0], nrm[2], m]);
         for (let k = n0; k < B.P.length / 3; k++) {
@@ -405,7 +407,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
 
   for (const m of models) {
     const [x, z] = centroidFlat(m.ring); if (Math.floor(x / t.size) !== t.x || Math.floor(z / t.size) !== t.y) continue;
-    const ring = toXZ(m.ring), base = world ? world.baseOf(ring) : 0; facPad();
+    const ring = toXZ(m.ring), base = world ? world.lowOf(ring) : 0; facPad(); // własne modele: dopasowane do najniższego punktu (mają własne cokoły i schody)
     const sink = makeSink({ tri: (a, b2, c, col, n) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad }, base, .37); sink.ground = (x, z) => (g ? g(x, z) : 0);
     BUILDERS[m.model]?.(sink, m.frame, ring); facPad();
   }
