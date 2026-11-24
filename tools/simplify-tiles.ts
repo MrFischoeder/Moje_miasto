@@ -8,6 +8,7 @@ import { gunzipSync } from 'node:zlib';
 import pc from 'polygon-clipping';
 import type { Flat, TileBuilding, TileData, TileIndex, TileRoad } from '../shared/src/tiles/types';
 import { writeTiles } from './lib/common';
+import { normalizeRoads } from './lib/roads';
 import { CITIES, type CityKey } from '../shared/src/data/cities';
 import { makeProj } from '../shared/src/data/projection';
 
@@ -147,6 +148,7 @@ for (const f of readdirSync(src)) {
   tiles.set(t.x + '_' + t.y, simplifyTile(t));
   if (++n % 100 === 0) console.log(`${n}/${idx.tiles.length}`);
 }
+const rn = normalizeRoads(tiles); console.log(`ulice: ${rn.roads} odcinków, wyrównane krótkie: ${rn.absorbed}, płynne zwężenia: ${rn.tapers}`);
 const ix = writeTiles(city, tiles, dst, idx.source + ' · uproszczone (tools/simplify-tiles.ts)');
 const kb = (a: number) => (a / 1024 / 1024).toFixed(1) + ' MB';
 console.log(`budynki ${stats.b0} → ${stats.b1} (ważne zachowane: ${stats.kept}, połączone w kwartały: ${stats.merged}); wierzchołki budynków ${stats.v0} → ${stats.v1}`);

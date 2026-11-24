@@ -33,7 +33,7 @@ const ROAD_CLASS: Record<string, RoadClass> = {
   cycleway: 'cycleway', path: 'path', steps: 'steps', track: 'track',
 };
 /** szerokość pasa [m] */
-const LANE_W: Partial<Record<RoadClass, number>> = { motorway: 3.5, trunk: 3.5, primary: 3.25, secondary: 3.25, tertiary: 3, residential: 3, service: 2.75, living: 2.75 };
+export const LANE_W: Partial<Record<RoadClass, number>> = { motorway: 3.5, trunk: 3.5, primary: 3.25, secondary: 3.25, tertiary: 3, residential: 3, service: 2.75, living: 2.75 };
 /** domyślna liczba pasów (dwukierunkowa / jednokierunkowa) */
 const LANES: Partial<Record<RoadClass, [number, number]>> = { motorway: [4, 2], trunk: [4, 2], primary: [2, 2], secondary: [2, 1], tertiary: [2, 1], residential: [2, 1], service: [1, 1], living: [1, 1] };
 const PATH_W: Partial<Record<RoadClass, number>> = { pedestrian: 5, footway: 2, cycleway: 2, path: 1.6, steps: 2, track: 3 };

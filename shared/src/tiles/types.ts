@@ -50,6 +50,8 @@ export interface TileRoad {
   bw?: number[];
   /** tunel / przejście podziemne */
   tu?: 1;
+  /** szerokość na początku / końcu (płynne zwężenie do w na ok. 30 m; tools/lib/roads.ts) */
+  wa?: number; wb?: number;
   /** chodniki: 1 lewy, 2 prawy, 3 oba */
   sw?: number;
   /** węzły grafu: [indeks wierzchołka, id węzła OSM, ...] */

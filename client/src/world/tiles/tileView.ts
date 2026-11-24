@@ -189,17 +189,21 @@ type Ys = number | number[];
 const yAt = (ys: Ys, i: number, dy = 0) => (typeof ys === 'number' ? ys : ys[i]) + dy;
 
 /** Pas wzdłuż łamanej od przesunięcia s0 do s1 (w poprzek). */
-function strip(buf: Buf, p: XZ[], n: XZ[], s0: number, s1: number, ys: Ys, col: RGB, dy = 0): void {
+/** przesunięcie od osi: stałe albo osobne dla każdego punktu łamanej (zmienna szerokość jezdni) */
+type Off = number | number[];
+const o = (s: Off, i: number) => typeof s === 'number' ? s : s[i];
+const offMap = (s: Off, f: (v: number) => number): Off => typeof s === 'number' ? f(s) : s.map(f);
+function strip(buf: Buf, p: XZ[], n: XZ[], s0: Off, s1: Off, ys: Ys, col: RGB, dy = 0): void {
   for (let i = 0; i < p.length - 1; i++) {
-    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], ya = yAt(ys, i, dy), yb = yAt(ys, i + 1, dy);
-    buf.quad([A[0] + na[0] * s0, ya, A[1] + na[1] * s0], [B[0] + nb[0] * s0, yb, B[1] + nb[1] * s0], [B[0] + nb[0] * s1, yb, B[1] + nb[1] * s1], [A[0] + na[0] * s1, ya, A[1] + na[1] * s1], col, [0, 1, 0]);
+    const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], ya = yAt(ys, i, dy), yb = yAt(ys, i + 1, dy), a0 = o(s0, i), b0 = o(s0, i + 1), a1 = o(s1, i), b1 = o(s1, i + 1);
+    buf.quad([A[0] + na[0] * a0, ya, A[1] + na[1] * a0], [B[0] + nb[0] * b0, yb, B[1] + nb[1] * b0], [B[0] + nb[0] * b1, yb, B[1] + nb[1] * b1], [A[0] + na[0] * a1, ya, A[1] + na[1] * a1], col, [0, 1, 0]);
   }
 }
 /** Pionowa ściana wzdłuż łamanej na przesunięciu s, od wysokości h0 do h1 nad ys (krawężnik, bok torowiska). */
-function wall(buf: Buf, p: XZ[], n: XZ[], s: number, ys: Ys, h0: number, h1: number, col: RGB): void {
+function wall(buf: Buf, p: XZ[], n: XZ[], s: Off, ys: Ys, h0: number, h1: number, col: RGB): void {
   for (let i = 0; i < p.length - 1; i++) {
     const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], ya = yAt(ys, i), yb = yAt(ys, i + 1);
-    const ax = A[0] + na[0] * s, az = A[1] + na[1] * s, bx = B[0] + nb[0] * s, bz = B[1] + nb[1] * s;
+    const ax = A[0] + na[0] * o(s, i), az = A[1] + na[1] * o(s, i), bx = B[0] + nb[0] * o(s, i + 1), bz = B[1] + nb[1] * o(s, i + 1);
     buf.quad([ax, ya + h0, az], [bx, yb + h0, bz], [bx, yb + h1, bz], [ax, ya + h1, az], col);
   }
 }
@@ -217,11 +221,11 @@ function sleepers(buf: Buf, p: XZ[], n: XZ[], ys: Ys, h: number, hw: number, ste
   }
 }
 
-function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?: [number, number], skip?: (x: number, z: number) => boolean, dy = 0): void {
+function offLine(L: Lines, p: XZ[], n: XZ[], s: Off, ys: Ys, col: RGB, dash?: [number, number], skip?: (x: number, z: number) => boolean, dy = 0): void {
   let acc = 0;
   for (let i = 0; i < p.length - 1; i++) {
     const A = p[i], B = p[i + 1], na = n[i], nb = n[i + 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]), ya = yAt(ys, i, dy), yb = yAt(ys, i + 1, dy);
-    const a: XZ = [A[0] + na[0] * s, A[1] + na[1] * s], b: XZ = [B[0] + nb[0] * s, B[1] + nb[1] * s];
+    const a: XZ = [A[0] + na[0] * o(s, i), A[1] + na[1] * o(s, i)], b: XZ = [B[0] + nb[0] * o(s, i + 1), B[1] + nb[1] * o(s, i + 1)];
     if (!dash) { if (!skip || (!skip(A[0], A[1]) && !skip(B[0], B[1]))) L.seg([a[0], ya, a[1]], [b[0], yb, b[1]], col); acc += len; continue; }
     const [on, off] = dash, per = on + off;
     for (let t = Math.ceil(acc / per) * per - acc; t < len; t += per) {
@@ -409,24 +413,33 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       for (const s of [-ext - .2, ext + .2]) { offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1.05); offLine(SL, p, n, s, ys, C.railing, undefined, undefined, .05); }
     }
     if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); return; }
-    strip(F[3], p, n, -hw, hw, ys, r.tu ? [.03, .04, .045] : C.road);
+    // zmienna szerokość: płynne zwężenie na ok. 30 m przy końcach z wa / wb (tools/lib/roads.ts)
+    let H: Off = hw;
+    if (r.wa != null || r.wb != null) {
+      const arc = [0]; for (let i = 1; i < p.length; i++) arc.push(arc[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+      const L = arc[arc.length - 1], T = Math.min(30, L / 2.2), sm = (x: number) => x * x * (3 - 2 * x);
+      H = arc.map(s => { let w = r.w; if (r.wa != null && s < T) w = r.wa + (r.w - r.wa) * sm(s / T); if (r.wb != null && s > L - T) w = r.wb + (w - r.wb) * sm((L - s) / T); return w / 2; });
+    }
+    const nH = offMap(H, v => -v);
+    strip(F[3], p, n, nH, H, ys, r.tu ? [.03, .04, .045] : C.road);
     const skip = near(hw + 4);
     if (r.sw) for (const side of [-1, 1]) {
       if (!((side < 0 && r.sw & 1) || (side > 0 && r.sw & 2))) continue;
       // chodnik podniesiony o krawężnik: nawierzchnia, ściana krawężnika od jezdni, zewnętrzna krawędź
-      strip(RB, p, n, side * hw, side * (hw + 2.5), ys, PAL.sidewalk, CURB); wall(RB, p, n, side * hw, ys, 0, CURB, PAL.curb); wall(RB, p, n, side * (hw + 2.5), ys, 0, CURB, PAL.sidewalk);
+      const e0 = offMap(H, v => side * v), e1 = offMap(H, v => side * (v + 2.5));
+      strip(RB, p, n, e0, e1, ys, PAL.sidewalk, CURB); wall(RB, p, n, e0, ys, 0, CURB, PAL.curb); wall(RB, p, n, e1, ys, 0, CURB, PAL.sidewalk);
     }
     // pasy ruchu
-    const ln = r.ln, lw = r.w / Math.max(1, ln);
+    const ln = r.ln, lane = (k: number, d = 0): Off => offMap(H, v => -v + k * 2 * v / Math.max(1, ln) + d); // k-ta linia pasów od lewej krawędzi
     // oznakowanie poziome tylko na głównych ulicach (uproszczenie)
     if (ln >= 2 && ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'].includes(r.k)) {
-      if (r.ow) { for (let k = 1; k < ln; k++) offLine(FL[4], p, n, -hw + k * lw, ys, C.mark, [3, 6], skip); }
+      if (r.ow) { for (let k = 1; k < ln; k++) offLine(FL[4], p, n, lane(k), ys, C.mark, [3, 6], skip); }
       else {
-        const fwd = Math.ceil(ln / 2), back = ln - fwd, cs = -hw + back * lw;
-        if (ln >= 4) { offLine(FL[4], p, n, cs - .15, ys, C.mark, undefined, skip); offLine(FL[4], p, n, cs + .15, ys, C.mark, undefined, skip); }
-        else offLine(FL[4], p, n, cs, ys, C.mark, [4, 4], skip);
-        for (let k = 1; k < back; k++) offLine(FL[4], p, n, -hw + k * lw, ys, C.mark, [3, 6], skip);
-        for (let k = 1; k < fwd; k++) offLine(FL[4], p, n, cs + k * lw, ys, C.mark, [3, 6], skip);
+        const fwd = Math.ceil(ln / 2), back = ln - fwd;
+        if (ln >= 4) { offLine(FL[4], p, n, lane(back, -.15), ys, C.mark, undefined, skip); offLine(FL[4], p, n, lane(back, .15), ys, C.mark, undefined, skip); }
+        else offLine(FL[4], p, n, lane(back), ys, C.mark, [4, 4], skip);
+        for (let k = 1; k < back; k++) offLine(FL[4], p, n, lane(k), ys, C.mark, [3, 6], skip);
+        for (let k = 1; k < fwd; k++) offLine(FL[4], p, n, lane(back + k), ys, C.mark, [3, 6], skip);
       }
     }
   };
