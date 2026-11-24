@@ -273,3 +273,73 @@ export function buildNFM(S: ModelSink, f0: Frame): void {
   for (let u = W * .07; u < W * .94; u += 3.1) for (const v of [D * .08, D * .92]) { const s = v < D / 2 ? -1 : 1; S.box(P(u - .25, v), P(u + .25, v), P(u + .25, v + s * .7), P(u - .25, v + s * .7), 0, 26 + Math.sin(u * .2) * 4, [.62, .5, .32], null); }
   S.box(P(W * .3, D * .92), P(W * .7, D * .92), P(W * .7, D + 4), P(W * .3, D + 4), 8, 10, WOOD, null); // daszek nad wejściem
 }
+
+// ======================= partia 3: szablony i kolejne landmarki =======================
+const IVY: RGB = [.3, .45, .25], SANDST: RGB = [.72, .58, .45];
+
+interface ChurchOpt { h: number; roof: number; roofCol?: RGB; towers: 0 | 1 | 2; towerH: number; helm: 'spire' | 'baroque' | 'flat'; helmH: number; bridge?: boolean; aisles?: boolean; wall?: RGB; fac?: Fac }
+/** Kościół: nawa (z nawami bocznymi), prezbiterium z zamknięciem wielobocznym, wieże zachodnie (0, 1, 2) z hełmem */
+function church(S: ModelSink, f0: Frame, o: ChurchOpt): void {
+  const f = east(f0), P = at(f), { W, D } = f, vm = D / 2, rc = o.roofCol ?? TILE, wc = o.wall ?? BRICK, fac = o.fac ?? gothic(o.h - 2, 4.4, 2);
+  const t0 = o.towers ? .2 : .04, nw = o.aisles ? D * .2 : D * .36;
+  const nave = rect(P, W * t0, vm - nw, W * .82, vm + nw);
+  walls(S, nave, 0, o.h, wc, fac); addRoof(S, nave, S.base + o.h, o.roof, 'gabled', false, rc, wc);
+  if (o.aisles) for (const s of [-1, 1]) { const a = rect(P, W * t0, vm + s * nw, W * .8, vm + s * D * .46); walls(S, a, 0, o.h * .55, wc, { ...fac, levelH: o.h * .5, wh: o.h * .3, sill: o.h * .1 }); addRoof(S, a, S.base + o.h * .55, 5, 'skillion', false, rc, wc); }
+  const ac = P(W * .82, vm), ap = arc(ac, nw * .92, Math.atan2(f.uz, f.ux) - Math.PI / 2, Math.atan2(f.uz, f.ux) + Math.PI / 2, 5);
+  for (let i = 0; i + 1 < ap.length; i++) S.wall(ap[i], ap[i + 1], 0, o.h, wc, { ...fac, spacing: 2.6, ww: 1.4 }, ac);
+  addRoof(S, ngon(ac, nw * .9, 8, Math.atan2(f.uz, f.ux)), S.base + o.h, o.roof * .7, 'cone', false, rc, wc);
+  const tw = Math.min(D * .22, 7);
+  const tcs: XZ[] = o.towers === 2 ? [P(W * .1, vm - D * .26), P(W * .1, vm + D * .26)] : o.towers === 1 ? [P(W * .1, vm)] : [];
+  for (const tc of tcs) {
+    const t = rect(local(tc, f), -tw, -tw, tw, tw);
+    walls(S, t, 0, o.towerH, wc, { levelH: 12, spacing: 2.8, ww: 1.2, wh: 6, sill: 3.5, raise: 0, levels: Math.floor(o.towerH / 12), mat: fac.mat, arch: fac.arch });
+    if (o.helm === 'spire') { addRoof(S, ngon(tc, tw * .95, 8, Math.PI / 8), S.base + o.towerH, o.helmH, 'pyramidal', false, COPPER, wc); for (const c of t) S.spire(c, o.towerH, .5, 3, wc); }
+    else if (o.helm === 'baroque') {
+      const o1 = ngon(tc, tw * .8, 8, Math.PI / 8); walls(S, o1, o.towerH, o.towerH + 4, wc, null);
+      addRoof(S, o1, S.base + o.towerH + 4, o.helmH * .45, 'onion', false, COPPER, wc);
+      walls(S, ngon(tc, tw * .3, 8), o.towerH + 4 + o.helmH * .45, o.towerH + 7 + o.helmH * .45, COPPER, null);
+      addRoof(S, ngon(tc, tw * .32, 8), S.base + o.towerH + 7 + o.helmH * .45, o.helmH * .4, 'onion', false, COPPER, COPPER);
+    } else addRoof(S, t, S.base + o.towerH, 3, 'pyramidal', false, rc, wc);
+  }
+  if (o.bridge && tcs.length === 2) { // Mostek Pokutnic między wieżami
+    const a = tcs[0], b = tcs[1];
+    S.box([a[0] - f.ux * 1.5, a[1] - f.uz * 1.5], [a[0] + f.ux * 1.5, a[1] + f.uz * 1.5], [b[0] + f.ux * 1.5, b[1] + f.uz * 1.5], [b[0] - f.ux * 1.5, b[1] - f.uz * 1.5], 44, 46, wc, null);
+    S.slab([[a[0] - f.ux * 1.5, a[1] - f.uz * 1.5], [a[0] + f.ux * 1.5, a[1] + f.uz * 1.5], [b[0] + f.ux * 1.5, b[1] + f.uz * 1.5], [b[0] - f.ux * 1.5, b[1] - f.uz * 1.5]], 46, 46.3, DARK);
+  }
+}
+
+interface PalaceOpt { h: number; levels: number; wall: RGB; roof: RGB; roofH: number; risalit?: boolean; pediment?: boolean; corner?: boolean; tower?: 'onion' | 'dome' | null; ivy?: boolean; roofShape?: string }
+/** Pałac / gmach (barok, klasycyzm, neorenesans): korpus, gzyms, ryzalit z frontonem, pawilony narożne, wieżyczka */
+function palace(S: ModelSink, f0: Frame, o: PalaceOpt): void {
+  const f = east(f0), P = at(f), { W, D } = f, lh = (o.h - 1) / o.levels;
+  const fac: Fac = { levelH: lh, spacing: 3.4, ww: 1.5, wh: lh * .5, sill: lh * .25, raise: .8, levels: o.levels, mat: o.wall === BRICK ? 1 : 0, arch: false };
+  const body = rect(P, W * .03, D * .1, W * .97, D * .9);
+  walls(S, body, 0, o.h, o.wall, fac); S.slab(body, o.h, o.h + .5, WHITE);
+  addRoof(S, body, S.base + o.h + .5, o.roofH, o.roofShape ?? 'hipped', false, o.roof, o.wall);
+  if (o.ivy) for (let u = W * .06; u < W * .94; u += 9) S.box(P(u, D * .9), P(u + 5, D * .9), P(u + 5, D * .9 + .3), P(u, D * .9 + .3), 0, o.h * (.5 + ((u * 7) % 5) / 10), IVY, null);
+  if (o.corner) for (const [u0, u1] of [[W * .01, W * .16], [W * .84, W * .99]]) { const p = rect(P, u0, D * .06, u1, D * .94); walls(S, p, 0, o.h + 3, o.wall, fac); S.slab(p, o.h + 3, o.h + 3.5, WHITE); addRoof(S, p, S.base + o.h + 3.5, o.roofH * 1.3, 'hipped', false, o.roof, o.wall); }
+  if (o.risalit) {
+    const rz = rect(P, W * .42, D * .88, W * .58, D * .98); walls(S, rz, 0, o.h + 1.5, o.wall, fac); S.slab(rz, o.h + 1.5, o.h + 2, WHITE);
+    if (o.pediment) addRoof(S, rz, S.base + o.h + 2, 4, 'gabled', true, o.roof, WHITE);
+  }
+  if (o.tower) { const tc = P(W / 2, D / 2), r = Math.min(D * .15, 5); walls(S, ngon(tc, r, 8), o.h, o.h + o.roofH + 5, o.wall, { ...fac, levelH: 6, levels: 1, raise: o.h + o.roofH - 1 }); addRoof(S, ngon(tc, r, 8), S.base + o.h + o.roofH + 5, r * 1.4, o.tower, false, COPPER, o.wall); }
+}
+
+export const buildMagdalena = (S: ModelSink, f: Frame) => church(S, f, { h: 26, roof: 18, towers: 2, towerH: 50, helm: 'baroque', helmH: 22, bridge: true, aisles: true });
+export const buildWincenty = (S: ModelSink, f: Frame) => church(S, f, { h: 28, roof: 20, towers: 1, towerH: 30, helm: 'flat', helmH: 4 });
+export const buildWojciech = (S: ModelSink, f: Frame) => church(S, f, { h: 24, roof: 18, towers: 1, towerH: 44, helm: 'spire', helmH: 26 });
+export const buildImieniaJezus = (S: ModelSink, f: Frame) => church(S, f, { h: 22, roof: 12, towers: 0, towerH: 0, helm: 'flat', helmH: 0, wall: CREAM, fac: { levelH: 20, spacing: 4.6, ww: 2.2, wh: 9, sill: 6, raise: 0, levels: 1, mat: 0, arch: false } });
+export const buildArsenal = (S: ModelSink, f: Frame) => palace(S, f, { h: 13, levels: 3, wall: BRICK, roof: TILE, roofH: 11, corner: true });
+export const buildPalacKrolewski = (S: ModelSink, f: Frame) => palace(S, f, { h: 14, levels: 3, wall: [.92, .84, .62], roof: SLATE, roofH: 6, risalit: true, pediment: true, roofShape: 'mansard' });
+export const buildStaraGielda = (S: ModelSink, f: Frame) => palace(S, f, { h: 15, levels: 3, wall: WHITE, roof: SLATE, roofH: 4, risalit: true, pediment: true });
+export const buildMuzeum = (S: ModelSink, f: Frame) => palace(S, f, { h: 18, levels: 3, wall: SANDST, roof: SLATE, roofH: 9, corner: true, risalit: true, pediment: true, tower: 'dome', ivy: true });
+export const buildZamekLesnica = (S: ModelSink, f: Frame) => palace(S, f, { h: 14, levels: 3, wall: CREAM, roof: TILE, roofH: 8, tower: 'onion', roofShape: 'mansard' });
+
+/** Wieża ciśnień Na Grobli: neogotycka ceglana, narożne wieżyczki, stromy dach */
+export function buildWiezaCisnien(S: ModelSink, f0: Frame): void {
+  const f = east(f0), P = at(f), { W, D } = f, c = P(W / 2, D / 2), s = Math.min(W, D) * .42, t = rect(local(c, f), -s, -s, s, s);
+  walls(S, t, 0, 30, BRICK, { levelH: 10, spacing: 3, ww: 1.4, wh: 5, sill: 3, raise: 0, levels: 3, mat: 1, arch: true });
+  battlements(S, t, 30, BRICK2, 1.8);
+  addRoof(S, rect(local(c, f), -s * .85, -s * .85, s * .85, s * .85), S.base + 30, 13, 'pyramidal', false, SLATE, BRICK);
+  for (const p of t) { const o = ngon(p, 1.8, 8); walls(S, o, 0, 34, BRICK2, null); addRoof(S, o, S.base + 34, 5, 'cone', false, SLATE, BRICK2); }
+}
