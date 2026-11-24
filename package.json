@@ -27,6 +27,7 @@
     "@playwright/test": "1.63.0",
     "@types/node": "22.20.5",
     "geotiff": "3.0.5",
+    "polygon-clipping": "^0.15.7",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vitest": "4.1.12"

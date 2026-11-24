@@ -8,9 +8,11 @@ import type { GroundGrid } from '../ground';
 import type { TileSource } from './source';
 import type { StopPoint } from './props';
 import { MAX_LAMPS } from '../lampLight';
-import { buildTileView, TileMaterials, type TileView } from './tileView';
+import TileBuildWorker from './tileWorker?worker&inline';
+import type { TileWorkerIn, TileWorkerOut } from './tileWorker';
+import { assembleTile, buildTileView, TileMaterials, type TileView } from './tileView';
 
-export interface StreamStats { indexed: number; loaded: number; visible: number; pending: number; lastBuildMs: number; maxBuildMs: number }
+export interface StreamStats { indexed: number; loaded: number; visible: number; pending: number; lastBuildMs: number; maxBuildMs: number; lastAssembleMs?: number; maxAssembleMs?: number }
 
 export class TileStreamer {
   readonly group = new THREE.Group();
@@ -29,6 +31,29 @@ export class TileStreamer {
   /** przystanki komunikacji w kaflu (wiaty); ustawiane po wczytaniu rozkładów */
   stopsFor: (x: number, y: number) => StopPoint[] = () => [];
   constructor(private world: World, private source: TileSource, private ground: GroundGrid, private maxParallel = 3) {}
+
+  // ---- wątek budowy kafli ----
+  private worker: Worker | null = null; private workerFailed = false;
+  private building = new Set<string>();
+  private tileWorker(): Worker | null {
+    if (this.worker || this.workerFailed) return this.worker;
+    try {
+      const w = new TileBuildWorker(); this.worker = w;
+      const init: TileWorkerIn = { t: 'init', city: this.world.key, terrain: this.world.terrain ? this.world.terrain.encode() : null }; w.postMessage(init);
+      w.onmessage = (e: MessageEvent<TileWorkerOut>) => {
+        const d = e.data.d; if (!this.building.delete(d.key) || !this.data.has(d.key) || this.disposed) return; // kafel już zwolniony
+        const t0 = performance.now(); this.addView(d.key, assembleTile(d, this.mats));
+        const a = performance.now() - t0; this.stats.lastAssembleMs = a; this.stats.maxAssembleMs = Math.max(this.stats.maxAssembleMs ?? 0, a);
+      };
+      w.onerror = () => { this.workerFailed = true; this.worker = null; };
+    } catch { this.workerFailed = true; }
+    return this.worker;
+  }
+  private addView(k: string, v: TileView): void {
+    this.views.set(k, v); this.group.add(v.group);
+    this.stats.lastBuildMs = v.ms; this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, v.ms);
+    this.onChange();
+  }
 
   async init(): Promise<number> {
     this.index = await this.source.index();
@@ -55,23 +80,23 @@ export class TileStreamer {
       const [tx, ty] = k.split('_').map(Number); this.loading.add(k);
       this.source.load(tx, ty).then(t => { this.loading.delete(k); if (!this.disposed && t) this.ready.push(t); else if (!t) this.available.delete(k); });
     }
-    // jeden kafelek na klatkę: kolizje + bryły
+    // jeden kafelek na klatkę: kolizje od razu, bryły liczone w wątku kafli (albo od razu, gdy wątku brak)
     const t = this.ready.shift();
     if (t) {
       const k = tileKey(t.x, t.y); this.data.set(k, t); this.world.addTile(t);
       if (t.dem) this.ground.refresh(t.x, t.y); // dokładny teren: siatka gruntu od nowa
-      const v = buildTileView(t, this.mats, this.world.terrain ? this.world : null, this.world, this.stopsFor(t.x, t.y)); this.views.set(k, v); this.group.add(v.group);
-      this.stats.lastBuildMs = v.ms; this.stats.maxBuildMs = Math.max(this.stats.maxBuildMs, v.ms);
+      const w = this.tileWorker();
+      if (w) { this.building.add(k); const msg: TileWorkerIn = { t: 'build', tile: t, stops: this.stopsFor(t.x, t.y) }; w.postMessage(msg); }
+      else this.addView(k, buildTileView(t, this.mats, this.world.terrain ? this.world : null, this.world, this.stopsFor(t.x, t.y)));
       const water = t.a.filter(a => a.k === 'water');
       if (water.length) this.ground.setWater(t.x, t.y, water.flatMap(a => [toXZ(a.o)]));
-      this.onChange();
     }
     // zwalnianie: poza promieniem + 600 m
     for (const [k, v] of this.views) {
       const [i, j] = k.split('_').map(Number);
       const dx = Math.max(0, Math.abs((i + .5) * TILE_SIZE - x) - TILE_SIZE / 2), dz = Math.max(0, Math.abs((j + .5) * TILE_SIZE - z) - TILE_SIZE / 2);
       if (Math.hypot(dx, dz) <= radius + 600) continue;
-      this.group.remove(v.group); v.dispose(); this.views.delete(k); this.data.delete(k); this.world.removeTile(k);
+      this.group.remove(v.group); v.dispose(); this.views.delete(k); this.data.delete(k); this.world.removeTile(k); this.worker?.postMessage({ t: 'remove', key: k } as TileWorkerIn);
       const tt = { x: i, y: j }; this.ground.setWater(tt.x, tt.y, null); this.onChange();
     }
     this.stats.loaded = this.data.size; this.stats.visible = this.views.size; this.stats.pending = this.loading.size + this.ready.length;
@@ -97,6 +122,7 @@ export class TileStreamer {
   }
   dispose(): void {
     this.disposed = true;
+    this.worker?.terminate(); this.worker = null;
     for (const v of this.views.values()) v.dispose(); this.views.clear(); this.mats.dispose();
   }
 }

@@ -44,19 +44,33 @@ export class PropMaterials {
   dispose(): void { for (const m of [this.wood, this.leaves, this.metal, this.lamp, this.bench, this.shelter, this.glass]) m.dispose(); }
 }
 
+type GeoName = keyof typeof G;
+type PropMat = 'wood' | 'leaves' | 'metal' | 'lamp' | 'bench' | 'shelter' | 'glass';
+/** Instancje jednego rodzaju obiektu: macierze (16 liczb) i kolory (3 liczby) jako tablice (z wątku kafli). */
+export interface InstData { geo: GeoName; mat: PropMat; m: Float32Array; c?: Float32Array }
+
+/** Obiekty three.js z danych instancji. */
+export function assembleInst(list: InstData[], M: PropMaterials): THREE.InstancedMesh[] {
+  return list.map(d => {
+    const n = d.m.length / 16, im = new THREE.InstancedMesh(G[d.geo], M[d.mat], n);
+    im.instanceMatrix.array.set(d.m); im.instanceMatrix.needsUpdate = true;
+    if (d.c) im.instanceColor = new THREE.InstancedBufferAttribute(d.c, 3);
+    im.computeBoundingSphere(); return im;
+  });
+}
+
 class Inst {
   readonly m: THREE.Matrix4[] = []; readonly c: THREE.Color[] = [];
-  constructor(readonly geo: THREE.BufferGeometry, readonly mat: THREE.Material) {}
+  constructor(readonly geo: GeoName, readonly mat: PropMat) {}
   add(x: number, y: number, z: number, yaw: number, sx: number, sy: number, sz: number, col?: THREE.Color): void {
     this.m.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(sx, sy, sz)));
     if (col) this.c.push(col);
   }
-  mesh(): THREE.InstancedMesh | null {
+  data(): InstData | null {
     if (!this.m.length) return null;
-    const im = new THREE.InstancedMesh(this.geo, this.mat, this.m.length);
-    this.m.forEach((m, i) => im.setMatrixAt(i, m));
-    if (this.c.length === this.m.length) this.c.forEach((c, i) => im.setColorAt(i, c));
-    im.computeBoundingSphere(); return im;
+    const m = new Float32Array(this.m.length * 16); this.m.forEach((q, i) => q.toArray(m, i * 16));
+    let c: Float32Array | undefined; if (this.c.length === this.m.length) { c = new Float32Array(this.m.length * 3); this.c.forEach((q, i) => q.toArray(c!, i * 3)); }
+    return { geo: this.geo, mat: this.mat, m, ...(c ? { c } : {}) };
   }
 }
 
@@ -86,11 +100,11 @@ const LEAF = [new THREE.Color(.24, .42, .16), new THREE.Color(.3, .48, .18), new
 const NEEDLE = [new THREE.Color(.12, .28, .16), new THREE.Color(.16, .32, .18), new THREE.Color(.1, .24, .14)];
 
 /** Obiekty jednego kafla. ground: wysokość terenu (null = płasko); stops: przystanki w kaflu. */
-export function buildProps(t: TileData, M: PropMaterials, world: World | null, ground: ((x: number, z: number) => number) | null, stops: StopPoint[]): { objs: THREE.Object3D[]; lamps: number[] } {
+export function buildProps(t: TileData, world: World | null, ground: ((x: number, z: number) => number) | null, stops: StopPoint[]): { inst: InstData[]; lamps: number[] } {
   const R = rng(`obiekty${t.x}_${t.y}`), Y = (x: number, z: number) => ground ? ground(x, z) : 0;
-  const trunk = new Inst(G.trunk, M.wood), crown = new Inst(G.crown, M.leaves), cone = new Inst(G.cone, M.leaves);
-  const pole = new Inst(G.pole, M.metal), head = new Inst(G.lampHead, M.lamp), bench = new Inst(G.bench, M.bench);
-  const shelter = new Inst(G.shelter, M.shelter), glass = new Inst(G.glass, M.glass);
+  const trunk = new Inst('trunk', 'wood'), crown = new Inst('crown', 'leaves'), cone = new Inst('cone', 'leaves');
+  const pole = new Inst('pole', 'metal'), head = new Inst('lampHead', 'lamp'), bench = new Inst('bench', 'bench');
+  const shelter = new Inst('shelter', 'shelter'), glass = new Inst('glass', 'glass');
   const x0 = t.x * t.size, z0 = t.y * t.size, inTile = (x: number, z: number) => x >= x0 && x < x0 + t.size && z >= z0 && z < z0 + t.size;
   const blocked = (x: number, z: number) => !!world && world.blocked(x, z);
   // drogi, ścieżki, tory: zakazane pasy
@@ -117,7 +131,7 @@ export function buildProps(t: TileData, M: PropMaterials, world: World | null, g
   // 1) drzewa w parkach, lasach i na cmentarzach (rozrzut po siatce z przesunięciem)
   const parks: XZ[][] = [];
   for (const a of t.a) {
-    const spec = a.k === 'forest' ? { s: 6.5, p: .9, con: .55 } : a.k === 'park' ? { s: 12, p: .55, con: .12 } : a.k === 'cemetery' ? { s: 9, p: .7, con: .35 } : null;
+    const spec = a.k === 'forest' ? { s: 9, p: .85, con: .55 } : a.k === 'park' ? { s: 16, p: .5, con: .12 } : a.k === 'cemetery' ? { s: 12, p: .65, con: .35 } : null; // uproszczenie: rzadziej
     if (!spec) continue;
     const outer = toXZ(a.o), holes = (a.i || []).map(toXZ); if (a.k === 'park') parks.push(outer);
     let ax = Infinity, bx = -Infinity, az = Infinity, bz = -Infinity; for (const [x, z] of outer) { ax = Math.min(ax, x); bx = Math.max(bx, x); az = Math.min(az, z); bz = Math.max(bz, z); }
@@ -131,7 +145,7 @@ export function buildProps(t: TileData, M: PropMaterials, world: World | null, g
   // 2) szpalery drzew wzdłuż ulic miejskich (za chodnikiem), z przerwami przy skrzyżowaniach i przejściach
   for (const r of t.r) {
     if (r.tu || r.br || !isVehicleRoad(r.k) || !URBAN.includes(r.k)) continue;
-    const p = toXZ(r.p), off = r.w / 2 + 3.6, step = 10 + (r.id % 4), topola = r.id % 9 === 0;
+    const p = toXZ(r.p), off = r.w / 2 + 3.6, step = 15 + (r.id % 4), topola = r.id % 9 === 0;
     let acc = R() * step;
     for (let i = 0; i + 1 < p.length; i++) {
       const [ax, az] = p[i], [bx, bz] = p[i + 1], L = Math.hypot(bx - ax, bz - az); if (L < .1) continue;
@@ -164,7 +178,7 @@ export function buildProps(t: TileData, M: PropMaterials, world: World | null, g
     for (let i = 0; i + 1 < p.length; i++) {
       const [ax, az] = p[i], [bx, bz] = p[i + 1], L = Math.hypot(bx - ax, bz - az); if (L < .1) continue;
       const ux = (bx - ax) / L, uz = (bz - az) / L;
-      for (; acc < L; acc += 32, side = -side) {
+      for (; acc < L; acc += 40, side = -side) {
         const x = ax + ux * acc - uz * off * side, z = az + uz * acc + ux * off * side;
         if (!inTile(x, z) || nearPt(lamps, x, z, 22) || nearPt(keep, x, z, 7) || blocked(x, z)) continue;
         lampAt(x, z, Math.atan2(uz * side, -ux * side)); // ramię nad jezdnię
@@ -192,7 +206,7 @@ export function buildProps(t: TileData, M: PropMaterials, world: World | null, g
     if (!inTile(s.x, s.z) || blocked(s.x, s.z)) continue;
     const y = Y(s.x, s.z) + .15; shelter.add(s.x, y, s.z, s.yaw, 1, 1, 1); glass.add(s.x, y, s.z, s.yaw, 1, 1, 1);
   }
-  const out: THREE.Object3D[] = [];
-  for (const i of [trunk, crown, cone, pole, head, bench, shelter, glass]) { const m = i.mesh(); if (m) out.push(m); }
-  return { objs: out, lamps: lampPos };
+  const out: InstData[] = [];
+  for (const i of [trunk, crown, cone, pole, head, bench, shelter, glass]) { const d = i.data(); if (d) out.push(d); }
+  return { inst: out, lamps: lampPos };
 }

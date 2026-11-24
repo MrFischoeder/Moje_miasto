@@ -99,7 +99,7 @@ test('prawdziwe kafle Warszawy z OSM: budynki wokół Świętokrzyskiej', async 
   await page.goto('/');
   await expect(page.locator('#cityName')).toHaveText('WARSZAWA');
   await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.streamer.stats.indexed), { timeout: 20_000 }).toBeGreaterThan(1000);
-  await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.buildingCount), { timeout: 60_000 }).toBeGreaterThan(2000);
+  await expect.poll(() => page.evaluate(() => (window as unknown as G).__game.view.buildingCount), { timeout: 60_000 }).toBeGreaterThan(1000); // uproszczona mapa: kwartały zamiast pojedynczych kamienic
   // stacja z prawdziwą pozycją i wejściami z OSM
   const st = await page.evaluate(() => { const s = (window as unknown as G).__game.world.stations.find((x: { name: string }) => x.name === 'Świętokrzyska'); return { exits: s.exitGeoms.length }; });
   expect(st.exits).toBeGreaterThan(1);

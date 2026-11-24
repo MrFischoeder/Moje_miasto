@@ -12,7 +12,7 @@ import { MAX_SEG } from '../geometry';
 import { classify } from '@miasto/shared/interiors/facade';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
-import { buildProps, PropMaterials, type StopPoint } from './props';
+import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
 import { installLamps, lampUniforms, MAX_LAMPS, type LampUniforms } from '../lampLight';
 
 export const WATER_Y = -4;
@@ -59,6 +59,12 @@ const HOUSE = ['house', 'detached', 'semidetached_house', 'terrace', 'bungalow',
 const INDUSTRY = ['industrial', 'warehouse', 'service', 'garage', 'garages', 'hangar', 'manufacture', 'shed', 'roof', 'carport'];
 const SHOPS = ['retail', 'commercial', 'supermarket', 'kiosk'];
 
+/** Dane geometrii (zwykłe tablice: liczone w wątku kafli, przesyłane bez kopiowania). */
+type Attrs = Record<string, { array: Float32Array; size: number }>;
+type MatName = 'build' | 'edge' | 'flat' | 'flatLine' | 'solid' | 'line' | 'raised';
+export interface Layer { lines: boolean; mat: MatName; order: number; a: Attrs }
+export interface TileBuildData { key: string; layers: Layer[]; inst: InstData[]; lamps: number[]; buildings: number; ms: number }
+
 class Buf {
   P: number[] = []; Cc: number[] = []; N: number[] = [];
   tri(a: number[], b: number[], c: number[], col: RGB, n?: number[]): void {
@@ -72,12 +78,7 @@ class Buf {
   }
   quad(a: number[], b: number[], c: number[], d: number[], col: RGB, n?: number[]): void { this.tri(a, b, c, col, n); this.tri(a, c, d, col, n); }
   get empty(): boolean { return !this.P.length; }
-  geometry(): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(this.Cc, 3));
-    if (this.N.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(this.N, 3));
-    return g;
-  }
+  attrs(): Attrs { return { position: { array: new Float32Array(this.P), size: 3 }, color: { array: new Float32Array(this.Cc), size: 3 }, ...(this.N.length ? { normal: { array: new Float32Array(this.N), size: 3 } } : {}) }; }
 }
 class Lines {
   P: number[] = []; Cc: number[] = [];
@@ -93,11 +94,7 @@ class Lines {
     for (let i = 0; i < pts.length - (closed ? 0 : 1); i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; this.seg([a[0], y, a[1]], [b[0], y, b[1]], col); }
   }
   get empty(): boolean { return !this.P.length; }
-  geometry(): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(this.Cc, 3));
-    return g;
-  }
+  attrs(): Attrs { return { position: { array: new Float32Array(this.P), size: 3 }, color: { array: new Float32Array(this.Cc), size: 3 } }; }
 }
 
 const area2 = (r: XZ[]) => { let a = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; a += p[0] * q[1] - q[0] * p[1]; } return a; };
@@ -205,7 +202,28 @@ function offLine(L: Lines, p: XZ[], n: XZ[], s: number, ys: Ys, col: RGB, dash?:
 
 export interface TileView { group: THREE.Group; buildings: number; ms: number; dispose(): void; /** oprawy latarni: x, y, z, ... */ lamps: number[] }
 
+/** Kafel złożony od razu (bez wątku). */
 export function buildTileView(t: TileData, M: TileMaterials, world: World | null = null, phys: World | null = world, stops: StopPoint[] = []): TileView {
+  return assembleTile(computeTile(t, world, phys, stops), M);
+}
+
+/** Obiekty three.js z danych kafla (szybkie: same bufory; liczenie w computeTile, zwykle w wątku). */
+export function assembleTile(d: TileBuildData, M: TileMaterials): TileView {
+  const group = new THREE.Group(); group.name = `tile ${d.key}`;
+  for (const L of d.layers) {
+    const g = new THREE.BufferGeometry(); for (const [k, v] of Object.entries(L.a)) g.setAttribute(k, new THREE.BufferAttribute(v.array, v.size));
+    const o = L.lines ? new THREE.LineSegments(g, M[L.mat] as THREE.LineBasicMaterial) : new THREE.Mesh(g, M[L.mat] as THREE.Material); o.renderOrder = L.order; group.add(o);
+  }
+  for (const im of assembleInst(d.inst, M.props)) group.add(im);
+  return {
+    group, buildings: d.buildings, ms: d.ms, lamps: d.lamps,
+    // obiekty (instancje) mają wspólne geometrie: zwalniamy tylko bufory instancji
+    dispose: () => group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); else { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); } }),
+  };
+}
+
+/** Liczenie kafla: geometria jako tablice liczb (bez obiektów three.js, więc może działać w wątku). */
+export function computeTile(t: TileData, world: World | null = null, phys: World | null = world, stops: StopPoint[] = []): TileBuildData {
   const t0 = performance.now(), g: Ground = world ? world.ground : null;
   // dokładny teren (NMT): drogi i tereny próbkowane gęściej, żeby leżały na gruncie
   const fine = !!world?.terrain?.hasFine(t.x, t.y), SEG = fine ? 4 : MAX_SEG; FILL_MAX = fine ? 6 : 30;
@@ -292,7 +310,8 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
     }
     // pasy ruchu
     const ln = r.ln, lw = r.w / Math.max(1, ln);
-    if (ln >= 2) {
+    // oznakowanie poziome tylko na głównych ulicach (uproszczenie)
+    if (ln >= 2 && ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'].includes(r.k)) {
       if (r.ow) { for (let k = 1; k < ln; k++) offLine(FL[4], p, n, -hw + k * lw, ys, C.mark, [3, 6], skip); }
       else {
         const fwd = Math.ceil(ln / 2), back = ln - fwd, cs = -hw + back * lw;
@@ -339,25 +358,20 @@ export function buildTileView(t: TileData, M: TileMaterials, world: World | null
     }
   }
 
-  // --- złożenie ---
-  const group = new THREE.Group(); group.name = `tile ${t.x}_${t.y}`;
-  const add = (o: THREE.Object3D, order: number) => { o.renderOrder = order; group.add(o); };
+  // --- złożenie (dane) ---
+  const layers: Layer[] = [];
+  const add = (lines: boolean, mat: MatName, order: number, a: Attrs) => layers.push({ lines, mat, order, a });
   if (!B.empty) {
-    facPad(); const bg = B.geometry();
-    bg.setAttribute('aFacA', new THREE.Float32BufferAttribute(FA, 4)); bg.setAttribute('aFacB', new THREE.Float32BufferAttribute(FB, 4)); bg.setAttribute('aFacC', new THREE.Float32BufferAttribute(FC, 3));
-    add(new THREE.Mesh(bg, M.build), 0);
+    facPad(); const a = B.attrs();
+    a.aFacA = { array: new Float32Array(FA), size: 4 }; a.aFacB = { array: new Float32Array(FB), size: 4 }; a.aFacC = { array: new Float32Array(FC), size: 3 };
+    add(false, 'build', 0, a);
   }
-  if (!BE.empty) { const g = BE.geometry(); g.deleteAttribute('color'); add(new THREE.LineSegments(g, M.edge), 0); }
-  F.forEach((f, i) => { if (!f.empty) add(new THREE.Mesh(f.geometry(), M.flat), 1 + i * 2); });
-  FL.forEach((f, i) => { if (!f.empty) add(new THREE.LineSegments(f.geometry(), M.flatLine), 2 + i * 2); });
-  if (!S.empty) add(new THREE.Mesh(S.geometry(), M.solid), 0);
-  if (!RB.empty) add(new THREE.Mesh(RB.geometry(), M.raised), 0);
-  if (!SL.empty) add(new THREE.LineSegments(SL.geometry(), M.line), 0);
-  const props = buildProps(t, M.props, phys, g, stops); for (const o of props.objs) add(o, 0);
-  const ms = performance.now() - t0;
-  return {
-    group, buildings: t.b.length, ms, lamps: props.lamps,
-    // obiekty (instancje) mają wspólne geometrie: zwalniamy tylko bufory instancji
-    dispose: () => group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); else { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); } }),
-  };
+  if (!BE.empty) { const a = BE.attrs(); delete a.color; add(true, 'edge', 0, a); }
+  F.forEach((f, i) => { if (!f.empty) add(false, 'flat', 1 + i * 2, f.attrs()); });
+  FL.forEach((f, i) => { if (!f.empty) add(true, 'flatLine', 2 + i * 2, f.attrs()); });
+  if (!S.empty) add(false, 'solid', 0, S.attrs());
+  if (!RB.empty) add(false, 'raised', 0, RB.attrs());
+  if (!SL.empty) add(true, 'line', 0, SL.attrs());
+  const props = buildProps(t, phys, g, stops);
+  return { key: `${t.x}_${t.y}`, layers, inst: props.inst, lamps: props.lamps, buildings: t.b.length, ms: performance.now() - t0 };
 }

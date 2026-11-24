@@ -31,3 +31,18 @@ npx tsx tools/nmt-import.ts --city warszawa --src /ścieżka/do/arkuszy --step 2
 
 Opcje: `--step 1|2|2.5|4|5` (krok siatki w grze, domyślnie 2 m), `--min-cover 0.5` (najmniejsze pokrycie kafla danymi),
 `--out katalog` i `--no-coarse` (zapis gdzie indziej, bez zmiany modelu zgrubnego; do prób).
+
+## Uproszczona mapa (szybsza gra)
+
+Gra i serwery czytają kafle z `client/public/tiles/<miasto>/`. Dla Warszawy to wersja uproszczona; pełne kafle są w
+`client/public/tiles-pelne/<miasto>/` (po ponownym pobraniu danych z OSM zapisuj je tam i uruchom upraszczanie):
+
+```bash
+npx tsx tools/simplify-tiles.ts --city warszawa
+```
+
+Co robi: zostawia z prawdziwym kształtem ważne budynki (wysokie od 35 m, z nazwą, zabytki i świątynie, szkoły, szpitale,
+dworce, budynki publiczne, duże powyżej 6000 m², sklepy z wnętrzami); pozostałe stykające się budynki łączy w bryły kwartałów
+(wysokość: mediana, liczba kondygnacji w pasmach 1, 2, 3, 5, 8, 11, 14, 18, 24), usuwa drobnicę (poniżej 30 m², garaże,
+komórki), wygładza obrysy (1,5 m), usuwa krótkie ślepe ścieżki i dojazdy oraz małe tereny, upraszcza linie dróg (węzły zostają).
+Warszawa: budynki 127 tys. → 67 tys., wierzchołki budynków −59%, tereny −70%, dane 31,8 → 19,7 MB.

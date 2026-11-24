@@ -29,7 +29,8 @@ Stan na 23.11.2026. Szczegóły planu rozwoju: specyfikacja użytkownika (sekcje
    - [x] tabliczki z nazwami ulic na ścianach narożnych budynków przy skrzyżowaniach (zamiast napisów w powietrzu)
    - [x] światło latarni na terenie, jezdniach, chodnikach i ścianach (najbliższe 40 latarni, nocą)
    - [ ] kształty dachów, drzewa z OSM (`natural=tree`, szpalery) po ponownym pobraniu danych, kosze, słupki, znaki
-   - [ ] budowa kafli (z obiektami) w osobnym wątku: dziś do ok. 95 ms na kafel
+   - [x] budowa kafli (z obiektami) w osobnym wątku: na wątku głównym zostaje składanie (typowo ~9 ms)
+   - [x] uproszczona mapa Warszawy (kwartały, ujednolicone wysokości, bez drobnicy); pełne kafle w tiles-pelne/
    - [ ] krawężniki i torowiska także w fizyce (dziś tylko wygląd)
    - [x] teren z NMT 1 m (GUGiK): import, kafle terenu 2 m, wczytywanie w grze i na serwerach, gęstsza siatka gruntu i dróg
    - [ ] wgrać prawdziwe arkusze NMT Warszawy (dane od użytkownika) i sprawdzić w znanych punktach
