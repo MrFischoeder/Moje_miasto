@@ -97,6 +97,16 @@ export interface TileNode {
 
 /** Węzeł grafu drogowego (skrzyżowanie, koniec drogi, granica kafelka). */
 /** jn = skrzyżowanie (węzeł wspólny dla kilku dróg), sig = sygnalizacja, cr = przejście */
+/**
+ * Skrzyżowanie: kilka węzłów grafu OSM (np. dwie jezdnie ulic dwujezdniowych) jako jedno miejsce z jedną sygnalizacją
+ * i jednymi przepisami. k: 'sig' sygnalizacja świetlna, 'pri' droga z pierwszeństwem (główna), 'eq' równorzędne
+ * (pierwszeństwo z prawej), 'cross' sygnalizacja na przejściu dla pieszych poza skrzyżowaniem.
+ * ax: kierunek osi głównej [rad] (faza 1 świateł / droga z pierwszeństwem), r: promień obszaru skrzyżowania [m].
+ * a: wloty po 5 liczb: [id węzła na brzegu, kierunek jazdy przy wjeździe [rad, atan2(z, x)], główny (1) / podporządkowany (0),
+ *    szerokość jezdni wlotu [m], jednokierunkowa (1)] ...
+ */
+export interface TileJunction { id: number; c: [number, number]; r: number; k: 'sig' | 'pri' | 'eq' | 'cross'; ax: number; n: number[]; a: number[] }
+
 export interface GraphNode { id: number; x: number; z: number; jn?: 1; sig?: 1; cr?: 1 }
 
 export interface TilePoi {
@@ -124,6 +134,8 @@ export interface TileData {
   l: TileRail[];
   /** cieki (linie osi) */
   w?: TileWaterway[];
+  /** skrzyżowania (węzły grafu połączone w jedno skrzyżowanie: tools/lib/intersections.ts); w każdym kaflu z jego węzłem */
+  jx?: TileJunction[];
   /** ogrodzenia posesji z domami jednorodzinnymi (tools/lib/plots.ts) */
   fe?: TileFence[];
   n: TileNode[];

@@ -1,7 +1,7 @@
 // Graf pasów ruchu z kafli OSM: krawędź = odcinek jezdni między węzłami grafu (skrzyżowania, końce),
 // w jednym kierunku, z liczbą pasów, prędkością dopuszczalną i informacją o sygnalizacji na końcu.
 import { isVehicleRoad } from '../tiles/build';
-import type { RoadClass } from '../tiles/types';
+import type { RoadClass, TileJunction } from '../tiles/types';
 import type { XZ } from '../world/collision';
 import { toXZ, type World } from '../world/world';
 
@@ -11,8 +11,10 @@ export interface Edge {
   lanes: number; speed: number; cls: RoadClass;
   /** szerokość jezdni [m]; most */
   w: number; br: boolean;
-  /** sygnalizacja na końcu krawędzi */
+  /** sygnalizacja na końcu krawędzi (wlot do skrzyżowania ze światłami; nie łączniki wewnątrz skrzyżowania) */
   sig: boolean;
+  /** skrzyżowanie na końcu krawędzi (gdy krawędź do niego wjeżdża z zewnątrz) */
+  jn: TileJunction | null;
   /** kierunek przy wjeździe do węzła końcowego [rad] */
   endHeading: number;
 }
@@ -28,6 +30,8 @@ export class RoadGraph {
   axis = new Map<number, number>();
   private byTile = new Map<string, Edge[]>();
   private sigNodes = new Set<number>();
+  /** węzeł -> skrzyżowanie (tools/lib/intersections.ts) */
+  readonly junctions = new Map<number, TileJunction>();
   private nextId = 0;
 
   /** Dołożenie / usunięcie kafli tak, by graf odpowiadał kaflom świata (przyrostowo). */
@@ -36,13 +40,14 @@ export class RoadGraph {
     for (const k of [...this.byTile.keys()]) if (!world.tiles.has(k)) { this.removeTile(k); removed.push(k); }
     for (const [k, t] of world.tiles) if (!this.byTile.has(k)) {
       for (const g of t.g) if (g.sig) this.sigNodes.add(g.id);
+      for (const J of t.jx ?? []) for (const n of J.n) this.junctions.set(n, J);
       const list: Edge[] = [];
       const add = (from: number, to: number, pts: XZ[], lanes: number, cls: RoadClass, w: number, br: boolean) => {
         if (pts.length < 2 || from === to) return;
         const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
         const len = cum[cum.length - 1]; if (len < 1) return;
         const a = pts[pts.length - 2], b = pts[pts.length - 1];
-        const e: Edge = { id: this.nextId++, from, to, pts, cum, len, lanes: Math.max(1, lanes), speed: SPEED[cls] ?? 8.3, cls, w, br, sig: false, endHeading: Math.atan2(b[0] - a[0], b[1] - a[1]) };
+        const e: Edge = { id: this.nextId++, from, to, pts, cum, len, lanes: Math.max(1, lanes), speed: SPEED[cls] ?? 8.3, cls, w, br, sig: false, jn: null, endHeading: Math.atan2(b[0] - a[0], b[1] - a[1]) };
         list.push(e); let l = this.out.get(from); if (!l) this.out.set(from, l = []); l.push(e);
         if (!this.axis.has(to)) this.axis.set(to, e.endHeading);
       };
@@ -59,7 +64,12 @@ export class RoadGraph {
     }
     if (added || removed.length) {
       this.edges = [...this.byTile.values()].flat();
-      for (const e of this.edges) e.sig = this.sigNodes.has(e.to);
+      for (const e of this.edges) {
+        // skrzyżowanie: tylko wjazd z zewnątrz (łączniki wewnątrz skrzyżowania bez ponownego zatrzymania)
+        const J = this.junctions.get(e.to), inner = !!J && J === this.junctions.get(e.from);
+        e.jn = J && !inner ? J : null;
+        e.sig = J ? !inner && (J.k === 'sig' || J.k === 'cross') : this.sigNodes.has(e.to);
+      }
     }
     return { added, removed };
   }

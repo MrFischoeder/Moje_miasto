@@ -10,6 +10,7 @@ import type { Flat, TileBuilding, TileData, TileIndex, TileRoad } from '../share
 import { writeTiles } from './lib/common';
 import { cityPavements, inferPassages, normalizeRoads } from './lib/roads';
 import { makePlots } from './lib/plots';
+import { buildIntersections } from './lib/intersections';
 import { bakeWaterBanks } from './lib/waterBanks';
 import { CITIES, type CityKey } from '../shared/src/data/cities';
 import { makeProj } from '../shared/src/data/projection';
@@ -181,6 +182,7 @@ for (const f of readdirSync(src)) {
 }
 const rn = normalizeRoads(tiles); console.log(`ulice: ${rn.roads} odcinków, wyrównane krótkie: ${rn.absorbed}, płynne zwężenia: ${rn.tapers}`);
 const ps = inferPassages(tiles); console.log(`bramy przejazdowe: przez budynek ${ps.through}, ślepe końce przy ścianie ${ps.deadEnd}`);
+const ix0 = buildIntersections(tiles); console.log(`skrzyżowania: ${ix0.junctions} (z sygnalizacją ${ix0.signals}), połączone łączniki ${ix0.merged}`);
 const pl = makePlots(tiles); console.log(`posesje z płotem: ${pl.plots} (pominięte ${pl.skipped}), odcinki płotu ${pl.segs}`);
 const pv = cityPavements(tiles); console.log(`chodniki: ulice miejskie ${pv.urban} (dodane chodniki ${pv.added}), podmiejskie ${pv.suburban}`);
 const wb = bakeWaterBanks(ROOT, city, tiles); if (wb) console.log(`woda i nabrzeża: poziom wody w ${wb.tiles} kaflach, wierzchołki nabrzeży ${wb.quayVerts}, przetworzone kafle terenu ${wb.demTiles}`);

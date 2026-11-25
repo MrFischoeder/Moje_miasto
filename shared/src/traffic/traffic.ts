@@ -55,8 +55,10 @@ export class Traffic {
 
   /** Faza świateł dla wjazdu na węzeł z kierunku heading w chwili t [s]: 0 zielone, 1 żółte, 2 czerwone. */
   light(node: number, heading: number, t: number): number {
-    const ax = this.graph.axis.get(node) ?? 0, group = Math.abs(Math.cos(heading - ax)) > .7071 ? 0 : 1;
-    const ph = ((t + (node % 97) * 7) % CYCLE + CYCLE) % CYCLE, start = group * (GREEN + AMBER), u = ((ph - start) % CYCLE + CYCLE) % CYCLE;
+    // jedno skrzyżowanie = jedna sygnalizacja: faza wg osi głównej skrzyżowania (wloty wzdłuż osi razem, poprzeczne razem)
+    const J = this.graph.junctions.get(node), id = J ? J.id : node;
+    const group = J ? (Math.abs(Math.sin(heading + J.ax)) > .7071 ? 0 : 1) : (Math.abs(Math.cos(heading - (this.graph.axis.get(node) ?? 0))) > .7071 ? 0 : 1);
+    const ph = ((t + (Math.abs(id) % 97) * 7) % CYCLE + CYCLE) % CYCLE, start = group * (GREEN + AMBER), u = ((ph - start) % CYCLE + CYCLE) % CYCLE;
     return u < GREEN ? 0 : u < GREEN + AMBER ? 1 : 2;
   }
 

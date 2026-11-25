@@ -677,7 +677,32 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   }
 
   // --- przejścia i sygnalizacja ---
+  // --- skrzyżowania (tools/lib/intersections.ts): linia zatrzymania i sygnalizator przy każdym wlocie,
+  //     przy wlotach podporządkowanych „ząbki” (ustąp pierwszeństwa); sygnalizatory z węzłów OSM tylko poza skrzyżowaniami ---
+  const inJunction = new Set<number>(), gpos = new Map<number, XZ>(); for (const q of t.g) gpos.set(q.id, [q.x, q.z]);
+  const doneJ = new Set<number>();
+  for (const J of t.jx ?? []) {
+    for (const id of J.n) inJunction.add(id); if (doneJ.has(J.id)) continue; doneJ.add(J.id);
+    if (J.k === 'eq') continue;
+    for (let i = 0; i + 4 < J.a.length; i += 5) {
+      const pos = gpos.get(J.a[i]); if (!pos) continue; // wlot rysuje kafel, w którym leży jego węzeł
+      const h = J.a[i + 1], main = J.a[i + 2] === 1, w = J.a[i + 3], ow = J.a[i + 4] === 1;
+      if (J.k === 'pri' && main) continue;
+      const ux = Math.cos(h), uz = Math.sin(h), rx = -uz, rz = ux; // kierunek jazdy i prawa strona
+      const back = (roadW.get(J.a[i]) || 8) / 2 + 2.2, sx = pos[0] - ux * back, sz = pos[1] - uz * back, y = (g ? g(sx, sz) : 0) + LIFT + .02;
+      const s0 = ow ? -w / 2 : 0, s1 = w / 2 - .2; // pasy w stronę skrzyżowania (prawa połowa jezdni)
+      const P = (s: number, t2: number): number[] => [sx + rx * s + ux * t2, y, sz + rz * s + uz * t2];
+      if (J.k === 'pri') { for (let s = s0 + .2; s < s1 - .3; s += .9) F[4].tri(P(s, -.6), P(s + .6, -.6), P(s + .3, 0), C.zebra, [0, 1, 0]); continue; } // ząbki
+      F[4].quad(P(s0 + .1, -.25), P(s0 + .1, .25), P(s1, .25), P(s1, -.25), C.zebra, [0, 1, 0]); // linia zatrzymania
+      // sygnalizator na prawym poboczu przy linii zatrzymania
+      const px = sx + rx * (w / 2 + .9), pz = sz + rz * (w / 2 + .9), gy2 = g ? g(px, pz) + LIFT : 0;
+      SL.seg([px, gy2, pz], [px, gy2 + 4.2, pz], C.pole);
+      const light = (y0: number, c: RGB) => { const yy = gy2 + y0; S.quad([px - rx * .15, yy, pz - rz * .15], [px + rx * .15, yy, pz + rz * .15], [px + rx * .15, yy + .3, pz + rz * .15], [px - rx * .15, yy + .3, pz - rz * .15], c); };
+      light(3.9, [.9, .15, .1]); light(3.55, [.9, .7, .1]); light(3.2, [.15, .9, .35]);
+    }
+  }
   for (const nd of t.n) {
+    if (nd.k === 'signals' && inJunction.has(nd.id)) continue; // sygnalizatory skrzyżowania rysowane przy wlotach (wyżej)
     const d = nd.d ?? 0, ux = Math.cos(d), uz = Math.sin(d), nx = -uz, nz = ux, gy = g ? g(nd.x, nd.z) + LIFT : 0;
     if (nd.k === 'crossing') {
       const w = (roadW.get(nd.id) || 7) / 2;

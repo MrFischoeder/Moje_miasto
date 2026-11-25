@@ -19,7 +19,7 @@ import { NO_INPUT } from '../src/sim/types';
 const ROOT = join(__dirname, '../..');
 const tile = (city: string, x: number, y: number): TileData => JSON.parse(gunzipSync(readFileSync(join(ROOT, `client/public/tiles/${city}/${x}_${y}.json.gz`))).toString());
 const terrain = (city: string) => { const b = gunzipSync(readFileSync(join(ROOT, `client/public/terrain/${city}.bin.gz`))); return Terrain.parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
-function worldAround(city: 'warszawa' | 'londyn', tx: number, ty: number): World {
+function worldAround(city: 'warszawa' | 'londyn' | 'wroclaw', tx: number, ty: number): World {
   const tiles: TileData[] = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { try { tiles.push(tile(city, tx + dx, ty + dy)); } catch { /* brak kafla */ } }
   return new World(city, { tiles, terrain: terrain(city) });
 }
@@ -221,5 +221,21 @@ describe('auta gracza i praca kierowcy', () => {
     info = sim.cab!.info(p.id)!; expect(info.rides).toBe(1); expect(p.money).toBeGreaterThan(m1);
     // wyjście z auta kończy pracę
     sim.command(p.id, { type: 'mode', mode: 'walk' }); sim.stepTraffic(13, 12); expect(sim.cab!.info(p.id)).toBeNull();
+  });
+});
+
+describe('skrzyżowania', () => {
+  it('kilka węzłów OSM = jedno skrzyżowanie: jedna sygnalizacja, łączniki wewnątrz bez świateł', () => {
+    const w = worldAround('wroclaw', 1, -2), sim = new Simulation(w); sim.enableTraffic(); sim.stepTraffic(0, 12);
+    const T = sim.traffic!, G = T.graph, Js = new Map<number, import('../src/tiles/types').TileJunction>();
+    for (const t of w.tiles.values()) for (const J of t.jx ?? []) Js.set(J.id, J);
+    expect(Js.size).toBeGreaterThan(10);
+    const multi = [...Js.values()].find(J => J.k === 'sig' && J.n.length > 1);
+    if (multi) {
+      // wszystkie węzły skrzyżowania: ta sama faza dla tego samego kierunku
+      for (const tt of [0, 13, 29, 41]) { const ph = new Set(multi.n.map(n => T.light(n, -multi.ax + Math.PI / 2, tt))); expect(ph.size).toBe(1); }
+      // krawędzie wewnątrz skrzyżowania nie mają świateł
+      for (const e of G.edges) if (multi.n.includes(e.from) && multi.n.includes(e.to)) expect(e.sig).toBe(false);
+    }
   });
 });
