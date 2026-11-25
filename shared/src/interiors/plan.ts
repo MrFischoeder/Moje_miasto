@@ -8,7 +8,7 @@ import { pip, type XZ } from '../world/collision';
 import { signText } from '../config/branding';
 import { classify, windowSlots, type BuildingClass, type Typology } from './facade';
 import { inset, maxRect, rd, rect, reframe, ringXZ, rw, toLocal, toWorld, type Frame, type Rect } from './geom';
-import { layoutTemplate, TEMPLATES, TYPOLOGY, type ShopCfg, type Template, type TLayout } from './layout';
+import { DOOR_H, layoutTemplate, TEMPLATES, TYPOLOGY, type ShopCfg, type Template, type TLayout } from './layout';
 import CHAINS from './data/sieci.json';
 import FURN from './data/meble.json';
 
@@ -18,7 +18,8 @@ export interface Box { name: string; kind: string; r: Rect; y: number; h: number
 /** Powierzchnia (podest, bieg schodów): wysokość ya przy mniejszej współrzędnej osi, yb przy większej. */
 export interface Slab { r: Rect; axis: 'x' | 'y'; ya: number; yb: number; steps: boolean }
 export interface Walk extends Omit<Slab, 'steps'> { nm: string }
-export interface Item { r: Rect; y: number; h: number; k: string; n: string; c?: string; id?: string; unit: number }
+/** Mebel: prostokąt w układzie budynku; f = ściana, przy której stoi (0: y0, 1: x1, 2: y1, 3: x0), front w stronę pokoju */
+export interface Item { r: Rect; y: number; h: number; k: string; n: string; c?: string; id?: string; unit: number; f?: Side }
 /** Drzwi (skrzydło) w otworze: linia w układzie budynku (oś x: x = at, y od a do b; oś y: y = at, x od a do b), id stałe dla planu. */
 export interface DoorDef { id: string; axis: 'x' | 'y'; at: number; a: number; b: number; y0: number; y1: number; ext: boolean }
 export interface Level { k: number; boxes: Box[]; slabs: Slab[]; walks: Walk[]; items: Item[]; doors: DoorDef[]; ms: number }
@@ -204,7 +205,7 @@ export function makePlan(b: TileBuilding, t: TileData, w: PlanWorld): Plan | nul
     let t = 0; for (; t < 6; t += .25) { const [wx, wz] = toWorld(frame, x, -t); if (!pip(outer, wx, wz)) break; }
     const tOut = t + .8, [gx, gz] = toWorld(frame, x, -tOut), g = w.ground(gx, gz), fd = Math.max(0, t - .25), c = toWorld(frame, x, -fd);
     const hf = g + (yIn - g) * (tOut - fd) / (tOut + .45); // podłoga dojścia (pochylnia od ulicy do wnętrza) przy licu fasady
-    return { x, w: w0, tOut, g, yIn, c, u: [frame.ux, frame.uz], y0: hf - .04, y1: hf + 2.17, fd, hf }; // otwór w fasadzie = skrzydło drzwi
+    return { x, w: w0, tOut, g, yIn, c, u: [frame.ux, frame.uz], y0: hf - .04, y1: hf + 2.3, fd, hf }; // otwór w fasadzie = skrzydło drzwi
   };
   for (const c of p.cores) if (c.street) {
     const fr = freeIn(c.r.x0 + .2, c.r.x1 - .2), mid = (c.r.x0 + c.r.x1) / 2;
@@ -286,7 +287,7 @@ export function buildLevel(p: Plan, k: number): Level {
     L.walks.push({ r: rect(c.x0 + .3, c.y0 + .3, c.x1 - .3, c.y1 - .3), axis: 'x', ya: F(k), yb: F(k), nm: `${addr}Korytarz · ${fl}` });
     for (const core of p.cores) {
       const at = core.r.x1 <= c.x0 + .05 ? core.r.x1 : core.r.x0, l: Line = { axis: 'x', at, a: (c.y0 + c.y1) / 2 - .6, b: (c.y0 + c.y1) / 2 + .6 };
-      addHole(L.boxes, l, F(k), F(k) + 2.1, 'door'); door(l, F(k), F(k) + 2.1); L.walks.push(doorWalk(l, F(k), `${addr}Korytarz · ${fl}`));
+      addHole(L.boxes, l, F(k), F(k) + DOOR_H, 'door'); door(l, F(k), F(k) + DOOR_H); L.walks.push(doorWalk(l, F(k), `${addr}Korytarz · ${fl}`));
     }
   }
   if (k === 0 && p.lobby) {
@@ -294,7 +295,7 @@ export function buildLevel(p: Plan, k: number): Level {
     L.boxes.push({ name: 'Hol wejściowy', kind: 'lobby', r: lb, y: F(0), h: H - .2, holes: [], floor: true, ceil: true, unit: -1 });
     L.walks.push({ r: inset(lb, .3), axis: 'x', ya: F(0), yb: F(0), nm });
     const cx = (lb.x0 + lb.x1) / 2, l: Line = { axis: 'y', at: lb.y1, a: cx - .8, b: cx + .8 };
-    addHole(L.boxes, l, F(0), F(0) + 2.1, 'door'); door(l, F(0), F(0) + 2.1); L.walks.push(doorWalk(l, F(0), nm));
+    addHole(L.boxes, l, F(0), F(0) + DOOR_H, 'door'); door(l, F(0), F(0) + DOOR_H); L.walks.push(doorWalk(l, F(0), nm));
   }
 
   // --- lokale ---
@@ -322,14 +323,14 @@ export function buildLevel(p: Plan, k: number): Level {
     for (const d of lay.doors) if (d.floor === tf) {
       const a = d.axis === 'x' ? mapT(u, d.at, d.a) : mapT(u, d.a, d.at), b = d.axis === 'x' ? mapT(u, d.at, d.b) : mapT(u, d.b, d.at);
       const l: Line = Math.abs(a[0] - b[0]) < .01 ? { axis: 'x', at: a[0], a: Math.min(a[1], b[1]), b: Math.max(a[1], b[1]) } : { axis: 'y', at: a[1], a: Math.min(a[0], b[0]), b: Math.max(a[0], b[0]) };
-      addHole(L.boxes, l, F(k), F(k) + (d.open ? 2.3 : 2.05), d.open ? 'open' : 'door', mine); if (!d.open) door(l, F(k), F(k) + 2.05);
+      addHole(L.boxes, l, F(k), F(k) + (d.open ? 2.3 : DOOR_H), d.open ? 'open' : 'door', mine); if (!d.open) door(l, F(k), F(k) + DOOR_H);
       L.walks.push(doorWalk(l, F(k), roomNm(d.B), d.open ? .05 : .1));
     }
     // wejście do lokalu
     if (tf === 0 && lay.entry) {
       const a = mapT(u, lay.entry.a, 0), b = mapT(u, lay.entry.b, 0);
       const l: Line = Math.abs(a[0] - b[0]) < .01 ? { axis: 'x', at: a[0], a: Math.min(a[1], b[1]), b: Math.max(a[1], b[1]) } : { axis: 'y', at: a[1], a: Math.min(a[0], b[0]), b: Math.max(a[0], b[0]) };
-      addHole(L.boxes, l, F(k), F(k) + 2.1, 'door'); if (!u.ext) door(l, F(k), F(k) + 2.1);
+      addHole(L.boxes, l, F(k), F(k) + DOOR_H, 'door'); if (!u.ext) door(l, F(k), F(k) + DOOR_H);
       if (!u.ext) L.walks.push(doorWalk(l, F(k), roomNm('wejście')));
     }
   }
@@ -345,7 +346,7 @@ export function buildLevel(p: Plan, k: number): Level {
   // drzwi zewnętrzne (parter)
   if (k === 0) for (const e of p.ext) {
     const l: Line = { axis: 'y', at: 0, a: e.x - e.w / 2, b: e.x + e.w / 2 };
-    addHole(L.boxes, l, e.yIn, e.yIn + 2.15, 'door'); door({ ...l, at: -e.fd }, e.hf, e.hf + 2.17, true); // drzwi w licu fasady
+    addHole(L.boxes, l, e.yIn, e.yIn + 2.3, 'door'); door({ ...l, at: -e.fd }, e.hf, e.hf + 2.3, true); // drzwi w licu fasady
     L.walks.push({ r: rect(e.x - e.w / 2 + .15, -e.tOut, e.x + e.w / 2 - .15, .45), axis: 'y', ya: e.g, yb: e.yIn, nm: `${addr}Wejście` });
   }
   // okna z fasady
@@ -442,7 +443,7 @@ function furnish(bx: Box, R: Rng, L: Level, p: Plan, k: number): void {
       }
       if (!got || !keepsOpen(bx, [...placed.map(o => o.r), got])) continue;
       placed.push({ r: got, side: gs, d });
-      L.items.push({ r: got, y: bx.y, h: s.h, k: s.k, n: s.n, unit: bx.unit, ...(s.c ? { c: s.c, id: `${p.id}/${k}/${bx.unit}/${bx.name}/${n++}` } : {}) });
+      L.items.push({ r: got, y: bx.y, h: s.h, k: s.k, n: s.n, unit: bx.unit, ...(gs >= 0 ? { f: gs as Side } : {}), ...(s.c ? { c: s.c, id: `${p.id}/${k}/${bx.unit}/${bx.name}/${n++}` } : {}) });
     }
   }
 }
@@ -451,10 +452,10 @@ function furnish(bx: Box, R: Rng, L: Level, p: Plan, k: number): void {
 function shopFill(bx: Box, cfg: ShopCfg, R: Rng, L: Level, p: Plan, k: number): void {
   const r = bx.r, zones = doorZones(bx, cfg.front), items: Item[] = [];
   let n = 0;
-  const put = (q: Rect, h: number, kk: string, nm: string, c?: string) => {
+  const put = (q: Rect, h: number, kk: string, nm: string, c?: string, f?: Side) => {
     if (q.x1 - q.x0 < .3 || q.y1 - q.y0 < .3) return;
     if (zones.some(z => hit(z, q, 0)) || items.some(o => hit(o.r, q, .02))) return; // przejście sprawdzane raz na końcu
-    items.push({ r: q, y: bx.y, h, k: kk, n: nm, unit: bx.unit, ...(c ? { c, id: `${p.id}/${k}/${bx.unit}/sala/${n++}` } : {}) });
+    items.push({ r: q, y: bx.y, h, k: kk, n: nm, unit: bx.unit, ...(f != null ? { f } : {}), ...(c ? { c, id: `${p.id}/${k}/${bx.unit}/sala/${n++}` } : {}) });
   };
   const front = bx.holes.find(h => h.side === 0 && h.kind === 'door'), dx = front ? (front.a + front.b) / 2 : (r.x0 + r.x1) / 2;
   // kasy: wzdłuż frontu, po stronie dalszej od drzwi
@@ -480,11 +481,11 @@ function shopFill(bx: Box, cfg: ShopCfg, R: Rng, L: Level, p: Plan, k: number): 
   }
   const yA = r.y0 + cfg.front, back = cfg.fridges ? .85 : 0;
   // lodówki pod tylną ścianą
-  if (cfg.fridges) for (let t = r.x0 + .3; t + 1.25 <= r.x1 - .3; t += 1.3) put(rect(t, r.y1 - WALL - .8, t + 1.25, r.y1 - WALL), 2.1, 'lodowka_sklep', 'Lodówka z napojami', 'lodowka_sklep');
+  if (cfg.fridges) for (let t = r.x0 + .3; t + 1.25 <= r.x1 - .3; t += 1.3) put(rect(t, r.y1 - WALL - .8, t + 1.25, r.y1 - WALL), 2.1, 'lodowka_sklep', 'Lodówka z napojami', 'lodowka_sklep', 2);
   // regały przyścienne
   for (const s of [1, 3]) for (let t = yA; t + 1.8 <= r.y1 - back - .9; t += 2) {
     const q = s === 3 ? rect(r.x0 + WALL, t, r.x0 + WALL + cfg.wall, t + 1.9) : rect(r.x1 - WALL - cfg.wall, t, r.x1 - WALL, t + 1.9);
-    put(q, 1.8, 'polka', 'Regał', 'polka');
+    put(q, 1.8, 'polka', 'Regał', 'polka', s as Side);
   }
   // piekarnia przy wejściu (dyskont)
   if (cfg.bakery) put(dir > 0 ? rect(r.x0 + .5, r.y0 + 2.4, r.x0 + 3.5, r.y0 + 3.2) : rect(r.x1 - 3.5, r.y0 + 2.4, r.x1 - .5, r.y0 + 3.2), 1.6, 'piekarnia', 'Pieczywo', 'polka');

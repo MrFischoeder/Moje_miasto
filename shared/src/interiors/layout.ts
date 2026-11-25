@@ -26,8 +26,14 @@ export interface TLayout { rooms: TRoom[]; doors: TDoor[]; entry: { room: string
 
 const EPS = .02;
 
+/** Pomieszczenia o stałym wymiarze (przedpokój, łazienka, kuchnia...) nieco większe niż normy: w grze z perspektywy gracza
+ *  prawdziwe wymiary wyglądają ciasno. */
+export const ROOM_SCALE = 1.15;
+/** Drzwi wewnętrzne: szerokość i wysokość otworu [m] (powiększone jak pomieszczenia) */
+export const DOOR_W = 1.0, DOOR_H = 2.2;
+
 function sizes(parts: NonNullable<TNode['parts']>, len: number, R: Rng, keyR: (k: string) => number): number[] {
-  const fixed = parts.map(p => p.size ? p.size[0] + (p.size[1] - p.size[0]) * (p.key ? keyR(p.key) : R()) : 0);
+  const fixed = parts.map(p => p.size ? (p.size[0] + (p.size[1] - p.size[0]) * (p.key ? keyR(p.key) : R())) * ROOM_SCALE : 0);
   const flexW = parts.map(p => p.size ? 0 : p.flex ?? 1), nFlex = flexW.filter(w => w > 0).length, sumW = flexW.reduce((a, b) => a + b, 0);
   let sumF = fixed.reduce((a, b) => a + b, 0);
   if (!nFlex) return fixed.map(f => f * len / (sumF || 1));
@@ -87,8 +93,8 @@ function layoutOnce(t: Template, W: number, D: number, seed: string, entryA: num
   const unite = (a: TRoom, b: TRoom) => parent.set(find(a), find(b));
   const addDoor = (A: TRoom, B: TRoom, open: boolean): boolean => {
     if (A.floor !== B.floor) return false;
-    const s = shared(A.r, B.r); if (!s || s.b - s.a < .95) return false;
-    const w = open ? Math.max(.9, s.b - s.a - .2) : .9, lo = s.a + w / 2 + .1, hi = s.b - w / 2 - .1;
+    const s = shared(A.r, B.r); if (!s || s.b - s.a < DOOR_W + .05) return false;
+    const w = open ? Math.max(DOOR_W, s.b - s.a - .2) : DOOR_W, lo = s.a + w / 2 + .1, hi = s.b - w / 2 - .1;
     const c = hi > lo ? lo + (hi - lo) * R() : (s.a + s.b) / 2;
     doors.push({ floor: A.floor, axis: s.axis, at: s.at, a: c - w / 2, b: c + w / 2, A: A.id, B: B.id, ...(open ? { open: true } : {}) });
     unite(A, B); return true;
@@ -104,8 +110,8 @@ function layoutOnce(t: Template, W: number, D: number, seed: string, entryA: num
   const pref = ['hall', 'open', 'sala', 'living', 'kitchen', 'room'];
   const cands = rooms.filter(r => r.floor === 0 && r.r.y0 < EPS).sort((p, q) => (p.id === t.entry ? -1 : 0) - (q.id === t.entry ? -1 : 0) || pref.indexOf(p.kind) - pref.indexOf(q.kind));
   for (const r of cands) {
-    const a = Math.max(r.r.x0 + .15, entryA), b = Math.min(r.r.x1 - .15, entryB); if (b - a < .95) continue;
-    const w = r.kind === 'sala' ? Math.min(r.r.x1 - r.r.x0 < 6 ? 1.2 : 1.8, b - a - .1) : .9, c = a + w / 2 + (b - a - w) * R(); entry = { room: r.id, a: c - w / 2, b: c + w / 2 }; break;
+    const a = Math.max(r.r.x0 + .15, entryA), b = Math.min(r.r.x1 - .15, entryB); if (b - a < DOOR_W + .05) continue;
+    const w = r.kind === 'sala' ? Math.min(r.r.x1 - r.r.x0 < 6 ? 1.2 : 1.8, b - a - .1) : DOOR_W, c = a + w / 2 + (b - a - w) * R(); entry = { room: r.id, a: c - w / 2, b: c + w / 2 }; break;
   }
   // uzupełnienie: każde pomieszczenie osiągalne z wejścia
   const start = entry ? byId(entry.room, 0) : null;
