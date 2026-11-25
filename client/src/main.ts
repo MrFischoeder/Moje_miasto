@@ -22,6 +22,14 @@ const SAVE_KEY = 'moje-miasto.save';
 const nearestIndex = (g: Game) => { const w = g.world!; return w.stations.length ? w.nearestStation(g.pose.x, g.pose.z).i : -1; };
 const openMenu = () => { menu.classList.remove('hide'); if (game.world) stSel.value = String(nearestIndex(game)); game.input.releasePointer(); };
 const closeMenu = () => menu.classList.add('hide');
+const menuOpen = () => !menu.classList.contains('hide');
+$('menuClose').onclick = closeMenu;
+menu.addEventListener('mousedown', e => { if (e.target === menu && game.world) closeMenu(); }); // klik w tło obok okna
+addEventListener('keydown', e => {
+  if (!menuOpen() || !game.world) return;
+  const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+  if (e.key === 'Escape' || (e.code === 'KeyM' && !typing)) { e.preventDefault(); e.stopPropagation(); closeMenu(); }
+}, true);
 
 function info(g: Game): void {
   const w = g.world!, v = g.view!, st = v.streamer.stats, s = g.session;
@@ -50,7 +58,7 @@ chatIn.addEventListener('keydown', e => {
 const ui: GameUI = {
   setBusy(on) { $('busy').style.display = on ? 'grid' : 'none'; },
   setStatus(t) { $('status').textContent = t; },
-  onMenu: openMenu,
+  onMenu: () => { if (menuOpen()) closeMenu(); else openMenu(); },
   onChat(l) { addChat(l.from, l.color, l.text, l.sys); },
   onPm(m) { phone?.onPm(m); },
   onInteriors(on) { const c = $<HTMLInputElement>('intChk'); if (c.checked !== on) { c.checked = on; logEvent(`serwer: wnętrza budynków ${on ? 'włączone' : 'wyłączone'}`); } },
