@@ -113,6 +113,33 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
   const isWall = (e: Edge) => { const q = tiles.get(e.tile)!.a[e.area].qk?.[e.ring]; return !!q && (q[e.i] === 1 || q[(e.i + 1) % q.length] === 1); };
   const crown = (e: Edge, u: number): number | null => { const a = tiles.get(e.tile)!.a[e.area], q = a.qt?.[e.ring], k = a.qk?.[e.ring]; if (!q || !k) return null; const j = (e.i + 1) % q.length; return k[e.i] && k[j] ? q[e.i] + (q[j] - q[e.i]) * u : null; };
 
+  // --- mosty: ląd pod pomostem i przy końcach mostów zostaje bez zmian (wysokość pomostu liczy się z gruntu
+  //     na końcach mostu: obniżenie terenu przy murze robiło dziurę przed wjazdem) ---
+  const BG = 16, bgrid = new Map<string, { a: XZ; b: XZ; r: number; end?: boolean }[]>();
+  const addB = (a: XZ, b: XZ, r: number, end = false) => { const s = { a, b, r, end }; for (let gx = Math.floor((Math.min(a[0], b[0]) - r) / BG); gx <= Math.floor((Math.max(a[0], b[0]) + r) / BG); gx++) for (let gz = Math.floor((Math.min(a[1], b[1]) - r) / BG); gz <= Math.floor((Math.max(a[1], b[1]) + r) / BG); gz++) { const k = gx + ',' + gz; let l = bgrid.get(k); if (!l) bgrid.set(k, l = []); l.push(s); } };
+  for (const t of tiles.values()) {
+    for (const r of t.r) if (r.br) { const p = ring(r.p); for (let i = 0; i + 1 < p.length; i++) addB(p[i], p[i + 1], r.w / 2 + 8); if (r.bw) { addB([r.bw[0], r.bw[1]], [r.bw[0], r.bw[1]], 18, true); addB([r.bw[2], r.bw[3]], [r.bw[2], r.bw[3]], 18, true); } }
+    for (const l of t.l) if (l.br) { const p = ring(l.p); for (let i = 0; i + 1 < p.length; i++) addB(p[i], p[i + 1], 9); if (l.bw) { addB([l.bw[0], l.bw[1]], [l.bw[0], l.bw[1]], 18, true); addB([l.bw[2], l.bw[3]], [l.bw[2], l.bw[3]], 18, true); } }
+  }
+  const nearBridge = (x: number, z: number, endOnly = false) => (bgrid.get(Math.floor(x / BG) + ',' + Math.floor(z / BG)) ?? []).some(s => { if (endOnly && !s.end) return false; const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L2 = dx * dx + dz * dz, u = L2 ? Math.max(0, Math.min(1, ((x - s.a[0]) * dx + (z - s.a[1]) * dz) / L2)) : 0; return Math.hypot(s.a[0] + dx * u - x, s.a[1] + dz * u - z) < s.r; });
+
+  // --- nasypy przy końcach mostów: koniec mostu na wysokości drogi dojazdowej (15 m dalej), łagodny wjazd ---
+  interface Emb { E: XZ; u: XZ; hw: number; hEnd: number; hApp: number }
+  const embs: Emb[] = [], embSeen = new Set<string>();
+  for (const t of tiles.values()) for (const q of [...t.r.map(r => ({ bw: r.bw, hw: r.w / 2 + (r.sw ? 2.5 : 0) + 1.5 })), ...t.l.map(l => ({ bw: l.bw, hw: 3.5 }))]) {
+    const bw = q.bw; if (!bw) continue;
+    for (const [ex, ez, ox, oz] of [[bw[0], bw[1], bw[2], bw[3]], [bw[2], bw[3], bw[0], bw[1]]]) {
+      const key = Math.round(ex) + ',' + Math.round(ez) + ',' + Math.round(q.hw); if (embSeen.has(key)) continue; embSeen.add(key);
+      const L = Math.hypot(ex - ox, ez - oz); if (L < 8) continue; const u: XZ = [(ex - ox) / L, (ez - oz) / L];
+      const hApp = H(ex + u[0] * 15, ez + u[1] * 15), hEnd = Math.max(H(ex, ez), hApp);
+      embs.push({ E: [ex, ez], u, hw: q.hw, hEnd, hApp });
+    }
+  }
+  /** wysokość nasypu w punkcie (NaN poza nasypem): od końca mostu (−6 m w głąb mostu) do 15 m na zewnątrz */
+  const embAt = (x: number, z: number) => { let best = NaN; for (const e of embs) { if (Math.abs(x - e.E[0]) > 30 || Math.abs(z - e.E[1]) > 30) continue;
+    const dx = x - e.E[0], dz = z - e.E[1], tt = dx * e.u[0] + dz * e.u[1], lat = Math.abs(dx * e.u[1] - dz * e.u[0]); if (tt < -6 || tt > 15 || lat > e.hw) continue;
+    const h = tt <= 0 ? e.hEnd : e.hEnd + (e.hApp - e.hEnd) * tt / 15; if (!(h <= best)) best = h; } return best; };
+
   // --- przetworzenie NMT ---
   let demTiles = 0, nan = 0;
   for (const [k, t] of dem) {
@@ -127,6 +154,9 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
       const top = ne ? crown(ne.e, ne.u) : null, cur = h[idx] + off;
       let v = cur;
       const wall = top != null && isWall(ne!.e);
+      const emb = embAt(x, z);
+      if (!Number.isNaN(emb)) { if (emb > cur) { h[idx] = emb - off; touched = true; } continue; } // nasyp wjazdu na most
+      if (nearBridge(x, z, wet)) continue; // przy moście (ląd) i przy jego końcach (także w wodzie): oryginalny teren
       if (wet) v = Math.min(cur, wl - (wall && ne!.d < 7 ? 12 : ne && ne.d < 6 ? 4 : 1.6)); // dno: przy brzegu głęboko (stromy skos tuż przy linii brzegu)
       else if (wall && ne!.d < 1.2) v = Math.min(cur, wl - 12);    // tuż przy murze (pod brukiem, który ma własną fizykę): bez skosu nad wodę
       else if (top != null && ne!.d < 4 && !wall) v = wl - .4 + (top - wl + .4) * Math.min(1, (ne!.d + .3) / 4.3); // skarpa: teren wzdłuż jej spadku
@@ -137,6 +167,8 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
     if (touched || nan) { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(new DemTile(t.tx, t.ty, t.step, t.n, t.ref, h).encode()))); demTiles++; }
     else if (existsSync(join(orig, `${k}.bin.gz`))) writeFileSync(join(dir, `${k}.bin.gz`), readFileSync(join(orig, `${k}.bin.gz`)));
   }
+  // nabrzeża (mur, bruk) nie wchodzą pod most i na jego wjazd
+  for (const t of tiles.values()) for (const a of t.a) if (a.qk) a.qk = a.qk.map((K, ri) => { const f = ri ? a.i![ri - 1] : a.o; return K.map((k, i) => k && nearBridge(f[2 * i], f[2 * i + 1]) ? 0 : k); });
   console.log(`nabrzeża: uzupełnione punkty bez danych NMT przy wodzie: ${nan}`);
   writeFileSync(marker, 'teren przetworzony przez tools/lib/waterBanks.ts; oryginał w .cache/terrain-orig\n');
   return { tiles: level.size, quayVerts, demTiles };
