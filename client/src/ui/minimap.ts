@@ -1,4 +1,4 @@
-// Minimapa obracana razem z graczem: budynki, ulice, tunele w kolorach linii, hale i lokale.
+// Minimapa zawsze północą do góry (strzałka gracza pokazuje kierunek patrzenia): budynki, ulice, tunele w kolorach linii, hale i lokale.
 import { CELL } from '@miasto/shared/world/grid';
 import type { BuildingPoly } from '@miasto/shared/world/collision';
 import type { Mode } from '@miasto/shared/sim/types';
@@ -17,7 +17,7 @@ export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: M
   const under = (MODE === 'walk' && C.under) || C.xray;
   const view = MODE === 'heli' ? Math.min(3000, 300 + C.height * 5) : MODE === 'car' ? 450 : (C.under ? 500 : 260), s = W / view, R = view / 2 * 1.45;
   mctx.save(); mctx.beginPath(); mctx.arc(W / 2, W / 2, W / 2 - 2, 0, 7); mctx.clip();
-  mctx.translate(W / 2, W / 2); mctx.rotate(C.yaw); mctx.scale(s, s); mctx.translate(-C.x, -C.z);
+  mctx.translate(W / 2, W / 2); mctx.scale(s, s); mctx.translate(-C.x, -C.z);
   const lw = 1 / s;
   if (!C.under) {
     mctx.fillStyle = 'rgba(125,255,176,.3)'; mctx.strokeStyle = 'rgba(125,255,176,.8)'; mctx.lineWidth = lw; const seen = new Set<BuildingPoly>();
@@ -35,7 +35,7 @@ export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: M
     // — bez jaśniejszych plam i szwów tam, gdzie odcinki dróg na siebie zachodzą
     for (const [jezdnie, col, alpha] of [[false, '#96d2b4', .3], [true, '#cfe9ff', .5]] as const) {
       const L = layer(W), lc = L.getContext('2d')!; lc.setTransform(1, 0, 0, 1, 0, 0); lc.clearRect(0, 0, W, W);
-      lc.translate(W / 2, W / 2); lc.rotate(C.yaw); lc.scale(s, s); lc.translate(-C.x, -C.z);
+      lc.translate(W / 2, W / 2); lc.scale(s, s); lc.translate(-C.x, -C.z);
       lc.strokeStyle = col; lc.lineCap = 'round'; lc.lineJoin = 'round';
       for (const t of world.tiles.values()) {
         if (!near(t)) continue;
@@ -60,5 +60,11 @@ export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: M
   for (const o of C.others || []) { mctx.fillStyle = o.color; mctx.beginPath(); mctx.arc(o.x, o.z, 5 * lw, 0, 7); mctx.fill(); }
   mctx.restore();
   mctx.fillStyle = MODE === 'car' ? '#ffcc33' : MODE === 'heli' ? '#66e0ff' : '#fff';
-  mctx.beginPath(); mctx.moveTo(W / 2, W / 2 - 13); mctx.lineTo(W / 2 - 9, W / 2 + 9); mctx.lineTo(W / 2 + 9, W / 2 + 9); mctx.closePath(); mctx.fill();
+  // gracz: strzałka obrócona w kierunku patrzenia (mapa stoi: północ u góry)
+  mctx.save(); mctx.translate(W / 2, W / 2); mctx.rotate(-C.yaw);
+  mctx.beginPath(); mctx.moveTo(0, -13); mctx.lineTo(-9, 9); mctx.lineTo(0, 4); mctx.lineTo(9, 9); mctx.closePath(); mctx.fill();
+  mctx.strokeStyle = 'rgba(0,0,0,.6)'; mctx.lineWidth = 1.5; mctx.stroke(); mctx.restore();
+  // oznaczenie północy
+  mctx.font = `700 ${Math.round(W / 11)}px "Chakra Petch", sans-serif`; mctx.textAlign = 'center'; mctx.textBaseline = 'top';
+  mctx.fillStyle = 'rgba(0,0,0,.55)'; mctx.fillText('N', W / 2 + 1, 7); mctx.fillStyle = '#ff6b6b'; mctx.fillText('N', W / 2, 6);
 }
