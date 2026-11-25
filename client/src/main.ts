@@ -7,6 +7,7 @@ import { CITIES, cityAt, type CityKey } from '@miasto/shared/data/cities';
 import type { SaveState } from '@miasto/shared/sim/types';
 import { Game, type GameUI } from './game/game';
 import { Phone } from './phone/phone';
+import { setVehicleQuality, VEHICLE_Q } from './player/vehicles';
 import { VEH } from '@miasto/shared/sim/vehicles';
 import { cellName, fmtLatLon, gridOf, unprojPoint } from '@miasto/shared/data/grid';
 import { parseOsmText } from './osm/parse';
@@ -202,6 +203,11 @@ intChk.onchange = () => {
   try { localStorage.setItem('mm.wnetrza', intChk.checked ? '1' : '0'); } catch { /* brak dostępu */ }
   if (!game.setInteriorsOn(intChk.checked)) $('status').textContent = 'W grze sieciowej o wnętrzach decyduje serwer.';
 };
+
+// wydajność: modele pojazdów proste / szczegółowe (zapamiętane; auta przebudowują się od razu)
+const autaSel = $<HTMLSelectElement>('autaSel');
+autaSel.value = VEHICLE_Q.hq ? '1' : '0';
+autaSel.onchange = () => setVehicleQuality(autaSel.value === '1');
 
 // wydajność: liczba aut i pieszych NPC (zapamiętana)
 const carRng = $<HTMLInputElement>('carRng'), pedRng = $<HTMLInputElement>('pedRng');

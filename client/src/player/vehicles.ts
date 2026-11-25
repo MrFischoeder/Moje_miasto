@@ -5,15 +5,22 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-type C = number;
-interface Part { g: THREE.BufferGeometry; col: C; emi?: C }
+export type C = number;
+export interface Part { g: THREE.BufferGeometry; col: C; emi?: C }
 const VC = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+/** szczegółowe modele: gładkie cieniowanie (normalne z loftu) */
+const VC_HQ = new THREE.MeshLambertMaterial({ vertexColors: true });
+/** Jakość modeli pojazdów: false = proste (low-poly), true = szczegółowe (vehiclesHQ.ts). Zmiana: setVehicleQuality. */
+export const VEHICLE_Q = { hq: (() => { try { return localStorage.getItem('mm.autaHQ') === '1'; } catch { return false; } })() };
+let buildHQRef: ((v: number, col: C) => Spec | null) | null = null;
+export function registerHQ(fn: (v: number, col: C) => Spec | null): void { buildHQRef = fn; }
+export function setVehicleQuality(hq: boolean): void { VEHICLE_Q.hq = hq; try { localStorage.setItem('mm.autaHQ', hq ? '1' : '0'); } catch { /* brak pamięci */ } }
 /** szyby: lekko przyciemnione, półprzezroczyste (bez zapisu głębi: widać wnętrze i ludzi) */
 export const GLASS = new THREE.MeshLambertMaterial({ color: 0x9ec4d8, transparent: true, opacity: .32, depthWrite: false, side: THREE.DoubleSide, flatShading: true });
 
-const DARK = 0x1c1c1e, TIRE = 0x161616, RIM = 0x9a9ea4, SEAT = 0x2a2c30, DASH = 0x202124, HEAD = 0xfff6d8, TAIL = 0xc81818, CHROME = 0xb8bcc0, BLACK = 0x18181a;
+export const DARK = 0x1c1c1e, TIRE = 0x161616, RIM = 0x9a9ea4, SEAT = 0x2a2c30, DASH = 0x202124, HEAD = 0xfff6d8, TAIL = 0xc81818, CHROME = 0xb8bcc0, BLACK = 0x18181a;
 
-function bx(w: number, h: number, d: number, x: number, y: number, z: number, col: C, emi?: C): Part {
+export function bx(w: number, h: number, d: number, x: number, y: number, z: number, col: C, emi?: C): Part {
   const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.translate(x, y, z); return { g, col, emi };
 }
 /** prostopadłościan zwężony ku górze (kabina): dół w × d, góra skalowana (sx, sz) i przesunięta o dz */
@@ -22,29 +29,29 @@ function cab(w: number, h: number, d: number, x: number, y: number, z: number, s
   for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) { p.setX(i, p.getX(i) * sx); p.setZ(i, p.getZ(i) * sz + dz); }
   const n = g.toNonIndexed(); n.translate(x, y, z); return { g: n, col };
 }
-function wheel(r: number, wdt: number, x: number, y: number, z: number): Part[] {
+export function wheel(r: number, wdt: number, x: number, y: number, z: number): Part[] {
   const t = new THREE.CylinderGeometry(r, r, wdt, 10).toNonIndexed(); t.rotateZ(Math.PI / 2); t.translate(x, y, z);
   const h = new THREE.CylinderGeometry(r * .55, r * .55, wdt + .02, 8).toNonIndexed(); h.rotateZ(Math.PI / 2); h.translate(x, y, z);
   return [{ g: t, col: TIRE }, { g: h, col: RIM }];
 }
-function merge(parts: Part[]): THREE.BufferGeometry {
+export function merge(parts: Part[], keepNormals = false): THREE.BufferGeometry {
   const c = new THREE.Color(), e = new THREE.Color();
   return mergeGeometries(parts.map(({ g, col, emi }) => {
     const n = g.getAttribute('position').count, a = new Float32Array(n * 3); c.setHex(col); e.setHex(emi ?? 0);
     for (let i = 0; i < n; i++) { a[i * 3] = Math.min(1, c.r + e.r); a[i * 3 + 1] = Math.min(1, c.g + e.g); a[i * 3 + 2] = Math.min(1, c.b + e.b); }
     g.setAttribute('color', new THREE.BufferAttribute(a, 3)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
-    g.computeVertexNormals(); return g;
+    if (!keepNormals || !g.getAttribute('normal')) g.computeVertexNormals(); return g;
   }))!;
 }
 
 // ---------- postacie w pojazdach ----------
-const SKIN = [0xf1c8a8, 0xe0b090, 0xc89070, 0x9a6a4a];
+export const SKIN = [0xf1c8a8, 0xe0b090, 0xc89070, 0x9a6a4a];
 /** siedząca postać (tułów, uda, głowa) z przodem w stronę -z; y = poziom siedziska */
-function seated(shirt: C, skin: C, x: number, y: number, z: number): Part[] {
+export function seated(shirt: C, skin: C, x: number, y: number, z: number): Part[] {
   return [bx(.42, .46, .24, x, y + .27, z + .05, shirt), bx(.34, .14, .46, x, y + .05, z - .18, 0x2a3448), bx(.22, .22, .22, x, y + .62, z + .02, skin), bx(.24, .06, .24, x, y + .76, z + .03, 0x3a2a1a)];
 }
 /** stojąca postać (hulajnoga) */
-function standing(shirt: C, skin: C, x: number, y: number, z: number): Part[] {
+export function standing(shirt: C, skin: C, x: number, y: number, z: number): Part[] {
   return [bx(.16, .82, .2, x - .11, y + .41, z, 0x2a3448), bx(.16, .82, .2, x + .11, y + .41, z, 0x2a3448), bx(.46, .6, .26, x, y + 1.12, z, shirt), bx(.24, .26, .26, x, y + 1.56, z, skin)];
 }
 
@@ -75,7 +82,7 @@ function carBody(p: CarP, col: C, extra: (o: Part[], g: Part[]) => void = () => 
   return { o, g, seats };
 }
 
-interface Spec { o: Part[]; g: Part[]; seats: [number, number, number][]; stand?: boolean }
+export interface Spec { o: Part[]; g: Part[]; seats: [number, number, number][]; stand?: boolean }
 function build(v: number, col: C): Spec {
   switch (v) {
     case 1: return carBody({ L: 4.7, W: 1.82, r: .33, y0: .3, y1: .95, c0: -.75, c1: 1.15, roof: 1.45, sx: .84, sz: .7, dz: .05, seats: 4 }, col);
@@ -144,7 +151,7 @@ function build(v: number, col: C): Spec {
 }
 
 export interface Vehicle3D { root: THREE.Group; occupants: THREE.Object3D[]; lights?: THREE.Object3D[] }
-const CACHE = new Map<string, { body: THREE.BufferGeometry; glass: THREE.BufferGeometry | null; seats: [number, number, number][]; stand: boolean }>();
+const CACHE = new Map<string, { body: THREE.BufferGeometry; glass: THREE.BufferGeometry | null; seats: [number, number, number][]; stand: boolean; hq: boolean }>();
 const FIG = new Map<string, THREE.BufferGeometry>();
 
 /**
@@ -153,14 +160,14 @@ const FIG = new Map<string, THREE.BufferGeometry>();
  */
 export function makeVehicle(v: number, col: C, npc: boolean, seed = 0): Vehicle3D {
   const shirt = [0x3a6ea5, 0xb04a3a, 0x3a8a5a, 0x8a5a9a, 0xd0a040, 0x404448][seed % 6], skin = SKIN[seed % SKIN.length];
-  const key = `${v}:${col}:${npc ? shirt + ':' + skin : '-'}`;
-  let c = CACHE.get(key);
+  const hq = VEHICLE_Q.hq && !!buildHQRef, key = `${hq ? 'hq' : 'lo'}:${v}:${col}:${npc ? shirt + ':' + skin : '-'}`;
+  let c = CACHE.get(key), hqUsed = false;
   if (!c) {
-    const s = build(v, col);
+    const sh = hq ? buildHQRef!(v, col) : null, s = sh ?? build(v, col); hqUsed = !!sh;
     if (npc && s.seats.length) { const [x, y, z] = s.seats[0]; s.o.push(...(s.stand ? standing(shirt, skin, x, y, z) : seated(shirt, skin, x, y, z))); }
-    c = { body: merge(s.o), glass: s.g.length ? merge(s.g) : null, seats: s.seats, stand: !!s.stand }; CACHE.set(key, c);
+    c = { body: merge(s.o, hqUsed), glass: s.g.length ? merge(s.g, hqUsed) : null, seats: s.seats, stand: !!s.stand, hq: hqUsed }; CACHE.set(key, c);
   }
-  const root = new THREE.Group(); root.add(new THREE.Mesh(c.body, VC));
+  const root = new THREE.Group(); root.add(new THREE.Mesh(c.body, c.hq ? VC_HQ : VC)); root.userData.hq = VEHICLE_Q.hq;
   if (c.glass) { const gm = new THREE.Mesh(c.glass, GLASS); gm.renderOrder = 2; root.add(gm); }
   const occupants: THREE.Object3D[] = [];
   if (!npc) c.seats.forEach(([x, y, z], i) => {

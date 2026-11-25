@@ -21,7 +21,9 @@ import { decodeTile, HttpTileSource, MemoryTileSource, NoTiles, type TileSource 
 import { StationLabels } from '../world/labels';
 import { CameraRig } from '../player/camera';
 import { disposeModel, makeAvatar, makeOfficer, makeHeli, type AvatarModel, type VehicleModel } from '../player/models';
-import { makePoliceVehicle, makeVehicle, setOccupants, type Vehicle3D } from '../player/vehicles';
+import { makePoliceVehicle, makeVehicle, registerHQ, setOccupants, VEHICLE_Q, type Vehicle3D } from '../player/vehicles';
+import { buildHQ } from '../player/vehiclesHQ';
+registerHQ(buildHQ);
 import { Input } from '../input/input';
 import type { Action } from '../input/bindings';
 import { NetSession, type ChatLine } from '../net/netSession';
@@ -390,7 +392,7 @@ export class Game {
       if (e.kind === 'walker' && (e.id === p.walker || e.hide)) continue;
       seen.add(e.id);
       let m = this.models.get(e.id);
-      if (m && e.kind === 'car' && m.root.userData.v !== (e.v ?? 0)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(e.id); m = undefined; } // zmiana pojazdu gracza
+      if (m && e.kind === 'car' && (m.root.userData.v !== (e.v ?? 0) || m.root.userData.hq !== VEHICLE_Q.hq)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(e.id); m = undefined; } // zmiana pojazdu gracza
       if (!m) {
         if (e.kind === 'walker') {
           if (e.police) m = makeOfficer(e.id);
