@@ -224,8 +224,8 @@ export class Simulation {
 
   /** Limity ruchu (ustawienie gry): najwięcej aut i pieszych wokół gracza w szczycie. */
   setTrafficLimits(cars: number, peds: number): void {
-    if (this.traffic && Number.isFinite(cars)) this.traffic.maxPerPlayer = Math.max(0, Math.min(200, Math.round(cars)));
-    if (this.peds && Number.isFinite(peds)) this.peds.max = Math.max(0, Math.min(150, Math.round(peds)));
+    if (this.traffic && Number.isFinite(cars)) this.traffic.maxPerPlayer = Math.max(0, Math.min(500, Math.round(cars)));
+    if (this.peds && Number.isFinite(peds)) this.peds.max = Math.max(0, Math.min(400, Math.round(peds)));
   }
 
   /** Włącza / wyłącza wnętrza budynków; gracz stojący w środku wychodzi na ulicę obok. */

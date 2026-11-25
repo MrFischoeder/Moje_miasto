@@ -201,13 +201,23 @@ try { intChk.checked = localStorage.getItem('mm.wnetrza') !== '0'; } catch { /* 
 game.interiorsOn = intChk.checked;
 intChk.onchange = () => {
   try { localStorage.setItem('mm.wnetrza', intChk.checked ? '1' : '0'); } catch { /* brak dostępu */ }
+  logEvent(`zmiana: wnętrza budynków ${intChk.checked ? 'włączone' : 'wyłączone'}`);
   if (!game.setInteriorsOn(intChk.checked)) $('status').textContent = 'W grze sieciowej o wnętrzach decyduje serwer.';
 };
+
+// dziennik testu (plik .txt, klawisz L): wiersze pomiarów co sekundę i zdarzenia – każda zmiana ustawień wydajności
+const LOG_MAX = 3 * 3600;
+const perfLog: string[] = (() => { try { return (localStorage.getItem('mm.perflog') ?? '').split('\n').filter(Boolean); } catch { return []; } })();
+function logEvent(text: string): void {
+  perfLog.push(`${new Date().toLocaleTimeString('pl-PL')}\t# ${text}`);
+  if (perfLog.length > LOG_MAX) perfLog.splice(0, perfLog.length - LOG_MAX);
+  try { localStorage.setItem('mm.perflog', perfLog.join('\n')); } catch { /* brak miejsca */ }
+}
 
 // wydajność: modele pojazdów proste / szczegółowe (zapamiętane; auta przebudowują się od razu)
 const autaSel = $<HTMLSelectElement>('autaSel');
 autaSel.value = VEHICLE_Q.hq ? '1' : '0';
-autaSel.onchange = () => setVehicleQuality(autaSel.value === '1');
+autaSel.onchange = () => { setVehicleQuality(autaSel.value === '1'); logEvent(`zmiana: pojazdy ${autaSel.value === '1' ? 'szczegółowe' : 'proste'}`); };
 
 // wydajność: liczba aut i pieszych NPC (zapamiętana)
 const carRng = $<HTMLInputElement>('carRng'), pedRng = $<HTMLInputElement>('pedRng');
@@ -218,26 +228,28 @@ const showRng = () => { $('carVal').textContent = carRng.value; $('pedVal').text
 showRng(); game.carMax = +carRng.value; game.pedMax = +pedRng.value;
 const applyTraffic = () => {
   showRng(); save('mm.auta', carRng.value); save('mm.piesi', pedRng.value);
-  if (!game.setTraffic(+carRng.value, +pedRng.value)) $('status').textContent = 'W grze sieciowej o ruchu decyduje serwer.';
+  game.setTraffic(+carRng.value, +pedRng.value);
+  logEvent(`zmiana: auta NPC ${carRng.value}, piesi NPC ${pedRng.value} na gracza${game.online ? ' (wysłane do serwera sieciowego; przyjmuje tylko serwer testowy)' : ' (serwer lokalny)'}`);
+  if (game.online) $('status').textContent = 'Limity ruchu wysłane do serwera (działa na serwerze testowym).';
 };
 carRng.oninput = showRng; pedRng.oninput = showRng; carRng.onchange = applyTraffic; pedRng.onchange = applyTraffic;
 
 // licznik wydajności (P)
 const perfChk = $<HTMLInputElement>('perfChk'), perfEl = $('perf');
 perfChk.checked = load('mm.licznik', 0) === 1; perfEl.hidden = !perfChk.checked;
-const setPerf = (on: boolean) => { perfChk.checked = on; perfEl.hidden = !on; save('mm.licznik', on ? '1' : '0'); game.perf.take(); };
+const setPerf = (on: boolean) => { perfChk.checked = on; perfEl.hidden = !on; save('mm.licznik', on ? '1' : '0'); game.perf.take(); logEvent(`licznik wydajności ${on ? 'włączony' : 'wyłączony'}`); };
 perfChk.onchange = () => setPerf(perfChk.checked);
 addEventListener('keydown', e => { if (e.code === 'KeyP' && !(document.activeElement instanceof HTMLInputElement)) setPerf(!perfChk.checked); });
 // dziennik wydajności: jedna linia na sekundę, póki licznik jest włączony
-const LOG_MAX = 3 * 3600, perfLogN = $('perfLogN');
-const perfLog: string[] = (() => { try { return (localStorage.getItem('mm.perflog') ?? '').split('\n').filter(Boolean); } catch { return []; } })();
+const perfLogN = $('perfLogN');
 function gpuName(): string {
   try { const gl = game.ctx.renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER)); } catch { return '?'; }
 }
 function savePerfLog(): void {
   const head = [`Moje miasto – dziennik wydajności, zapisano ${new Date().toLocaleString('pl-PL')}`,
     `Przeglądarka: ${navigator.userAgent}`, `Karta graficzna: ${gpuName()}`, `Ekran: ${innerWidth}x${innerHeight}, skala ${devicePixelRatio}`,
-    `Ustawienia: auta ${carRng.value}, piesi ${pedRng.value}, wnętrza ${$<HTMLInputElement>('intChk').checked ? 'tak' : 'nie'}`, '',
+    `Ustawienia: auta ${carRng.value}, piesi ${pedRng.value}, wnętrza ${$<HTMLInputElement>('intChk').checked ? 'tak' : 'nie'}, pojazdy ${VEHICLE_Q.hq ? 'szczegółowe' : 'proste'}, gra ${game.online ? 'sieciowa' : 'lokalna'}`,
+    'Wiersze zaczynające się od # to zdarzenia (zmiany ustawień); pozostałe to pomiary co sekundę.', '',
     ['czas', 'fps', 'klatka_ms', 'najgorsza_ms', 'cpu_ms', 'gpu_ms', 'rysowanie_ms', 'interfejs_ms', 'komunikacja_ms', 'auta_ms', 'kafle_ms',
       'wywolania', 'trojkaty', 'auta_npc', 'piesi_npc', 'komunikacja', 'kafle', 'symulacja_ms', 'symulacja_maks_ms', 'tryb', 'x', 'z'].join('\t')];
   const a = document.createElement('a'), d = new Date(), p2 = (n: number) => String(n).padStart(2, '0');

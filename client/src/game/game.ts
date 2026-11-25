@@ -228,8 +228,8 @@ export class Game {
   /** Limity ruchu NPC (gra jednoosobowa). Zwraca false w grze sieciowej. */
   setTraffic(cars: number, peds: number): boolean {
     this.carMax = cars; this.pedMax = peds;
-    if (this.online || !this.session) return !this.online;
-    this.session.setTraffic(cars, peds); return true;
+    if (!this.session) return true;
+    this.session.setTraffic(cars, peds); return true; // serwer sieciowy przyjmuje tylko w trybie testowym
   }
 
   /** Włącza / wyłącza wnętrza budynków (klient i lokalny serwer razem). Zwraca false w grze sieciowej. */

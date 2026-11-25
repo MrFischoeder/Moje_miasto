@@ -128,7 +128,10 @@ export class Room {
     else if (m.t === 'load' && this.opt.local) this.loadState(c, m.data);
     else if (m.t === 'setTime' && this.opt.local) this.setTime(m.sec, m.scale);
     else if (m.t === 'setInteriors' && this.opt.local) this.sim.setInteriors(!!m.on);
-    else if (m.t === 'setTraffic' && this.opt.local) this.sim.setTrafficLimits(+m.cars, +m.peds);
+    else if (m.t === 'setTraffic' && (this.opt.local || this.opt.dev)) { // serwer testowy: limity ruchu z suwaków (pomiar wydajności)
+      this.sim.setTrafficLimits(+m.cars, +m.peds);
+      if (!this.opt.local) { const t = this.sim.traffic?.maxPerPlayer, q = this.sim.peds?.max; this.broadcast({ t: 'chat', from: '', color: c.player.color, text: `${c.player.name} ustawia ruch: auta ${t}, piesi ${q} na gracza`, sys: true }); }
+    }
   }
 
   private command(c: Client, cmd: Command): void {
@@ -206,7 +209,7 @@ export class Room {
       };
       this.timing = { sum: 0, n: 0, max: 0, bytes: 0, since: t0 };
       // gra jednoosobowa: statystyki symulacji do licznika wydajności
-      if (this.opt.local) this.broadcast({ t: 'stats', tickMs: this.stats.tickMs, tickMsMax: this.stats.tickMsMax, entities: this.sim.entities.size,
+      if (this.opt.local || this.opt.dev) this.broadcast({ t: 'stats', tickMs: this.stats.tickMs, tickMsMax: this.stats.tickMsMax, entities: this.sim.entities.size,
         cars: this.sim.traffic?.cars.size ?? 0, peds: this.sim.peds?.peds.size ?? 0, police: this.sim.rules?.police.units.length ?? 0, interiors: this.world.interiors.live.size });
     }
   }
