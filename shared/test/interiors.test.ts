@@ -70,11 +70,11 @@ describe('wnętrza na prawdziwych budynkach', () => {
         // drzwi: zamknięte blokują przejście; po otwarciu wszystkich dojście do każdego pomieszczenia
         const fl = [0, 1, 2].filter(k => k < p.levels), ds = [...w.interiors.liveDoors()].filter(q => q.plan === p);
         if (ds.some(q => q.d.ext)) {
-          for (const { d } of ds) w.interiors.setDoor(d.id, false);
+          for (const { d } of ds) w.interiors.setDoor(d.id, 0);
           expect(unreachable(w, lv, fl).length, `${b.id}: zamknięte drzwi nie blokują`).toBeGreaterThan(0);
           const e = ds.find(q => q.d.ext); if (e) { const m = (e.d.a + e.d.b) / 2, [x, z] = toWorld(p.frame, m, -.5); expect(w.interiors.nearDoor(x, z, e.d.y0)?.d.id).toBe(e.d.id); }
         }
-        for (const { d } of ds) w.interiors.setDoor(d.id, true);
+        for (const { d } of ds) w.interiors.setDoor(d.id, 1);
         expect(unreachable(w, lv, fl), `${p.typ} ${b.id}`).toEqual([]);
         w.interiors.sync([]);
       }
@@ -147,9 +147,27 @@ describe('drzwi', () => {
     const { doorOpenByDefault } = await import('../src/interiors/interiors');
     let open = 0; for (let i = 0; i < 2000; i++) if (doorOpenByDefault(`123/${i % 7}/${i}`)) open++;
     expect(open / 2000).toBeGreaterThan(.08); expect(open / 2000).toBeLessThan(.25);
-    const w = new World('warszawa', { tiles: [tile('warszawa', 0, 0)] }), I = w.interiors, id = '1/0/0', d0 = I.isOpen(id);
-    expect(I.setDoor(id, !d0)).toBe(true); expect(I.isOpen(id)).toBe(!d0); expect(I.doorStates()).toEqual([[id, !d0]]);
-    expect(I.setDoor(id, !d0)).toBe(false);
-    I.setDoor(id, d0); expect(I.doorStates()).toEqual([]);
+    const w = new World('warszawa', { tiles: [tile('warszawa', 0, 0)] }), I = w.interiors, id = '1/0/0', c0 = I.doorCode(id), c1 = c0 ^ 1;
+    expect(I.setDoor(id, c1)).toBe(true); expect(I.isOpen(id)).toBe(!(c0 & 1)); expect(I.doorStates()).toEqual([[id, c1]]);
+    expect(I.setDoor(id, c1)).toBe(false);
+    I.setDoor(id, c0); expect(I.doorStates()).toEqual([]);
+  });
+  it('drzwi na klucz: nie otwierają się, trzy kopniaki wyważają (bez zamka) i dają poszukiwanie', async () => {
+    const { doorDefault, DOOR_LOCKED, DOOR_BROKEN, DOOR_OPEN } = await import('../src/interiors/interiors');
+    let locked = 0; for (let i = 0; i < 2000; i++) if (doorDefault(`9/${i % 5}/${i}`) & DOOR_LOCKED) locked++;
+    expect(locked / 2000).toBeGreaterThan(.2); expect(locked / 2000).toBeLessThan(.4);
+    const w = worldAround('warszawa', -3, 1);
+    const b = [...w.tiles.values()].flatMap(t => t.b).find(q => q.id === 238177212)!, [cx, cz] = center(b.o);
+    const sim = new Simulation(w); sim.enableTraffic(); const p = sim.addPlayer('a'), wk = sim.entity(p.walker);
+    Object.assign(wk, { x: cx, z: cz, y: -99 }); for (let i = 0; i < 5; i++) sim.syncInteriors();
+    const lv = w.interiors.live.get(b.id)!, e = [...w.interiors.liveDoors()].find(q => q.plan === lv.plan && q.d.ext)!;
+    const m = (e.d.a + e.d.b) / 2, [x, z] = toWorld(lv.plan.frame, m, e.d.at - .5); Object.assign(wk, { x, z, y: e.d.y0, reg: -1 });
+    w.interiors.setDoor(e.d.id, DOOR_LOCKED);
+    sim.command(p.id, { type: 'enter' }); expect(w.interiors.isOpen(e.d.id)).toBe(false);
+    sim.command(p.id, { type: 'kick' }); sim.command(p.id, { type: 'kick' }); expect(w.interiors.isOpen(e.d.id)).toBe(false);
+    sim.command(p.id, { type: 'kick' }); expect(w.interiors.doorCode(e.d.id)).toBe(DOOR_OPEN | DOOR_BROKEN);
+    expect(p.wanted).toBeGreaterThan(0);
+    sim.command(p.id, { type: 'enter' }); expect(w.interiors.doorCode(e.d.id)).toBe(DOOR_BROKEN); // wyważone: da się przymknąć, bez zamka
+    sim.command(p.id, { type: 'enter' }); expect(w.interiors.isOpen(e.d.id)).toBe(true);
   });
 });

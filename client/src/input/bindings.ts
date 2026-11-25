@@ -1,7 +1,7 @@
 // Mapowanie klawiszy na akcje (dane, nie kod). Pad dojdzie jako kolejne źródło.
 export type Axis = 'throttle' | 'steer' | 'lift';
 export type Button = 'run' | 'handbrake';
-export type Action = 'modeWalk' | 'modeCar' | 'modeHeli' | 'camera' | 'xray' | 'menu' | 'interact' | 'chat' | 'phone';
+export type Action = 'modeWalk' | 'modeCar' | 'modeHeli' | 'camera' | 'xray' | 'menu' | 'interact' | 'kick' | 'chat' | 'phone';
 
 export interface Bindings {
   axes: Record<Axis, { pos: string[]; neg: string[] }>;
@@ -27,6 +27,7 @@ export const DEFAULT_BINDINGS: Bindings = {
     xray: ['KeyX'],
     menu: ['KeyM'],
     interact: ['KeyE'],
+    kick: ['KeyB'],
     chat: ['KeyT', 'Enter'],
     phone: ['KeyC'],
   },

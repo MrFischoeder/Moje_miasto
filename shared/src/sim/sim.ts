@@ -7,6 +7,7 @@ import type { TransitSystem } from '../transit/system';
 import { Traffic } from '../traffic/traffic';
 import { Pedestrians } from '../traffic/peds';
 import { Rules } from '../game/rules';
+import { DOOR_BROKEN, DOOR_LOCKED, DOOR_OPEN } from '../interiors/interiors';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
 import { NO_INPUT, PLAYER_COLORS, SEATS, type Command, type Entity, type EntityKind, type InputCmd, type Mode, type PlayerState, type SaveState } from './types';
@@ -29,7 +30,9 @@ export class Simulation {
   readonly entities = new Map<number, Entity>();
   readonly players = new Map<number, PlayerState>();
   /** zmiany stanu drzwi do rozesłania graczom [id, otwarte] */
-  readonly doorEvents: [string, boolean][] = [];
+  readonly doorEvents: [string, number][] = [];
+  /** kopniaki w drzwi zamknięte na klucz: id drzwi -> [licznik, czas ostatniego] */
+  private kicks = new Map<string, [number, number]>();
   private readonly inputs = new Map<number, InputCmd>();
   private nextId = 1;
 
@@ -159,6 +162,7 @@ export class Simulation {
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
     if (c.type === 'mode') this.setMode(p, c.mode, c.v);
+    else if (c.type === 'kick') this.kick(p);
     else if (c.type === 'enter') { if (!this.board(p) && !this.door(p) && !this.search(p)) this.enterNearest(p); }
     else if (c.type === 'goStation') {
       const s = this.world.stations[c.station]; if (!s) return;
@@ -250,7 +254,23 @@ export class Simulation {
     if (p.vehicle != null || p.ride) return false;
     const w = this.entity(p.walker), I = this.world.interiors, d = I.nearDoor(w.x, w.z, w.y);
     if (!d || (d.dist > 1 && I.container(w.x, w.z, w.y))) return false;
-    if (I.setDoor(d.d.id, !d.open)) this.doorEvents.push([d.d.id, !d.open]);
+    if ((d.code & DOOR_LOCKED) && !(d.code & DOOR_BROKEN)) { this.rules?.notify(p, 'Zamknięte na klucz — możesz wyważyć drzwi (B / przycisk Wyważ)'); return true; }
+    this.setDoorCode(d.d.id, d.code ^ DOOR_OPEN);
+    return true;
+  }
+
+  private setDoorCode(id: string, code: number): void { if (this.world.interiors.setDoor(id, code)) this.doorEvents.push([id, code]); }
+
+  /** Kopniak w najbliższe drzwi: zamknięte na klucz puszczają po 3 kopniakach (wyważone: otwarte, już bez zamka). */
+  kick(p: PlayerState): boolean {
+    if (p.vehicle != null || p.ride || p.dead) return false;
+    const w = this.entity(p.walker), d = this.world.interiors.nearDoor(w.x, w.z, w.y); if (!d || d.open) return false;
+    if (!(d.code & DOOR_LOCKED) || (d.code & DOOR_BROKEN)) { this.setDoorCode(d.d.id, d.code | DOOR_OPEN); return true; } // nie na klucz: kopniak otwiera
+    const t = this.tick * SIM_DT, k = this.kicks.get(d.d.id), n = k && t - k[1] < 8 ? k[0] + 1 : 1;
+    if (n < 3) { this.kicks.set(d.d.id, [n, t]); this.rules?.notify(p, `Kopniak w drzwi (${n}/3)`); return true; }
+    this.kicks.delete(d.d.id);
+    this.setDoorCode(d.d.id, DOOR_OPEN | DOOR_BROKEN);
+    this.rules?.crime(p, 1, 'Włamanie: wyważone drzwi');
     return true;
   }
 

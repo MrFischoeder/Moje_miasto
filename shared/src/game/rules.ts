@@ -52,6 +52,8 @@ export class Rules {
     });
   }
 
+  /** Komunikat dla gracza. */
+  notify(p: PlayerState, text: string): void { this.ev(p, text, 'info'); }
   private ev(p: PlayerState, text: string, kind: GameEvent['kind']): void { this.events.push({ pid: p.id, text, kind }); }
 
   /** Przestępstwo: +gwiazdki (do 5). */

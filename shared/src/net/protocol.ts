@@ -3,7 +3,7 @@
 // Pozycje: liczby całkowite w centymetrach; kąty: int16 (pełny obrót = 65536).
 import type { Command, Entity, EntityKind, InputCmd, PlayerState, SaveState } from '../sim/types';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const MSG_INPUT = 1, MSG_SNAPSHOT = 2;
 
 // ---------- kwantyzacja ----------
@@ -116,7 +116,8 @@ export type ServerMsg =
   /** zdarzenie na środku ekranu */
   | { t: 'event'; text: string; kind: 'crime' | 'arrest' | 'death' | 'info' }
   /** stan drzwi we wnętrzach: zmiany (albo pełna lista przy dołączeniu) [id, otwarte] */
-  | { t: 'doors'; s: [string, boolean][]; all?: boolean }
+  /** stany drzwi: id -> bity DOOR_* (shared/src/interiors/interiors.ts) */
+  | { t: 'doors'; s: [string, number][]; all?: boolean }
   /** tryb wnętrz budynków na serwerze (testowy przełącznik: bez wnętrz = bez mieszkań, lokali i wejść) */
   | { t: 'interiors'; on: boolean }
   | { t: 'stats'; tickMs: number; tickMsMax: number; entities: number; cars: number; peds: number; police: number; interiors: number }

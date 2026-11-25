@@ -92,6 +92,8 @@ export const NO_INPUT: InputCmd = { f: 0, s: 0, run: false, brake: false, lift: 
 export type Command =
   | { type: 'mode'; mode: Mode; /** wariant własnego pojazdu (VEH) */ v?: number }
   | { type: 'enter' }
+  /** kopniak w najbliższe drzwi (wyważanie zamkniętych na klucz) */
+  | { type: 'kick' }
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
   | { type: 'teleport'; x: number; z: number }

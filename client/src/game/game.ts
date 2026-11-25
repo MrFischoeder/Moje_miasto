@@ -280,6 +280,7 @@ export class Game {
       case 'modeCar': s?.sendCommand({ type: 'mode', mode: 'car', v: this.vehicle }); break;
       case 'modeHeli': s?.sendCommand({ type: 'mode', mode: 'heli' }); break;
       case 'interact': if (this.lastMode === 'walk' || this.riding) s?.sendCommand({ type: 'enter' }); break;
+      case 'kick': if (this.lastMode === 'walk' && !this.riding) s?.sendCommand({ type: 'kick' }); break;
       case 'camera': this.rig.toggleFP(); this.ui.onModeChanged(this.lastMode, this.rig.fp); break;
       case 'xray': this.toggleXray(); break;
       case 'menu': this.ui.onMenu(); break;

@@ -76,3 +76,12 @@ body.dead #deadOv{display:grid}
 #menu .card{max-height:calc(100vh - 32px);overflow-y:auto;position:relative}
 #menu .menuClose{position:sticky;top:0;float:right;z-index:2;margin:0 0 8px 8px}
 #menu{z-index:70}
+
+/* przyciski akcji w pobliżu (drzwi, pojemnik, auto): duże, nad środkiem dolnej krawędzi — wygodne kciukiem na telefonie */
+#ctx{position:fixed;left:50%;transform:translateX(-50%);bottom:22vh;display:flex;gap:10px;z-index:5;pointer-events:none}
+#ctx button{pointer-events:auto;min-height:56px;min-width:120px;font-size:18px;border-radius:28px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#ctx button[hidden]{display:none}
+#ctx button.warn{background:#ff8a3d;color:#1a0d02}
+#ctx button .k{opacity:.6;font-size:13px;margin-left:6px}
+.touch #ctx button .k{display:none}
+@media(max-width:600px){#ctx{bottom:auto;top:46%}#ctx button{min-width:108px;min-height:60px}}

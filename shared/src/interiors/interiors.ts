@@ -18,7 +18,12 @@ interface DoorRef { d: DoorDef; live: Live }
 /** pół-grubość zamkniętego skrzydła jako przeszkody [m] (więcej niż krok pieszego w jednym takcie) */
 const LEAF = .22;
 /** Domyślny stan drzwi (bez zapisanej zmiany): większość zamknięta, ok. 15% otwartych (stałe dla danych drzwi). */
-export function doorOpenByDefault(id: string): boolean { let h = 2166136261; for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619); return ((h >>> 0) % 1000) < 150; }
+/** Stan drzwi (bity): otwarte, zamknięte na klucz, wyważone (wyważonych nie da się już zamknąć na klucz). */
+export const DOOR_OPEN = 1, DOOR_LOCKED = 2, DOOR_BROKEN = 4;
+const doorHash = (id: string) => { let h = 2166136261; for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619); return h >>> 0; };
+/** Stan początkowy: ok. 15% otwartych, z zamkniętych ok. 35% na klucz. */
+export function doorDefault(id: string): number { const h = doorHash(id), r = h % 1000; return r < 150 ? DOOR_OPEN : ((h >>> 10) % 100) < 35 ? DOOR_LOCKED : 0; }
+export function doorOpenByDefault(id: string): boolean { return (doorDefault(id) & DOOR_OPEN) !== 0; }
 
 export interface InteriorsHost extends PlanWorld { readonly regions: RegionIndex }
 
@@ -35,8 +40,8 @@ export class Interiors {
   private byTile = new Map<string, Cand[]>();
   private obst = new Map<string, Obst[]>();
   private dgrid = new Map<string, DoorRef[]>();
-  /** stan drzwi zmieniony przez graczy (id -> otwarte); reszta: doorOpenByDefault */
-  private doorState = new Map<string, boolean>();
+  /** stan drzwi zmieniony przez graczy (id -> bity DOOR_*); reszta: doorDefault */
+  private doorState = new Map<string, number>();
   /** rośnie przy zmianie stanu drzwi (widok skrzydeł) */
   doorVersion = 0;
 
@@ -170,30 +175,31 @@ export class Interiors {
   }
 
   // ---------- drzwi ----------
-  isOpen(id: string): boolean { return this.doorState.get(id) ?? doorOpenByDefault(id); }
-  /** Ustawia stan drzwi; true = zmiana. */
-  setDoor(id: string, open: boolean): boolean {
-    if (this.isOpen(id) === open) return false;
-    if (open === doorOpenByDefault(id)) this.doorState.delete(id); else this.doorState.set(id, open);
+  doorCode(id: string): number { return this.doorState.get(id) ?? doorDefault(id); }
+  isOpen(id: string): boolean { return (this.doorCode(id) & DOOR_OPEN) !== 0; }
+  /** Ustawia stan drzwi (bity DOOR_*); true = zmiana. */
+  setDoor(id: string, code: number): boolean {
+    if (this.doorCode(id) === code) return false;
+    if (code === doorDefault(id)) this.doorState.delete(id); else this.doorState.set(id, code);
     this.doorVersion++; return true;
   }
   /** Wszystkie drzwi w stanie domyślnym (przed pełną listą z serwera). */
   resetDoors(): void { if (this.doorState.size) { this.doorState.clear(); this.doorVersion++; } }
   /** Drzwi o stanie innym niż domyślny (do wysłania nowemu graczowi). */
-  doorStates(): [string, boolean][] { return [...this.doorState]; }
+  doorStates(): [string, number][] { return [...this.doorState]; }
   /** Wszystkie drzwi aktywnych pięter (widok). */
   *liveDoors(): Generator<{ d: DoorDef; plan: Plan; open: boolean }> {
     for (const lv of this.live.values()) for (const L of lv.levels.values()) for (const d of L.level.doors) yield { d, plan: lv.plan, open: this.isOpen(d.id) };
   }
   /** Najbliższe drzwi w zasięgu ręki (środek skrzydła, ta sama kondygnacja). */
-  nearDoor(x: number, z: number, y: number, maxD = 1.6): { d: DoorDef; plan: Plan; open: boolean; dist: number } | null {
-    let best: { d: DoorDef; plan: Plan; open: boolean; dist: number } | null = null;
+  nearDoor(x: number, z: number, y: number, maxD = 1.6): { d: DoorDef; plan: Plan; open: boolean; code: number; dist: number } | null {
+    let best: { d: DoorDef; plan: Plan; open: boolean; code: number; dist: number } | null = null;
     const l = this.dgrid.get(Math.floor(x / DCELL) + ',' + Math.floor(z / DCELL)); if (!l) return null;
     for (const { d, live } of l) {
       if (y < d.y0 - 1 || y > d.y0 + 1.2) continue;
       const [lx, ly] = toLocal(live.plan.frame, x, z), m = (d.a + d.b) / 2;
       const dist = d.axis === 'x' ? Math.hypot(lx - d.at, Math.max(0, Math.abs(ly - m) - (d.b - d.a) / 2)) : Math.hypot(ly - d.at, Math.max(0, Math.abs(lx - m) - (d.b - d.a) / 2));
-      if (dist < maxD && (!best || dist < best.dist)) best = { d, plan: live.plan, open: this.isOpen(d.id), dist };
+      if (dist < maxD && (!best || dist < best.dist)) { const code = this.doorCode(d.id); best = { d, plan: live.plan, open: (code & DOOR_OPEN) !== 0, code, dist }; }
     }
     return best;
   }

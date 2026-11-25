@@ -101,7 +101,7 @@ export class NetSession {
       else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur });
       else if (m.t === 'event') this.onEvent(m.text, m.kind);
       else if (m.t === 'interiors') { this.world.interiors.setEnabled(m.on); this.onInteriors(m.on); }
-      else if (m.t === 'doors') { const I = this.world.interiors; if (m.all) I.resetDoors(); for (const [id, open] of m.s) I.setDoor(id, open); }
+      else if (m.t === 'doors') { const I = this.world.interiors; if (m.all) I.resetDoors(); for (const [id, code] of m.s) I.setDoor(id, typeof code === 'boolean' ? (code ? 1 : 0) : code); }
       else if (m.t === 'stats') { const { t: _t, ...rest } = m; void _t; this.serverStats = rest; }
       else if (m.t === 'saved') { this.savedWait?.(m.data); this.savedWait = null; }
       else if (m.t === 'error') this.onError(m.text);

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { World } from '@miasto/shared/world/world';
 import type { Box, DoorDef, Level, Plan, Slab } from '@miasto/shared/interiors/plan';
-import { toWorld } from '@miasto/shared/interiors/geom';
+import { toLocal, toWorld } from '@miasto/shared/interiors/geom';
 import { hex, mix, type RGB } from '@miasto/shared/util/rng';
 import { GeoBuilder, type V3 } from './geometry';
 import { drawItem } from './furniture';
@@ -63,6 +63,20 @@ export class InteriorView {
 
 function dispose(o: THREE.Object3D): void {
   const m = o as THREE.Mesh; m.geometry?.dispose(); (m.material as THREE.Material)?.dispose();
+}
+
+/**
+ * Rzeczywista głębokość lica fasady przed drzwiami wejściowymi (układ budynku: od wnętrza y = 0 w stronę ulicy).
+ * Obrys budynku bywa ukośny albo wysunięty względem prostokąta planu: wtedy ściana stoi dalej niż e.fd
+ * i bez dopasowania z boku skrzydła widać jasne wnętrze („dziura”).
+ */
+function facadeDepth(p: Plan, x: number, fd: number): number {
+  const o = p.outer.map(([wx, wz]) => toLocal(p.frame, wx, wz)); let best = Infinity;
+  for (let i = 0; i < o.length; i++) {
+    const a = o[i], b = o[(i + 1) % o.length]; if ((a[0] - x) * (b[0] - x) > 0 || a[0] === b[0]) continue;
+    const y = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); if (y <= .05 && -y < best) best = -y;
+  }
+  return best >= fd - .05 && best <= fd + 1.5 ? best : fd;
 }
 
 export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
@@ -126,9 +140,10 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
   L.items.forEach((it, i) => drawItem(G, it, P, N, p.id % 997 + i * 7.3));
   // sień bramy: od lica fasady (drzwi) do wnętrza – ściany boczne, sufit, podłoga (bez prześwitów do środka budynku)
   if (L.k === 0) for (const e of p.ext) {
-    if (e.fd < .05) continue;
-    const xa = e.x - e.w / 2, xb = e.x + e.w / 2, y0 = -e.fd, top = Math.max(e.hf, e.yIn) + 2.3;
-    const fh = (y: number) => e.g + (e.yIn - e.g) * (y + e.tOut) / (e.tOut + .45), wallC: RGB = [.8, .78, .72];
+    const F = Math.max(facadeDepth(p, e.x - e.w / 2, e.fd), facadeDepth(p, e.x, e.fd), facadeDepth(p, e.x + e.w / 2, e.fd));
+    if (F < .05) continue;
+    const xa = e.x - e.w / 2, xb = e.x + e.w / 2, y0 = -F, top = Math.max(e.hf, e.yIn) + 2.3;
+    const fh = (y: number) => e.g + (e.yIn - e.g) * (y + e.tOut) / (e.tOut + .45), wallC: RGB = [.3, .29, .27]; // ościeże w kolorze obramienia drzwi na fasadzie (bez jasnych „dziur” obok skrzydła)
     G.quad(P(xa, y0, fh(y0)), P(xa, 0, fh(0)), P(xa, 0, top), P(xa, y0, top), wallC, N(1, 0));
     G.quad(P(xb, y0, fh(y0)), P(xb, 0, fh(0)), P(xb, 0, top), P(xb, y0, top), wallC, N(-1, 0));
     G.quad(P(xa, y0, top), P(xb, y0, top), P(xb, 0, top), P(xa, 0, top), mix(wallC, .9), down);
@@ -137,7 +152,8 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
   }
   // ramki drzwi wejściowych na fasadzie (widoczne z ulicy)
   if (L.k === 0) for (const e of p.ext) {
-    const a = P(e.x - e.w / 2, -e.fd - .02, e.hf), b = P(e.x + e.w / 2, -e.fd - .02, e.hf), h = e.hf + 2.3;
+    const F = Math.max(facadeDepth(p, e.x - e.w / 2, e.fd), facadeDepth(p, e.x, e.fd), facadeDepth(p, e.x + e.w / 2, e.fd));
+    const a = P(e.x - e.w / 2, -F - .02, e.hf), b = P(e.x + e.w / 2, -F - .02, e.hf), h = e.hf + 2.3;
     G.line(a, [a[0], h, a[2]], [.35, .25, .15]); G.line(b, [b[0], h, b[2]], [.35, .25, .15]); G.line([a[0], h, a[2]], [b[0], h, b[2]], [.35, .25, .15]);
   }
   const objs = G.build(); for (const o of objs) o.name = `wnętrze ${p.id}/${L.k}`;
@@ -155,7 +171,7 @@ function buildDoorLeaves(list: Iterable<{ d: DoorDef; plan: Plan; open: boolean 
     const w = d.b - d.a - .01, T = .045;
     // układ skrzydła: zawias H, kierunek skrzydła S, grubość wzdłuż N (wszystko w układzie budynku)
     let H: [number, number], S: [number, number], N: [number, number];
-    if (d.axis === 'x') { H = [d.at, d.a + .005]; S = [0, 1]; N = [1, 0]; } else { H = [d.a + .005, d.at + (d.ext ? .06 : 0)]; S = [1, 0]; N = [0, 1]; }
+    if (d.axis === 'x') { H = [d.at, d.a + .005]; S = [0, 1]; N = [1, 0]; } else { H = [d.a + .005, d.ext ? -Math.min(facadeDepth(plan, d.a, -d.at), facadeDepth(plan, (d.a + d.b) / 2, -d.at), facadeDepth(plan, d.b, -d.at)) + T + .005 : d.at]; S = [1, 0]; N = [0, 1]; } // drzwi wejściowe: lico skrzydła równo z (rzeczywistą) fasadą
     if (open) { const s = S; S = N; N = [-s[0], -s[1]]; }
     const col: RGB = d.ext ? [.36, .25, .16] : [.88, .86, .8], edge: RGB = d.ext ? [.2, .14, .09] : [.5, .48, .44];
     const y0 = d.y0 + .005, y1 = d.y1 - .005;
