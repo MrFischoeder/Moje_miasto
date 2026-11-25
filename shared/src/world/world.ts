@@ -87,25 +87,34 @@ export class World implements Surface {
     const deck = (pts: XZ[], hw: number, bw: number[] | undefined) => {
       let arc = 0;
       for (let i = 0; i < pts.length - 1; i++) {
-        const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], L = Math.hypot(x1 - x0, z1 - z0) || 1, nx = -(z1 - z0) / L * hw, nz = (x1 - x0) / L * hw;
-        const ex = (x1 - x0) / L * .5, ez = (z1 - z0) / L * .5, y = deckY(bw, arc + L / 2, this.ground); arc += L;
-        this.decks.add([[x0 - ex + nx, z0 - ez + nz], [x1 + ex + nx, z1 + ez + nz], [x1 + ex - nx, z1 + ez - nz], [x0 - ex - nx, z0 - ez - nz]], y, undefined, k);
+        const [X0, Z0] = pts[i], [X1, Z1] = pts[i + 1], L = Math.hypot(X1 - X0, Z1 - Z0) || 1, nx = -(Z1 - Z0) / L * hw, nz = (X1 - X0) / L * hw;
+        // kawałki co ok. 6 m, wysokość ze środka kawałka (zgodna z rysowanym spadkiem pomostu)
+        const m = Math.max(1, Math.ceil(L / 6));
+        for (let q = 0; q < m; q++) {
+          const t0 = q / m, t1 = (q + 1) / m, x0 = X0 + (X1 - X0) * t0, z0 = Z0 + (Z1 - Z0) * t0, x1 = X0 + (X1 - X0) * t1, z1 = Z0 + (Z1 - Z0) * t1;
+          const ex = (X1 - X0) / L * .3, ez = (Z1 - Z0) / L * .3, y = deckY(bw, arc + L * (t0 + t1) / 2, this.ground);
+          this.decks.add([[x0 - ex + nx, z0 - ez + nz], [x1 + ex + nx, z1 + ez + nz], [x1 + ex - nx, z1 + ez - nz], [x0 - ex - nx, z0 - ez - nz]], y, undefined, k);
+        }
+        arc += L;
       }
     };
     for (const r of t.r) if (r.br) deck(toXZ(r.p), r.w / 2 + (r.sw ? 2.5 : .6), r.bw);
     for (const l of t.l) if (l.br) deck(toXZ(l.p), 2.4, l.bw);
-    this.addPassages(t, k);
+    this.addPassages(t, k); this.deckVersion++;
     this.interiors.addTile(t);
   }
   removeTile(k: string): void {
     for (const [key, l] of this.passages) { const f = l.filter(q => q.k !== k); if (f.length) this.passages.set(key, f); else this.passages.delete(key); }
     if (!this.tiles.delete(k)) return;
+    this.deckVersion++;
     this.terrain?.removeFine(k);
     this.buildings.removeTile(k); this.water.removeTile(k); this.decks.removeTile(k); this.interiors.removeTile(k);
   }
 
   // ---------- zapytania fizyki ----------
   /** Punkt zablokowany: budynek albo woda poza mostem (y: wysokość sprawdzającego, do wyboru poziomu). */
+  /** rośnie przy dodaniu / usunięciu kafla (pomosty mostów): profile wysokości tras komunikacji do przeliczenia */
+  deckVersion = 0;
   // ---------- bramy przejazdowe ----------
   private passages = new Map<string, { a: XZ; b: XZ; hw: number; k: string }[]>();
   /** Punkt w bramie przejazdowej (droga przez budynek): przejście mimo obrysu budynku. */

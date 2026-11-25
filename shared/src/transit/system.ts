@@ -33,8 +33,15 @@ export class TransitSystem {
     // autobus jedzie prawym pasem (trasa biegnie osią jezdni z OSM); tramwaje i pociągi: osobne tory w danych
     const lane = p.kind === 'bus' ? 1.7 : 0;
     out.x = q.x + Math.cos(q.yaw) * lane; out.z = q.z - Math.sin(q.yaw) * lane; out.yaw = q.yaw;
-    out.y = Number.isNaN(q.y) ? this.world.surfaceAt(out.x, out.z, 1e6) : q.y;
+    out.y = Number.isNaN(q.y) ? this.surfaceY(p, s, out.x, out.z) : q.y;
     return out;
+  }
+
+  /** Wysokość jazdy po powierzchni: na odcinkach mostu (z dopasowania do OSM) pomost, poza nimi grunt (także pod wiaduktem). */
+  private surfaceY(p: Pattern, s: number, x: number, z: number): number {
+    const W = this.world, b = p.bridges;
+    for (let i = 0; i + 1 < b.length; i += 2) if (s >= b[i] - 2 && s <= b[i + 1] + 2) return W.surfaceAt(x, z, 1e6);
+    return p.hasBridgeInfo ? W.ground(x, z) : W.surfaceAt(x, z, 1e6); // dane bez przedziałów mostów (starsze rozkłady): jak dawniej
   }
 
   /** Kursy aktywne teraz w prostokącie [x0, z0, x1, z1]. */

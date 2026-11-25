@@ -94,6 +94,8 @@ function churchFacade(fc: BuildingClass, b: TileBuilding): BuildingClass {
   if (tower) { const lh = Math.min(14, Math.max(8, H / 4)), sp = Math.max(1, Math.min(3.2, med - .65)); return { ...fc, levels: Math.max(1, Math.floor(b.h / lh)), levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.1, sp * .6), wh: Math.min(4, lh * .35), sill: lh * .5 }; }
   const lh = Math.max(6, Math.min(22, H * .85)), sp = Math.max(2, Math.min(4.8, med - .65)); return { ...fc, levels: 1, levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.8, sp * .45), wh: lh * .62, sill: lh * .2 };
 }
+/** balustrady mostów: strona pomostu, strona zewnętrzna, poręcz */
+const BAL_IN: RGB = [.55, .55, .53], BAL_OUT: RGB = [.5, .5, .48], BAL_TOP: RGB = [.42, .44, .45];
 /** wysokość bramy przejazdowej [m] */
 const PASS_H = 3.8;
 /** balustrady balkonów bloków */
@@ -539,13 +541,23 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   const junctions: XZ[] = t.g.filter(g => g.jn).map(g => [g.x, g.z]);
   const roadW = new Map<number, number>(); // id węzła -> szerokość drogi
   const near = (r: number) => (x: number, z: number) => junctions.some(j => (j[0] - x) ** 2 + (j[1] - z) ** 2 < r * r);
+  // odcinki jezdni i torów na mostach (do balustrad: tylko zewnętrzne krawędzie mostu)
+  const brSegs: { id: number; a: XZ; b: XZ; hw: number }[] = [];
+  for (const q of t.r) if (q.br) { const pp = toXZ(q.p); for (let i = 0; i + 1 < pp.length; i++) brSegs.push({ id: q.id, a: pp[i], b: pp[i + 1], hw: q.w / 2 + (q.sw ? 2.5 : 0) + .3 }); }
+  for (const q of t.l) if (q.br) { const pp = toXZ(q.p); for (let i = 0; i + 1 < pp.length; i++) brSegs.push({ id: q.id, a: pp[i], b: pp[i + 1], hw: 2.2 }); }
+  const otherBridge = (x: number, z: number, self: number) => brSegs.some(sg => sg.id !== self && (() => { const dx = sg.b[0] - sg.a[0], dz = sg.b[1] - sg.a[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - sg.a[0]) * dx + (z - sg.a[1]) * dz) / L2)); return Math.hypot(sg.a[0] + dx * u - x, sg.a[1] + dz * u - z) < sg.hw + 1; })());
   const drawRoad = (r: TileRoad) => {
     const p = densify(toXZ(r.p), SEG), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k), ys = r.br ? deckYs(p, r.bw) : gys(p);
     for (let i = 0; i < r.j.length; i += 2) roadW.set(r.j[i + 1], Math.max(roadW.get(r.j[i + 1]) || 0, r.w));
     if (r.br) {
       const ext = hw + (r.sw ? 2.5 : 0);
       strip(S, p, n, -ext, ext, ys, C.deck, -.02);
-      for (const s of [-ext - .2, ext + .2]) { offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1.05); offLine(SL, p, n, s, ys, C.railing, undefined, undefined, .05); }
+      // balustrada: niski murek z poręczą (bryła, bez linii unoszących się nad pomostem)
+      for (const sd of [-1, 1]) { const s0 = sd * ext, s1 = sd * (ext + .25);
+        // obok (na zewnątrz tej krawędzi) inna jezdnia albo tory na moście: bez balustrady pośrodku mostu
+        const mi = Math.floor(p.length / 2), mp = p[mi], mn = n[mi];
+        if (otherBridge(mp[0] + mn[0] * sd * (ext + 1.5), mp[1] + mn[1] * sd * (ext + 1.5), r.id)) continue;
+        wall(S, p, n, s0, ys, -.02, .95, BAL_IN); wall(S, p, n, s1, ys, -.6, .95, BAL_OUT); strip(S, p, n, Math.min(s0, s1), Math.max(s0, s1), ys, BAL_TOP, .97); }
     }
     if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); return; }
     // zmienna szerokość: płynne zwężenie na ok. 30 m przy końcach z wa / wb (tools/lib/roads.ts)
@@ -589,7 +601,12 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     strip(RB, p, n, -bw, bw, ys, tram ? PAL.tramBed : PAL.ballast, bh); for (const sd of [-bw, bw]) wall(RB, p, n, sd, ys, 0, bh, tram ? PAL.curb : PAL.ballast);
     if (!tram) sleepers(RB, p, n, ys, bh + .02, 1.25, .9, PAL.sleeper);
     for (const s0 of [-.72, .72]) { strip(RB, p, n, s0 - .035, s0 + .035, ys, PAL.rail, bh + .14); for (const sd of [s0 - .035, s0 + .035]) wall(RB, p, n, sd, ys, bh, bh + .14, PAL.rail); }
-    if (l.br) { strip(S, p, n, -2.2, 2.2, ys, C.deck, -.02); for (const s of [-2.4, 2.4]) offLine(SL, p, n, s, ys, C.railing, undefined, undefined, 1); }
+    if (l.br) {
+      strip(S, p, n, -2.2, 2.2, ys, C.deck, -.02);
+      const mi = Math.floor(p.length / 2), mp = p[mi], mn = n[mi];
+      for (const sd of [-1, 1]) { if (otherBridge(mp[0] + mn[0] * sd * 3.7, mp[1] + mn[1] * sd * 3.7, l.id)) continue;
+        wall(S, p, n, sd * 2.2, ys, -.02, .95, BAL_IN); wall(S, p, n, sd * 2.45, ys, -.6, .95, BAL_OUT); strip(S, p, n, Math.min(sd * 2.2, sd * 2.45), Math.max(sd * 2.2, sd * 2.45), ys, BAL_TOP, .97); }
+    }
   }
 
   // --- przejścia i sygnalizacja ---

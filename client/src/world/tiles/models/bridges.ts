@@ -7,10 +7,10 @@ import type { Frame, ModelSink } from './sink';
 type XZ = [number, number];
 const GRANITE: RGB = [.74, .71, .64], GRANITE2: RGB = [.66, .63, .57], STEEL: RGB = [.42, .5, .49], STEEL_D: RGB = [.3, .35, .35], DECK: RGB = [.36, .36, .38];
 
-/** wysokość pomostu wzdłuż mostu (t = 0..1): brzegi = wyższa z (koniec, 12 m dalej na lądzie) */
+/** wysokość pomostu wzdłuż mostu (t = 0..1): końce na wysokości gruntu, jak pomost jezdni (shared/world/bridges.ts deckY) */
 function deck(S: ModelSink, f: Frame): (t: number) => number {
   const A: XZ = [f.ox, f.oz], B: XZ = [f.ox + f.ux * f.W, f.oz + f.uz * f.W];
-  const ha = Math.max(S.ground(A[0], A[1]), S.ground(A[0] - f.ux * 12, A[1] - f.uz * 12)), hb = Math.max(S.ground(B[0], B[1]), S.ground(B[0] + f.ux * 12, B[1] + f.uz * 12));
+  const ha = S.ground(A[0], A[1]), hb = S.ground(B[0], B[1]);
   return t => ha + (hb - ha) * Math.max(0, Math.min(1, t)) + .15;
 }
 

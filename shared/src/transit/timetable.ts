@@ -9,7 +9,8 @@ export interface TransitData {
   v: number; city: string; days: string[]; dates: Record<string, Record<string, string>>;
   routes: { n: string; t: TransitKind; c: string; l: string }[];
   stops: [string, number, number][];
-  patterns: { r: number; s: number[]; h: string; sh: number[]; d: number[]; pr: number[][]; tr: number[] }[];
+  /** bi: przedziały mostów wzdłuż kształtu [od, do, od, do...] w metrach (z dopasowania do sieci OSM) */
+  patterns: { r: number; s: number[]; h: string; sh: number[]; d: number[]; pr: number[][]; tr: number[]; bi?: number[] }[];
 }
 
 /** Postój na przystanku [s] i długość składu [m] wg rodzaju. */
@@ -19,6 +20,8 @@ export const LENGTH: Record<TransitKind, number> = { bus: 12, tram: 32, metro: 1
 export class Pattern {
   /** ścieżka 3D: x, y, z (y = NaN: wysokość z terenu) */
   pts: Float64Array; cum: Float64Array;
+  /** przedziały mostów [od, do, ...] [m]; hasBridgeInfo: rozkład zawiera te dane (inaczej wysokość jak dawniej) */
+  bridges: number[] = []; hasBridgeInfo = false;
   stopS: number[];
   enabled = true;
   x0 = Infinity; x1 = -Infinity; z0 = Infinity; z1 = -Infinity;
@@ -73,7 +76,9 @@ export class Timetable {
     this.patterns = data.patterns.map((p, i) => {
       const r = data.routes[p.r], path: number[] = [];
       let x = 0, z = 0; for (let j = 0; j < p.sh.length; j += 2) { x += p.sh[j] / 10; z += p.sh[j + 1] / 10; path.push(x, NaN, z); }
-      return new Pattern(i, p.r, r.t, p.s, p.h, path, p.d.slice(), p.pr.map(q => new Float64Array(q)), new Int32Array(p.tr));
+      const pat = new Pattern(i, p.r, r.t, p.s, p.h, path, p.d.slice(), p.pr.map(q => new Float64Array(q)), new Int32Array(p.tr));
+      if (p.bi) { pat.bridges = p.bi; pat.hasBridgeInfo = true; }
+      return pat;
     });
   }
 

@@ -21,10 +21,11 @@ CELL = 50.0
 class Net:
     """Graf jednej sieci: węzły (id OSM -> x, z), krawędzie skierowane, siatka odcinków do przyciągania przystanków."""
     def __init__(self):
-        self.xy = {}; self.adj = {}; self.grid = {}
-    def add_seg(self, a, b, both):
+        self.xy = {}; self.adj = {}; self.grid = {}; self.br = set()
+    def add_seg(self, a, b, both, br=False):
         (ax, az), (bx, bz) = self.xy[a], self.xy[b]; L = math.hypot(bx - ax, bz - az)
         if L < 1e-6: return
+        if br: self.br.add((a, b)); self.br.add((b, a))
         self.adj.setdefault(a, []).append((b, L))
         if both: self.adj.setdefault(b, []).append((a, L))
         seg = (a, b, both)
@@ -58,7 +59,8 @@ def load(pbf, proj, bbox):
                 else: rev, one = False, False
                 seq = list(reversed(pts)) if rev else pts
                 for ref, xy in seq: N.xy[ref] = xy
-                for (a, _), (b, _) in zip(seq, seq[1:]): N.add_seg(a, b, not one)
+                br = t.get('bridge') not in (None, 'no')
+                for (a, _), (b, _) in zip(seq, seq[1:]): N.add_seg(a, b, not one, br)
     H().apply_file(pbf, locations=True)
     return nets
 
@@ -145,7 +147,15 @@ def _route(N, A, B, guide, box, max_nodes=60000):
     if E not in prev: return None
     path = [E]
     while path[-1] != S: path.append(prev[path[-1]])
-    return [P(n) for n in reversed(path)]
+    path.reverse()
+    # most na odcinku: krawędź sieci z tagiem bridge (odcinki do punktów przyciągnięcia: z krawędzi przystanku)
+    brA, brB = (a1, b1) in N.br, (a2, b2) in N.br
+    flags = []
+    for u, v in zip(path, path[1:]):
+        if u == S: flags.append(brA)
+        elif v == E: flags.append(brB)
+        else: flags.append((u, v) in N.br)
+    return [P(n) for n in path], flags
 
 
 def _slice(shape, cd, d0, d1):
@@ -162,7 +172,7 @@ def _slice(shape, cd, d0, d1):
 
 def match(N, shape, cd, stops_xy, stop_d, rmax=45, cache=None, key=None):
     """Nowy kształt trasy po sieci N. Zwraca (kształt, odsetek dopasowanych odcinków)."""
-    out = []; ok = 0
+    out = []; ok = 0; flags = []
     snaps = []
     for i, (x, z) in enumerate(stops_xy):
         # kierunek jazdy przy przystanku: z kształtu GTFS
@@ -183,11 +193,13 @@ def match(N, shape, cd, stops_xy, stop_d, rmax=45, cache=None, key=None):
                 box = (min(xs) - 400, min(zs) - 400, max(xs) + 400, max(zs) + 400)
                 res = _route(N, A, B, Guide(seg), box)
                 if res:
-                    Lr = sum(math.dist(p, q) for p, q in zip(res, res[1:])); Ls = sum(math.dist(p, q) for p, q in zip(seg, seg[1:]))
+                    pts_ = res[0]; Lr = sum(math.dist(p, q) for p, q in zip(pts_, pts_[1:])); Ls = sum(math.dist(p, q) for p, q in zip(seg, seg[1:]))
                     if Lr > 2.2 * Ls + 250: res = None  # objazd: dopasowanie niewiarygodne
                 if ck is not None: cache[ck] = res
         if res: ok += 1
-        part = res or seg
-        if out and math.dist(out[-1], part[0]) < .05: part = part[1:]
-        out.extend(part)
-    return out, ok / max(1, len(stops_xy) - 1)
+        part, pf = (res[0], list(res[1])) if res else (seg, [False] * (len(seg) - 1))
+        # flags[i]: odcinek out[i] -> out[i + 1] na moście
+        if not out: out.extend(part); flags.extend(pf)
+        elif math.dist(out[-1], part[0]) < .05: out.extend(part[1:]); flags.extend(pf)
+        else: flags.append(False); out.extend(part); flags.extend(pf)
+    return out, ok / max(1, len(stops_xy) - 1), flags

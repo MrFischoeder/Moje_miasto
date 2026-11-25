@@ -204,14 +204,23 @@ for feed in a.feed:
             if shape is None or len(shape) < 2: shape = simplify(stops_xy, .5)
             cd = cumdist(shape)
             dist = project_stops(shape, cd, stops_xy)
+            bridges_ = None
             net = NETS and NETS.get('bus' if kind == 'bus' else 'tram' if kind == 'tram' else 'rail' if kind == 'rail' else '')
             if net is not None and len(net.xy):
-                new, frac = mapmatch.match(net, shape, cd, stops_xy, dist, rmax=45 if kind == 'bus' else 35, cache=MATCH_CACHE, key=kind)
+                new, frac, bflags = mapmatch.match(net, shape, cd, stops_xy, dist, rmax=45 if kind == 'bus' else 35, cache=MATCH_CACHE, key=kind)
                 st_ = MATCH_STATS.setdefault(kind, [0, 0.0]); st_[0] += 1; st_[1] += frac
-                if len(new) >= 2: shape = simplify(new, .4); cd = cumdist(shape); dist = project_stops(shape, cd, stops_xy)
+                if len(new) >= 2:
+                    # przedziały mostów wzdłuż ścieżki [m], przeskalowane do długości uproszczonego kształtu
+                    rc = cumdist(new); spans = []
+                    for i, f in enumerate(bflags):
+                        if not f: continue
+                        if spans and abs(spans[-1][1] - rc[i]) < .5: spans[-1][1] = rc[i + 1]
+                        else: spans.append([rc[i], rc[i + 1]])
+                    shape = simplify(new, .4); cd = cumdist(shape); dist = project_stops(shape, cd, stops_xy)
+                    k_ = cd[-1] / (rc[-1] or 1); bridges_ = [round(v * k_, 1) for sp in spans if sp[1] - sp[0] > 3 for v in sp]
             # kształt przycięty do części kursu (od pierwszego do ostatniego przystanku)
             pattern_index[pk] = len(patterns)
-            patterns.append({'r': ri, 's': sids, 'h': head, 'shape': shape, 'cd': cd, 'd': dist, 'prof': {}, 'trips': []})
+            patterns.append({'r': ri, 's': sids, 'h': head, 'shape': shape, 'cd': cd, 'd': dist, 'prof': {}, 'trips': [], 'bi': bridges_})
         p = patterns[pattern_index[pk]]
         base = seq[0][3]
         prof = tuple(v for s in seq for v in (s[2] - base, s[3] - base))
@@ -240,7 +249,7 @@ for p in patterns:
     profs = [list(k) for k, _ in sorted(p['prof'].items(), key=lambda kv: kv[1])]
     trips = sorted(p['trips'])
     out_patterns.append({'r': p['r'], 's': p['s'], 'h': p['h'], 'sh': enc_flat(p['shape']), 'd': [round(x, 1) for x in p['d']],
-                         'pr': profs, 'tr': [v for t in trips for v in t]})
+                         'pr': profs, 'tr': [v for t in trips for v in t], **({'bi': p['bi']} if p.get('bi') is not None else {})})
 data = {'v': 1, 'city': a.city, 'days': DAYS, 'dates': day_dates, 'routes': routes_out, 'stops': stops_out, 'patterns': out_patterns,
         'source': [os.path.basename(f) for f in a.feed], 'generated': dt.datetime.now(dt.timezone.utc).isoformat()[:16]}
 os.makedirs(os.path.join(ROOT, 'client/public/transit'), exist_ok=True)
