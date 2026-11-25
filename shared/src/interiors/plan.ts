@@ -30,7 +30,9 @@ export interface Unit {
   name: string; accent?: string; lay?: TLayout;
 }
 export interface Core { r: Rect; street: boolean; yv: number; sealed?: boolean }
-export interface ExtDoor { x: number; w: number; tOut: number; g: number; yIn: number; c: XZ; u: XZ; y0: number; y1: number }
+/** Drzwi zewnętrzne: x, szerokość, wyjście na ulicę tOut, grunt g, poziom wnętrza yIn; fd = głębokość fasady przed wnętrzem
+ *  (sień bramy od lica fasady y = -fd do wnętrza y = 0), hf = poziom podłogi przy licu fasady (tu stoją drzwi). */
+export interface ExtDoor { x: number; w: number; tOut: number; g: number; yIn: number; c: XZ; u: XZ; y0: number; y1: number; fd: number; hf: number }
 export interface Plan {
   id: number; city: string; typ: Typology; cls: BuildingClass; frame: Frame; base: number; f0: number; H: number; levels: number;
   units: Unit[]; cores: Core[]; corr: Rect | null; lobby: Rect | null; ext: ExtDoor[]; slots: [number, number][][];
@@ -200,8 +202,9 @@ export function makePlan(b: TileBuilding, t: TileData, w: PlanWorld): Plan | nul
   // drzwi zewnętrzne: klatki od ulicy, hol budynku korytarzowego, domy i sklepy
   const ext = (x: number, w0: number, yIn: number): ExtDoor => {
     let t = 0; for (; t < 6; t += .25) { const [wx, wz] = toWorld(frame, x, -t); if (!pip(outer, wx, wz)) break; }
-    const tOut = t + .8, [gx, gz] = toWorld(frame, x, -tOut), g = w.ground(gx, gz), c = toWorld(frame, x, -Math.max(0, t - .25));
-    return { x, w: w0, tOut, g, yIn, c, u: [frame.ux, frame.uz], y0: Math.min(g, yIn) - .3, y1: Math.max(g, yIn) + 2.25 };
+    const tOut = t + .8, [gx, gz] = toWorld(frame, x, -tOut), g = w.ground(gx, gz), fd = Math.max(0, t - .25), c = toWorld(frame, x, -fd);
+    const hf = g + (yIn - g) * (tOut - fd) / (tOut + .45); // podłoga dojścia (pochylnia od ulicy do wnętrza) przy licu fasady
+    return { x, w: w0, tOut, g, yIn, c, u: [frame.ux, frame.uz], y0: hf - .04, y1: hf + 2.17, fd, hf }; // otwór w fasadzie = skrzydło drzwi
   };
   for (const c of p.cores) if (c.street) {
     const fr = freeIn(c.r.x0 + .2, c.r.x1 - .2), mid = (c.r.x0 + c.r.x1) / 2;
@@ -342,7 +345,7 @@ export function buildLevel(p: Plan, k: number): Level {
   // drzwi zewnętrzne (parter)
   if (k === 0) for (const e of p.ext) {
     const l: Line = { axis: 'y', at: 0, a: e.x - e.w / 2, b: e.x + e.w / 2 };
-    addHole(L.boxes, l, e.yIn, e.yIn + 2.15, 'door'); door(l, e.yIn, e.yIn + 2.15, true);
+    addHole(L.boxes, l, e.yIn, e.yIn + 2.15, 'door'); door({ ...l, at: -e.fd }, e.hf, e.hf + 2.17, true); // drzwi w licu fasady
     L.walks.push({ r: rect(e.x - e.w / 2 + .15, -e.tOut, e.x + e.w / 2 - .15, .45), axis: 'y', ya: e.g, yb: e.yIn, nm: `${addr}Wejście` });
   }
   // okna z fasady

@@ -80,6 +80,9 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
     for (const [s, ax, ay, ex, ey] of sides) {
       const along = s === 0 || s === 2, lo = along ? ax : ay, hi = along ? ex : ey;
       const at = (t: number, h: number) => along ? P(t, ay, h) : P(ax, t, h);
+      // granica pomieszczenia (ściana stoi WALL do środka): ościeża otworów zamykają tę grubość, bez szczelin
+      const bnd = s === 0 ? r.y0 : s === 2 ? r.y1 : s === 3 ? r.x0 : r.x1;
+      const atB = (t: number, h: number) => along ? P(t, bnd, h) : P(bnd, t, h);
       const nrm = s === 0 ? N(0, 1) : s === 2 ? N(0, -1) : s === 1 ? N(-1, 0) : N(1, 0);
       const holes = bx.holes.filter(h => h.side === s && h.b > lo && h.a < hi);
       const cuts = new Set<number>([lo, hi]); for (const h of holes) { cuts.add(Math.max(lo, h.a)); cuts.add(Math.min(hi, h.b)); }
@@ -97,8 +100,16 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
       }
       G.line(at(lo, bx.y + .01), at(hi, bx.y + .01), edge); G.line(at(lo, top - .01), at(hi, top - .01), EDGE_DIM);
       G.line(at(lo, bx.y), at(lo, top), edge);
+      const tang = along ? N(1, 0) : N(0, 1), jamb = mix(fill, .88);
       for (const h of holes) {
         const a = Math.max(lo, h.a), b = Math.min(hi, h.b), h0 = Math.max(bx.y, h.y0), h1 = Math.min(top, h.y1);
+        if (b - a > .02 && h1 - h0 > .02) {
+          // boki otworu (normalna do środka otworu), nadproże (w dół), parapet okna (w górę)
+          G.quad(at(a, h0), atB(a, h0), atB(a, h1), at(a, h1), jamb, tang);
+          G.quad(at(b, h0), atB(b, h0), atB(b, h1), at(b, h1), jamb, [-tang[0], 0, -tang[2]]);
+          if (h1 < top - .01) G.quad(at(a, h1), at(b, h1), atB(b, h1), atB(a, h1), jamb, [0, -1, 0]);
+          if (h.kind === 'win' && h0 > bx.y + .01) G.quad(at(a, h0), at(b, h0), atB(b, h0), atB(a, h0), jamb, [0, 1, 0]);
+        }
         const c: RGB = h.kind === 'win' ? [.95, .95, .92] : edge;
         G.line(at(a, h0), at(a, h1), c); G.line(at(b, h0), at(b, h1), c); G.line(at(a, h1), at(b, h1), c); if (h.kind === 'win') G.line(at(a, h0), at(b, h0), c);
       }
@@ -118,9 +129,20 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
       G.line(at(i, y + h), at(j, y + h), e); G.line(at(i, y), at(i, y + h), e);
     }
   }
+  // sień bramy: od lica fasady (drzwi) do wnętrza – ściany boczne, sufit, podłoga (bez prześwitów do środka budynku)
+  if (L.k === 0) for (const e of p.ext) {
+    if (e.fd < .05) continue;
+    const xa = e.x - e.w / 2, xb = e.x + e.w / 2, y0 = -e.fd, top = Math.max(e.hf, e.yIn) + 2.17;
+    const fh = (y: number) => e.g + (e.yIn - e.g) * (y + e.tOut) / (e.tOut + .45), wallC: RGB = [.8, .78, .72];
+    G.quad(P(xa, y0, fh(y0)), P(xa, 0, fh(0)), P(xa, 0, top), P(xa, y0, top), wallC, N(1, 0));
+    G.quad(P(xb, y0, fh(y0)), P(xb, 0, fh(0)), P(xb, 0, top), P(xb, y0, top), wallC, N(-1, 0));
+    G.quad(P(xa, y0, top), P(xb, y0, top), P(xb, 0, top), P(xa, 0, top), mix(wallC, .9), down);
+    G.quad(P(xa, y0, fh(y0) + .01), P(xb, y0, fh(y0) + .01), P(xb, 0, fh(0) + .01), P(xa, 0, fh(0) + .01), [.55, .53, .5], up);
+    G.line(P(xa, y0, top), P(xa, 0, top), EDGE_DIM); G.line(P(xb, y0, top), P(xb, 0, top), EDGE_DIM);
+  }
   // ramki drzwi wejściowych na fasadzie (widoczne z ulicy)
   if (L.k === 0) for (const e of p.ext) {
-    const a = P(e.x - e.w / 2, -.02, e.yIn), b = P(e.x + e.w / 2, -.02, e.yIn), h = e.yIn + 2.15;
+    const a = P(e.x - e.w / 2, -e.fd - .02, e.hf), b = P(e.x + e.w / 2, -e.fd - .02, e.hf), h = e.hf + 2.17;
     G.line(a, [a[0], h, a[2]], [.35, .25, .15]); G.line(b, [b[0], h, b[2]], [.35, .25, .15]); G.line([a[0], h, a[2]], [b[0], h, b[2]], [.35, .25, .15]);
   }
   const objs = G.build(); for (const o of objs) o.name = `wnętrze ${p.id}/${L.k}`;
@@ -135,13 +157,13 @@ function buildDoorLeaves(list: Iterable<{ d: DoorDef; plan: Plan; open: boolean 
   const G = new GeoBuilder();
   for (const { d, plan, open } of list) {
     const f = plan.frame, P = (x: number, y: number, h: number): V3 => { const [wx, wz] = toWorld(f, x, y); return [wx, h, wz]; };
-    const w = d.b - d.a - .06, T = .045;
+    const w = d.b - d.a - .01, T = .045;
     // układ skrzydła: zawias H, kierunek skrzydła S, grubość wzdłuż N (wszystko w układzie budynku)
     let H: [number, number], S: [number, number], N: [number, number];
-    if (d.axis === 'x') { H = [d.at, d.a + .03]; S = [0, 1]; N = [1, 0]; } else { H = [d.a + .03, d.at + (d.ext ? -.02 : 0)]; S = [1, 0]; N = [0, 1]; }
+    if (d.axis === 'x') { H = [d.at, d.a + .005]; S = [0, 1]; N = [1, 0]; } else { H = [d.a + .005, d.at + (d.ext ? .06 : 0)]; S = [1, 0]; N = [0, 1]; }
     if (open) { const s = S; S = N; N = [-s[0], -s[1]]; }
     const col: RGB = d.ext ? [.36, .25, .16] : [.88, .86, .8], edge: RGB = d.ext ? [.2, .14, .09] : [.5, .48, .44];
-    const y0 = d.y0 + .01, y1 = d.y1 - .04;
+    const y0 = d.y0 + .005, y1 = d.y1 - .005;
     const pt = (s: number, n: number, h: number) => P(H[0] + S[0] * s + N[0] * n, H[1] + S[1] * s + N[1] * n, h);
     const nW = (sx: number, sy: number): V3 => { const [ax, az] = toWorld(f, 0, 0), [bx, bz] = toWorld(f, sx, sy); return [bx - ax, 0, bz - az]; };
     for (const sg of [-1, 1]) G.quad(pt(0, sg * T, y0), pt(w, sg * T, y0), pt(w, sg * T, y1), pt(0, sg * T, y1), col, nW(N[0] * sg, N[1] * sg));
