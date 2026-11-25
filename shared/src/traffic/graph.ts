@@ -9,6 +9,8 @@ export interface Edge {
   id: number; from: number; to: number;
   pts: XZ[]; cum: number[]; len: number;
   lanes: number; speed: number; cls: RoadClass;
+  /** szerokość jezdni [m]; most */
+  w: number; br: boolean;
   /** sygnalizacja na końcu krawędzi */
   sig: boolean;
   /** kierunek przy wjeździe do węzła końcowego [rad] */
@@ -35,12 +37,12 @@ export class RoadGraph {
     for (const [k, t] of world.tiles) if (!this.byTile.has(k)) {
       for (const g of t.g) if (g.sig) this.sigNodes.add(g.id);
       const list: Edge[] = [];
-      const add = (from: number, to: number, pts: XZ[], lanes: number, cls: RoadClass) => {
+      const add = (from: number, to: number, pts: XZ[], lanes: number, cls: RoadClass, w: number, br: boolean) => {
         if (pts.length < 2 || from === to) return;
         const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
         const len = cum[cum.length - 1]; if (len < 1) return;
         const a = pts[pts.length - 2], b = pts[pts.length - 1];
-        const e: Edge = { id: this.nextId++, from, to, pts, cum, len, lanes: Math.max(1, lanes), speed: SPEED[cls] ?? 8.3, cls, sig: false, endHeading: Math.atan2(b[0] - a[0], b[1] - a[1]) };
+        const e: Edge = { id: this.nextId++, from, to, pts, cum, len, lanes: Math.max(1, lanes), speed: SPEED[cls] ?? 8.3, cls, w, br, sig: false, endHeading: Math.atan2(b[0] - a[0], b[1] - a[1]) };
         list.push(e); let l = this.out.get(from); if (!l) this.out.set(from, l = []); l.push(e);
         if (!this.axis.has(to)) this.axis.set(to, e.endHeading);
       };
@@ -49,8 +51,8 @@ export class RoadGraph {
         const P = toXZ(r.p), fwd = r.ow ? r.ln : Math.max(1, Math.ceil(r.ln / 2)), back = r.ow ? r.ln : Math.max(1, r.ln - fwd);
         for (let i = 0; i + 3 < r.j.length; i += 2) {
           const ia = r.j[i], na = r.j[i + 1], ib = r.j[i + 2], nb = r.j[i + 3], seg = P.slice(ia, ib + 1);
-          if (r.ow !== -1) add(na, nb, seg, fwd, r.k);
-          if (r.ow !== 1) add(nb, na, seg.slice().reverse(), back, r.k);
+          if (r.ow !== -1) add(na, nb, seg, fwd, r.k, r.w, !!r.br);
+          if (r.ow !== 1) add(nb, na, seg.slice().reverse(), back, r.k, r.w, !!r.br);
         }
       }
       this.byTile.set(k, list); added += list.length;

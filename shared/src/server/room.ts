@@ -214,7 +214,7 @@ export class Room {
       this.timing = { sum: 0, n: 0, max: 0, bytes: 0, since: t0 };
       // gra jednoosobowa: statystyki symulacji do licznika wydajności
       if (this.opt.local || this.opt.dev) this.broadcast({ t: 'stats', tickMs: this.stats.tickMs, tickMsMax: this.stats.tickMsMax, entities: this.sim.entities.size,
-        cars: this.sim.traffic?.cars.size ?? 0, peds: this.sim.peds?.peds.size ?? 0, police: this.sim.rules?.police.units.length ?? 0, interiors: this.world.interiors.live.size });
+        cars: (this.sim.traffic?.cars.size ?? 0) + (this.sim.traffic?.parked.size ?? 0), peds: this.sim.peds?.peds.size ?? 0, police: this.sim.rules?.police.units.length ?? 0, interiors: this.world.interiors.live.size });
     }
   }
 

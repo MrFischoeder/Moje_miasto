@@ -29,6 +29,8 @@ export interface Entity {
   npc?: boolean;
   /** policja (radiowóz albo policjant) */
   police?: boolean;
+  /** auto zaparkowane przy ulicy / na parkingu (bez kierowcy; NPC może do niego wsiąść i odjechać) */
+  parked?: boolean;
   /** właściciel (pojazd przywoływany przez gracza) */
   owner: number | null;
   /** wariant pojazdu naziemnego (VEH w sim/vehicles.ts): model, długość, osiągi */

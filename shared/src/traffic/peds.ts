@@ -13,6 +13,8 @@ export interface WalkEdge { id: number; a: number; b: number; pts: XZ[]; cum: nu
 /** Natężenie pieszych wg godziny (0..1). */
 export const PED_DENSITY = [.05, .03, .02, .02, .03, .08, .25, .6, .8, .7, .7, .75, .85, .85, .8, .85, .95, 1, .9, .75, .55, .35, .2, .1];
 export const PED_SPAWN = [50, 240], PED_DESPAWN = 320, PED_MAX = 50;
+/** Udział limitu pieszych wg ożywienia miejsca (shared/src/world/activity.ts): 0 → 3%, 0,1 → ok. 8%, 0,5 → ok. 45%, 1 → 100%. */
+export const pedShare = (A: number) => Math.min(1, .03 + .97 * Math.pow(Math.max(0, A), 1.25));
 const WALKWAY: RoadClass[] = ['footway', 'path', 'pedestrian', 'living', 'steps'];
 /** Klasy jezdni, przy których zakładamy chodniki (gdy OSM nie mówi inaczej). */
 const URBAN: RoadClass[] = ['primary', 'secondary', 'tertiary', 'residential', 'living'];
@@ -114,11 +116,13 @@ export class Pedestrians {
     }
     if (!this.graph.edges.length) return;
     for (const p of [...this.peds.values()]) if (!players.some(q => Math.hypot(q.x - p.e.x, q.z - p.e.z) < PED_DESPAWN)) this.remove(p);
-    const target = Math.round(this.max * PED_DENSITY[Math.floor(hour) % 24]);
+    const hourly = this.max * PED_DENSITY[Math.floor(hour) % 24];
     for (const pl of players) {
+      // tłum wg miejsca: centrum pełne, centra osiedli średnio, peryferie i tereny poza miastem prawie puste
+      const A = W.activity.around(pl.x, pl.z), target = Math.round(hourly * pedShare(A));
       let n = 0, far: Ped | null = null, fd = 0;
       for (const p of this.peds.values()) if (Math.abs(p.e.x - pl.x) < PED_DESPAWN && Math.abs(p.e.z - pl.z) < PED_DESPAWN) { n++; const d = Math.hypot(p.e.x - pl.x, p.e.z - pl.z); if (d > fd && p.flee <= 0) { fd = d; far = p; } }
-      for (let k = 0; k < 3 && n < target; k++) if (this.trySpawn(pl)) n++;
+      for (let k = 0; k < 3 && n < target; k++) if (this.trySpawn(pl, A)) n++;
       if (n > target + (target ? 2 : 0) && far && players.length === 1) this.remove(far); // limit zmniejszony: najdalszy pieszy znika
     }
     const q = { x: 0, z: 0, yaw: 0 };
@@ -150,12 +154,14 @@ export class Pedestrians {
     p.s = p.dir === 1 ? n.s : n.e.len - n.s; this.peds.set(ent.id, p);
   }
 
-  private trySpawn(pl: { x: number; z: number }): boolean {
+  private trySpawn(pl: { x: number; z: number }, A: number): boolean {
     const E = this.graph.edges;
-    for (let t = 0; t < 10; t++) {
+    for (let t = 0; t < 16; t++) {
       const e = E[Math.floor(this.R() * E.length)], s = this.R() * e.len, q = { x: 0, z: 0, yaw: 0 };
       this.graph.pose(e, s, e.off, q); const d = Math.hypot(q.x - pl.x, q.z - pl.z);
       if (d < PED_SPAWN[0] || d > PED_SPAWN[1] || this.host.world.buildings.hit(q.x, q.z)) continue;
+      // więcej pieszych tam, gdzie gęściej (ulice handlowe, centra osiedli), mniej na odludziu
+      if (this.R() > Math.max(.05, this.host.world.activity.at(q.x, q.z) / Math.max(.08, A))) continue;
       const ent = this.host.spawn('walker', q.x, this.host.world.surfaceAt(q.x, q.z, 1e6), q.z, q.yaw); ent.npc = true;
       const dir: 1 | -1 = this.R() < .5 ? 1 : -1;
       this.peds.set(ent.id, { e: ent, edge: e, dir, s: dir === 1 ? s : e.len - s, v: 1.1 + this.R() * .6, off: e.off, flee: 0 });

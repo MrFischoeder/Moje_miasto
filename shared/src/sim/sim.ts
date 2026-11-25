@@ -65,6 +65,11 @@ export class Simulation {
         if (this.rules) for (const e of this.rules.police.entities()) if (e.kind === 'walker') out.push(e);
         return out;
       },
+      boardPed: (x, z, r) => {
+        if (!this.peds) return false;
+        for (const q of this.peds.peds.values()) if (q.flee <= 0 && Math.hypot(q.e.x - x, q.e.z - z) < r) { this.peds.peds.delete(q.e.id); this.entities.delete(q.e.id); return true; }
+        return false;
+      },
     });
   }
   /** Krok ruchu ulicznego: t = czas zegara [s], hour = godzina lokalna. */
@@ -86,8 +91,10 @@ export class Simulation {
   private hijack(p: PlayerState, v: Entity): boolean {
     if (Math.abs(v.speed) > 2) return false;
     if (this.rules?.police.isUnitCar(v.id)) { this.rules.police.release(v.id); this.rules.crime(p, 2, 'Kradzież radiowozu'); this.enter(p, v); return true; }
+    const parked = !!this.traffic?.isParked(v.id);
     if (!this.traffic || !this.traffic.release(v.id)) return false;
     this.rules?.crime(p, 1, 'Kradzież auta');
+    if (parked) { v.speed = 0; this.enter(p, v); return true; } // zaparkowane: bez kierowcy
     const rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw), side = this.world.key === 'londyn' ? 1 : -1; // drzwi kierowcy
     this.peds?.flee(v.x + rx * 1.8 * side, v.z + rz * 1.8 * side);
     v.speed = 0; this.enter(p, v); return true;

@@ -396,14 +396,14 @@ export class Game {
       if (e.kind === 'walker' && (e.id === p.walker || e.hide)) continue;
       seen.add(e.id);
       let m = this.models.get(e.id);
-      if (m && e.kind === 'car' && (m.root.userData.v !== (e.v ?? 0) || m.root.userData.hq !== VEHICLE_Q.hq)) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(e.id); m = undefined; } // zmiana pojazdu gracza
+      if (m && e.kind === 'car' && (m.root.userData.v !== (e.v ?? 0) || m.root.userData.hq !== VEHICLE_Q.hq || (e.npc && m.root.userData.pk !== !!e.parked))) { this.world3d.remove(m.root); disposeModel(m); this.models.delete(e.id); m = undefined; } // zmiana pojazdu gracza
       if (!m) {
         if (e.kind === 'walker') {
           if (e.police) m = makeOfficer(e.id);
           else if (e.npc) m = makeAvatar(PED_COLORS[e.id % PED_COLORS.length], '', e.id);
           else { const pl = [...s.players.values()].find(q => q.walker === e.id); m = makeAvatar(pl?.color ?? '#7dffb0', pl?.name ?? '?', e.id); }
         }
-        else if (e.kind === 'car') { m = e.police ? makePoliceVehicle(e.id) : makeVehicle(e.v ?? 0, e.npc ? NPC_COLORS[e.id % NPC_COLORS.length] : 0xe8b830, !!e.npc, e.id); m.root.userData.v = e.v ?? 0; }
+        else if (e.kind === 'car') { m = e.police ? makePoliceVehicle(e.id) : makeVehicle(e.v ?? 0, e.npc || e.parked ? NPC_COLORS[e.id % NPC_COLORS.length] : 0xe8b830, !!e.npc && !e.parked, e.id); m.root.userData.v = e.v ?? 0; m.root.userData.pk = !!e.parked; }
         else m = makeHeli();
         this.models.set(e.id, m); this.world3d.add(m.root);
       }

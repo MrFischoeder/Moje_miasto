@@ -4,6 +4,7 @@
 import { CITIES, type CityData, type CityKey } from '../data/cities';
 import { makeProj, normName, type Proj } from '../data/projection';
 import type { Tags } from '../osm/features';
+import { Activity } from './activity';
 import { TILE_SIZE, tileKey, type Flat, type TileData } from '../tiles/types';
 import { CAR_PTS, PolyIndex, type XZ } from './collision';
 import { RegionIndex, type Region, type Support, type Surface } from './regions';
@@ -40,6 +41,8 @@ export class World implements Surface {
   /** wnętrza budynków (generowane przy graczach) */
   readonly interiors: Interiors = new Interiors(this);
   readonly tiles = new Map<string, TileData>();
+  /** ożywienie miejsc (gęstość pieszych i aut NPC) */
+  readonly activity = new Activity(this.tiles);
   readonly metro: MetroLayout;
   /** liczba stacji przesuniętych na pozycję z OSM (z pliku) */
   readonly osmStations: number;
@@ -80,7 +83,7 @@ export class World implements Surface {
 
   // ---------- kafelki ----------
   addTile(t: TileData): void {
-    const k = tileKey(t.x, t.y); if (this.tiles.has(k)) return; this.tiles.set(k, t);
+    const k = tileKey(t.x, t.y); if (this.tiles.has(k)) return; this.tiles.set(k, t); this.activity.changed(k);
     if (t.dem && this.terrain) this.terrain.addFine(t.dem); // dokładny teren przed budynkami i mostami
     for (const b of t.b) if (b.mh < 2) { const o = toXZ(b.o); this.buildings.add(o, this.baseOf(o) + b.h, b.i?.map(toXZ), k); }
     for (const a of t.a) if (a.k === 'water') this.water.add(toXZ(a.o), 0, a.i?.map(toXZ), k);
@@ -105,7 +108,7 @@ export class World implements Surface {
   }
   removeTile(k: string): void {
     for (const [key, l] of this.passages) { const f = l.filter(q => q.k !== k); if (f.length) this.passages.set(key, f); else this.passages.delete(key); }
-    if (!this.tiles.delete(k)) return;
+    if (!this.tiles.delete(k)) return; this.activity.changed(k);
     this.deckVersion++;
     this.terrain?.removeFine(k);
     this.buildings.removeTile(k); this.water.removeTile(k); this.decks.removeTile(k); this.interiors.removeTile(k);
