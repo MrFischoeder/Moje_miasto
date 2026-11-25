@@ -38,9 +38,12 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
     const x0 = t.x * TILE_SIZE, z0 = t.y * TILE_SIZE, x1 = x0 + TILE_SIZE, z1 = z0 + TILE_SIZE, e = .05;
     return (Math.abs(p[0] - q[0]) < e && (Math.abs(p[0] - x0) < e || Math.abs(p[0] - x1) < e)) || (Math.abs(p[1] - q[1]) < e && (Math.abs(p[1] - z0) < e || Math.abs(p[1] - z1) < e));
   };
-  const inWater = (x: number, z: number) => { const t = tiles.get(Math.floor(x / TILE_SIZE) + '_' + Math.floor(z / TILE_SIZE)); if (!t) return false; for (const a of t.a) if (a.k === 'water' && pip(ring(a.o), x, z) && !(a.i ?? []).some(h => pip(ring(h), x, z))) return true; return false; };
+  /** małe zbiorniki (fontanny, oczka wodne): bez obróbki terenu i poziomu wody – rysowane jako niecki fontann */
+  const areaOf = (f: number[]) => { let s = 0; for (let i = 0; i < f.length; i += 2) { const j = (i + 2) % f.length; s += f[i] * f[j + 1] - f[j] * f[i + 1]; } return Math.abs(s) / 2; };
+  const small = (a: { o: number[] }) => areaOf(a.o) < 1500;
+  const inWater = (x: number, z: number) => { const t = tiles.get(Math.floor(x / TILE_SIZE) + '_' + Math.floor(z / TILE_SIZE)); if (!t) return false; for (const a of t.a) if (a.k === 'water' && !small(a) && pip(ring(a.o), x, z) && !(a.i ?? []).some(h => pip(ring(h), x, z))) return true; return false; };
   for (const [k, t] of tiles) t.a.forEach((a, ai) => {
-    if (a.k !== 'water') return;
+    if (a.k !== 'water' || small(a)) return;
     [a.o, ...(a.i ?? [])].forEach((f, ri) => { const R = ring(f); for (let i = 0; i < R.length; i++) {
       const p = R[i], q = R[(i + 1) % R.length]; if (isBox(t, p, q)) continue;
       const e: Edge = { a: p, b: q, tile: k, area: ai, ring: ri, i };
@@ -80,7 +83,7 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
     const wl = level.get(k);
     for (const a of t.a) {
       if (a.k !== 'water') continue;
-      if (wl == null) { delete a.wl; delete a.qt; delete a.qk; continue; }
+      if (wl == null || small(a)) { delete a.wl; delete a.qt; delete a.qk; continue; }
       a.wl = r2(wl);
       const rings = [a.o, ...(a.i ?? [])].map(ring);
       const inThis = (x: number, z: number) => pip(rings[0], x, z) && !rings.slice(1).some(h => pip(h, x, z));
@@ -144,7 +147,8 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
   let demTiles = 0, nan = 0;
   for (const [k, t] of dem) {
     const [tx, ty] = k.split('_').map(Number); let touched = false;
-    const has = [-1, 0, 1].some(i => [-1, 0, 1].some(j => level.has((tx + i) + '_' + (ty + j)))); if (!has) continue;
+    const has = [-1, 0, 1].some(i => [-1, 0, 1].some(j => level.has((tx + i) + '_' + (ty + j))));
+    if (!has) { if (existsSync(join(orig, `${k}.bin.gz`))) writeFileSync(join(dir, `${k}.bin.gz`), readFileSync(join(orig, `${k}.bin.gz`))); continue; } // bez wody: oryginalny teren (także po wcześniejszym przetworzeniu)
     const h = t.h.slice(), n = t.n, s = t.step, off = t.ref - coarse.ref;
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const x = t.x0 + i * s, z = t.z0 + j * s, idx = j * n + i;

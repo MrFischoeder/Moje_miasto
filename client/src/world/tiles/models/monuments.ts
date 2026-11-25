@@ -41,6 +41,19 @@ export function buildMonument(S: ModelSink, x: number, z: number, kind: string, 
     const cs = Math.cos(yaw), sn = Math.sin(yaw); S.spire([c[0] - .01 * sn, c[1] + .01 * cs], .34, .075, k, [.5, .3, .18]);
     return;
   }
+  if (kind === 'pillory') { // pręgierz (Wrocław, 1492): piaskowcowa gotycka kolumna na schodkach, na szczycie kat z mieczem
+    const ST: RGB = [.74, .66, .52], STD: RGB = [.6, .53, .42];
+    for (let k = 0; k < 4; k++) { const w = 4.4 - k * .9; OB(S, c, 0, 0, 0, w, w, k * .28, (k + 1) * .28, k % 2 ? ST : STD); } // schodki
+    const y0 = 1.12; OB(S, c, 0, 0, 0, 1.3, 1.3, y0, y0 + .7, STD);                                  // cokół
+    OB(S, c, Math.PI / 4, 0, 0, .78, .78, y0 + .7, y0 + 4.6, ST); OB(S, c, 0, 0, 0, .7, .7, y0 + .7, y0 + 4.6, ST); // ośmioboczny trzon
+    for (const h of [y0 + 1.9, y0 + 3.2]) OB(S, c, 0, 0, 0, .9, .9, h, h + .12, STD);                // opaski
+    OB(S, c, 0, 0, 0, 1.25, 1.25, y0 + 4.6, y0 + 4.85, STD);                                         // głowica
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { OB(S, c, 0, a * .5, b * .5, .16, .16, y0 + 4.85, y0 + 5.9, ST); S.spire([c[0] + a * .5, c[1] + b * .5], y0 + 5.9, .12, .55, STD); } // pinakle
+    OB(S, c, 0, 0, 0, 1.0, 1.0, y0 + 5.9, y0 + 6.05, STD);
+    figure(S, c, Math.PI, 0, 0, .8, y0 + 6.05, ST, 'reka');                                         // kat z mieczem
+    OB(S, c, 0, 0, -.42, .5, .06, y0 + .9, y0 + 1.05, [.25, .25, .27]);                             // obręcz (kuna)
+    return;
+  }
   if (n.includes('anonimowego przechodnia') || n.includes('przejście')) { // 7 przechodniów schodzących pod chodnik
     for (let k = 0; k < 7; k++) figure(S, c, yaw, 0, -6 + k * 1.6, 1, -k * .26, BRONZE, 'idzie');
     return;

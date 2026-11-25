@@ -60,6 +60,11 @@ const stats = { b0: 0, b1: 0, v0: 0, v1: 0, r0: 0, r1: 0, a0: 0, a1: 0, merged: 
 const nearEdge0 = (o: XZ[], x: number, z: number, e: number) => { for (let i = 0; i < o.length; i++) { const [ax, az] = o[i], [bx, bz] = o[(i + 1) % o.length], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); if (Math.hypot(ax + dx * u - x, az + dz * u - z) < e) return true; } return false; };
 
 /** Stare Miasto (data/cities.json, pole stare): budynki zostają osobno, z prawdziwym obrysem (kamienice) */
+/** obiekty OSM brakujące w kaflach pełnych zbudowanych przed dodaniem ich rodzaju (shared/src/osm/look.ts) */
+const EXTRA_POI: Record<string, { id: number; t: string; n: string; lat: number; lon: number }[]> = {
+  wroclaw: [{ id: 312606364, t: 'pillory', n: 'Pręgierz', lat: 51.1094563, lon: 17.0326988 }],
+};
+const projC = makeProj(CITIES[city as CityKey].o);
 const ST = CITIES[city as CityKey]?.stare, stareC = ST ? makeProj(CITIES[city as CityKey].o)(ST[0], ST[1]) : null;
 const inStare = (o: XZ[]) => { if (!ST || !stareC) return false; const cx = o.reduce((s, p) => s + p[0], 0) / o.length, cz = o.reduce((s, p) => s + p[1], 0) / o.length; return Math.hypot(cx - stareC[0], cz - stareC[1]) < ST[2]; };
 
@@ -168,6 +173,9 @@ function simplifyTile(t: TileData): TileData {
   });
   const rails = t.l.map(l => ({ ...l, p: flat(dp(ring(l.p), .7)) }));
   const ways = (t.w ?? []).map(q => ({ ...q, p: flat(dp(ring(q.p), .8)) }));
+  // krasnale: usunięte; obiekty brakujące w starszych kaflach pełnych (pręgierz) dopisane z ich współrzędnych OSM
+  for (const e of EXTRA_POI[city] ?? []) { const [x, z] = projC(e.lat, e.lon); if (Math.floor(x / t.size) === t.x && Math.floor(z / t.size) === t.y && !t.poi.some(q => q.id === e.id)) t.poi.push({ id: e.id, c: 'pomnik', t: e.t, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, n: e.n }); }
+  t.poi = t.poi.filter(q => !(q.c === 'pomnik' && q.t === 'dwarf'));
   const poi = t.poi.map(p => p.b != null && idMap.has(p.b) ? { ...p, b: idMap.get(p.b) } : p);
   return { ...t, b: out, r: roads, a: areas, l: rails, poi, ...(ways.length ? { w: ways } : {}) };
 }

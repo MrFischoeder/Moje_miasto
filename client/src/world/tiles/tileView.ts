@@ -506,7 +506,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   }
   // pomniki, rzeźby, krasnale (własne modele z punktów OSM)
   const BS = { tri: (a: number[], b2: number[], c: number[], col: RGB, n?: number[]) => B.tri(a, b2, c, col, n), get P() { return B.P; }, FA, FB, FC, pad: facPad };
-  for (const p of t.poi) if (p.c === 'pomnik') { buildMonument(makeSink(BS, g ? g(p.x, p.z) : 0, .5), p.x, p.z, p.t, p.n ?? ''); }
+  for (const p of t.poi) if (p.c === 'pomnik' && p.t !== 'dwarf') { buildMonument(makeSink(BS, g ? g(p.x, p.z) : 0, .5), p.x, p.z, p.t, p.n ?? ''); }
   facPad();
 
   // --- tereny ---
@@ -517,6 +517,28 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   for (const a of t.a) {
     const outer = toXZ(a.o), holes = (a.i || []).map(toXZ), st = AREA[a.k];
     if (a.k === 'water' && g) { // z terenem: płaska tafla na poziomie wody (tools/lib/waterBanks.ts); starsze dane: po terenie
+      // mała woda na poziomie gruntu (fontanna na placu, np. „Zdrój” na Rynku): kamienna niecka z wodą i strumieniami
+      let A2 = 0, cx = 0, cz = 0; for (let i = 0; i < outer.length; i++) { const p = outer[i], q = outer[(i + 1) % outer.length]; A2 += p[0] * q[1] - q[0] * p[1]; cx += p[0]; cz += p[1]; }
+      const area = Math.abs(A2) / 2; cx /= outer.length; cz /= outer.length;
+      const rimG = outer.map(p => { const dx = p[0] - cx, dz = p[1] - cz, d = Math.hypot(dx, dz) || 1; return g(p[0] + dx / d * 1.5, p[1] + dz / d * 1.5); }).sort((u, v) => u - v)[Math.floor(outer.length / 2)];
+      if (area < 1500) { // mała woda (bez poziomu z tools/lib/waterBanks.ts): fontanna / oczko wodne
+        const top = rimG + .45, wy = rimG + .3, rimC: RGB = [.62, .6, .56], capC: RGB = [.74, .72, .68];
+        fillPoly(F[0], outer, holes, 0, C.waterTop, () => wy);
+        for (const ring of [outer, ...holes]) for (let i = 0; i < ring.length; i++) {
+          const p = ring[i], q = ring[(i + 1) % ring.length], L = Math.hypot(q[0] - p[0], q[1] - p[1]); if (L < .05) continue;
+          const mx = (p[0] + q[0]) / 2, mz = (p[1] + q[1]) / 2; let nx = -(q[1] - p[1]) / L, nz = (q[0] - p[0]) / L; // normalna w głąb wody
+          if (Math.hypot(mx + nx - cx, mz + nz - cz) > Math.hypot(mx - nx - cx, mz - nz - cz)) { nx = -nx; nz = -nz; }
+          const w = .35, P = (x: number, z: number, y: number) => [x, y, z];
+          S.quad(P(p[0] - nx * .02, p[1] - nz * .02, rimG - .3), P(q[0] - nx * .02, q[1] - nz * .02, rimG - .3), P(q[0] - nx * .02, q[1] - nz * .02, top), P(p[0] - nx * .02, p[1] - nz * .02, top), rimC); // zewnętrzna ściana
+          S.quad(P(p[0], p[1], top), P(q[0], q[1], top), P(q[0] + nx * w, q[1] + nz * w, top), P(p[0] + nx * w, p[1] + nz * w, top), capC);                                   // korona
+          S.quad(P(p[0] + nx * w, p[1] + nz * w, wy - .2), P(q[0] + nx * w, q[1] + nz * w, wy - .2), P(q[0] + nx * w, q[1] + nz * w, top), P(p[0] + nx * w, p[1] + nz * w, top), rimC); // wewnętrzna
+        }
+        // strumienie wody: pośrodku i (w większych nieckach) wokół
+        const jet = (x: number, z: number, h: number) => { const jc: RGB = [.82, .9, .96]; for (const [ux, uz] of [[.25, 0], [0, .25]]) { S.quad([x - ux, wy, z - uz], [x + ux, wy, z + uz], [x + ux * .3, wy + h, z + uz * .3], [x - ux * .3, wy + h, z - uz * .3], jc); } };
+        jet(cx, cz, 2.6);
+        if (area > 150) for (let k = 0; k < 6; k++) { const an = k / 6 * Math.PI * 2, rr = Math.sqrt(area / Math.PI) * .45; jet(cx + Math.cos(an) * rr, cz + Math.sin(an) * rr, 1.2); }
+        continue;
+      }
       if (a.wl != null) { const wl = a.wl; fillPoly(F[0], outer, holes, 0, C.waterTop, () => wl + .02); }
       else fillPoly(F[0], outer, holes, LIFT, C.waterTop, g);
       continue;

@@ -46,6 +46,7 @@ export function lookOf(t: Tags, h: number, mh: number): Look {
 
 /** Pomnik / rzeźba z tagów punktu: rodzaj albo null (tablice pamiątkowe i drobne obiekty pomijane). */
 export function monumentKind(t: Tags): string | null {
+  if (t.historic === 'pillory') return 'pillory'; // pręgierz
   if (t.historic === 'monument') return 'monument';
   if (t.historic === 'memorial') {
     const m = t.memorial || '';
@@ -54,7 +55,7 @@ export function monumentKind(t: Tags): string | null {
   }
   if (t.tourism === 'artwork') {
     const a = t.artwork_type || '';
-    if (['statue', 'sculpture', 'bust', 'installation', 'fountain', 'dwarf'].includes(a)) return a; // dwarf: wrocławskie krasnale
+    if (['statue', 'sculpture', 'bust', 'installation', 'fountain'].includes(a)) return a; // krasnale (dwarf): pominięte
     return null;
   }
   return null;
