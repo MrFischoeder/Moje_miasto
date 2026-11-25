@@ -72,6 +72,13 @@ export interface TileRail { id: number; k: RailKind; p: Flat; br?: number; bw?: 
 export type WaterwayKind = 'river' | 'stream' | 'canal' | 'ditch';
 export interface TileWaterway { id: number; k: WaterwayKind; p: Flat; wd: number; n?: string }
 
+/**
+ * Ogrodzenie jednej posesji: s = odcinki płotu [x0, z0, x1, z1, ...] (bez otworów bram i bez odcinków wspólnych
+ * z sąsiednią posesją, które ma już sąsiad); g = bramy [x0, z0, x1, z1, rodzaj (0 furtka, 1 brama wjazdowa), ...],
+ * działka po lewej stronie kierunku 0→1; k = rodzaj płotu (0 sztachety, 1 pręty na podmurówce, 2 siatka, 3 mur).
+ */
+export interface TileFence { s: Flat; g: Flat; k: number }
+
 export type NodeKind = 'signals' | 'crossing' | 'stop' | 'give_way' | 'lamp' | 'tram_stop' | 'entrance' | 'station';
 export interface TileNode {
   id: number; k: NodeKind; x: number; z: number;
@@ -109,6 +116,8 @@ export interface TileData {
   l: TileRail[];
   /** cieki (linie osi) */
   w?: TileWaterway[];
+  /** ogrodzenia posesji z domami jednorodzinnymi (tools/lib/plots.ts) */
+  fe?: TileFence[];
   n: TileNode[];
   g: GraphNode[];
   poi: TilePoi[];

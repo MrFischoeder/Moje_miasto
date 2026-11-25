@@ -103,11 +103,12 @@ export class World implements Surface {
     };
     for (const r of t.r) if (r.br) deck(toXZ(r.p), r.w / 2 + (r.sw ? 2.5 : .6), r.bw);
     for (const l of t.l) if (l.br) deck(toXZ(l.p), 2.4, l.bw);
-    this.addPassages(t, k); this.deckVersion++;
+    this.addPassages(t, k); this.addFences(t, k); this.deckVersion++;
     this.interiors.addTile(t);
   }
   removeTile(k: string): void {
     for (const [key, l] of this.passages) { const f = l.filter(q => q.k !== k); if (f.length) this.passages.set(key, f); else this.passages.delete(key); }
+    for (const [key, l] of this.fences) { const f = l.filter(q => q.k !== k); if (f.length) this.fences.set(key, f); else this.fences.delete(key); }
     if (!this.tiles.delete(k)) return; this.activity.changed(k);
     this.deckVersion++;
     this.terrain?.removeFine(k);
@@ -118,6 +119,21 @@ export class World implements Surface {
   /** Punkt zablokowany: budynek albo woda poza mostem (y: wysokość sprawdzającego, do wyboru poziomu). */
   /** rośnie przy dodaniu / usunięciu kafla (pomosty mostów): profile wysokości tras komunikacji do przeliczenia */
   deckVersion = 0;
+  // ---------- płoty posesji ----------
+  private fences = new Map<string, { x0: number; z0: number; x1: number; z1: number; k: string }[]>();
+  private addFences(t: TileData, k: string): void {
+    for (const f of t.fe ?? []) for (let i = 0; i + 3 < f.s.length; i += 4) {
+      const s = { x0: f.s[i], z0: f.s[i + 1], x1: f.s[i + 2], z1: f.s[i + 3], k };
+      for (let gx = Math.floor((Math.min(s.x0, s.x1) - .5) / 16); gx <= Math.floor((Math.max(s.x0, s.x1) + .5) / 16); gx++) for (let gz = Math.floor((Math.min(s.z0, s.z1) - .5) / 16); gz <= Math.floor((Math.max(s.z0, s.z1) + .5) / 16); gz++) {
+        const key = gx + ',' + gz; let l = this.fences.get(key); if (!l) this.fences.set(key, l = []); l.push(s); }
+    }
+  }
+  /** Punkt na płocie (pas 0,6 m: krok biegnącego pieszego go nie przeskoczy; bramy są otworami). */
+  onFence(x: number, z: number): boolean {
+    const l = this.fences.get(Math.floor(x / 16) + ',' + Math.floor(z / 16)); if (!l) return false;
+    for (const s of l) { const dx = s.x1 - s.x0, dz = s.z1 - s.z0, L2 = dx * dx + dz * dz || 1e-9, t = Math.max(0, Math.min(1, ((x - s.x0) * dx + (z - s.z0) * dz) / L2)); if ((s.x0 + dx * t - x) ** 2 + (s.z0 + dz * t - z) ** 2 < .09) return true; }
+    return false;
+  }
   // ---------- bramy przejazdowe ----------
   private passages = new Map<string, { a: XZ; b: XZ; hw: number; k: string }[]>();
   /** Punkt w bramie przejazdowej (droga przez budynek): przejście mimo obrysu budynku. */
@@ -136,6 +152,7 @@ export class World implements Surface {
   inBuilding(x: number, z: number): boolean { return this.buildings.hit(x, z); }
   blocked(x: number, z: number, y?: number): boolean {
     if (this.buildings.hit(x, z) && !this.inPassage(x, z)) return true;
+    if (this.fences.size && this.onFence(x, z) && (y == null || y < this.ground(x, z) + 1.4)) return true;
     if (!this.water.hit(x, z)) return false;
     return !this.decks.containing(x, z).some(d => y == null || Math.abs(d.h - y) < 3);
   }

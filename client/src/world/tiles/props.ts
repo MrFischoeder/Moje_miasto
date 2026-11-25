@@ -28,7 +28,28 @@ const G = {
     new THREE.BoxGeometry(.1, 2.5, .1).translate(2, 1.25, .7), new THREE.BoxGeometry(.1, 2.5, .1).translate(-2, 1.25, -.7), new THREE.BoxGeometry(.1, 2.5, .1).translate(2, 1.25, -.7),
     new THREE.BoxGeometry(2.2, .08, .4).translate(0, .48, .45)])),
   glass: flat(mergeGeometries([new THREE.BoxGeometry(4, 2.1, .04).translate(0, 1.35, .74), new THREE.BoxGeometry(.04, 2.1, 1.3).translate(-2, 1.35, 0)])),
+  // płoty: przęsło 1 × 1 (skalowane do długości i wysokości; wzór z tekstury z przezroczystością), słupek, podmurówka
+  fPanel: new THREE.PlaneGeometry(1, 1).translate(0, .5, 0),
+  fBox: flat(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0)),
 };
+
+/** Tekstura przęsła (2 m szerokości): sztachety, pręty albo siatka; przezroczyste szczeliny (alphaTest). */
+function fenceTex(kind: 'pick' | 'bars' | 'mesh'): THREE.Texture {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d')!;
+  if (kind === 'pick') { // sztachety z dwiema poprzeczkami
+    x.fillStyle = '#7a5532'; for (let i = 0; i < 14; i++) { const px = 4 + i * 18; x.fillRect(px, 10, 11, 118); x.beginPath(); x.moveTo(px, 10); x.lineTo(px + 5.5, 2); x.lineTo(px + 11, 10); x.fill(); }
+    x.fillStyle = '#5e4026'; x.fillRect(0, 30, 256, 8); x.fillRect(0, 96, 256, 8);
+    x.fillStyle = 'rgba(0,0,0,.15)'; for (let i = 0; i < 14; i++) x.fillRect(4 + i * 18 + 9, 10, 2, 118);
+  } else if (kind === 'bars') { // pręty stalowe z ramą
+    x.fillStyle = '#2f3236'; x.fillRect(0, 0, 256, 7); x.fillRect(0, 112, 256, 7); for (let i = 0; i < 22; i++) x.fillRect(5 + i * 11.6, 0, 4, 128);
+    for (let i = 0; i < 22; i++) { x.beginPath(); x.arc(7 + i * 11.6, 4, 4, 0, Math.PI * 2); x.fill(); }
+  } else { // siatka w ramie
+    x.strokeStyle = '#7d8a7f'; x.lineWidth = 2; for (let i = -128; i < 256; i += 12) { x.beginPath(); x.moveTo(i, 128); x.lineTo(i + 128, 0); x.stroke(); x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 128, 128); x.stroke(); }
+    x.fillStyle = '#5c665e'; x.fillRect(0, 0, 256, 5); x.fillRect(0, 123, 256, 5);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+const fenceMat = (k: 'pick' | 'bars' | 'mesh') => new THREE.MeshLambertMaterial({ map: fenceTex(k), alphaTest: .5, side: THREE.DoubleSide });
 
 /** Materiały obiektów (wspólne dla kafli); lampy świecą nocą (setNight). */
 export class PropMaterials {
@@ -39,13 +60,17 @@ export class PropMaterials {
   readonly bench = new THREE.MeshLambertMaterial({ color: 0x7a5434 });
   readonly shelter = new THREE.MeshLambertMaterial({ color: 0x50565e });
   readonly glass = new THREE.MeshLambertMaterial({ color: 0x9cc4d8, transparent: true, opacity: .45, depthWrite: false });
+  readonly fPick = fenceMat('pick');
+  readonly fBars = fenceMat('bars');
+  readonly fMesh = fenceMat('mesh');
+  readonly fStone = new THREE.MeshLambertMaterial({ color: 0xffffff }); // podmurówka, słupki, mur (kolor z instancji)
   /** 0 = dzień, 1 = noc */
   setNight(n: number): void { this.lamp.emissiveIntensity = n * 1.6; }
-  dispose(): void { for (const m of [this.wood, this.leaves, this.metal, this.lamp, this.bench, this.shelter, this.glass]) m.dispose(); }
+  dispose(): void { for (const m of [this.wood, this.leaves, this.metal, this.lamp, this.bench, this.shelter, this.glass, this.fPick, this.fBars, this.fMesh, this.fStone]) { m.map?.dispose(); m.dispose(); } }
 }
 
 type GeoName = keyof typeof G;
-type PropMat = 'wood' | 'leaves' | 'metal' | 'lamp' | 'bench' | 'shelter' | 'glass';
+type PropMat = 'wood' | 'leaves' | 'metal' | 'lamp' | 'bench' | 'shelter' | 'glass' | 'fPick' | 'fBars' | 'fMesh' | 'fStone';
 /** Instancje jednego rodzaju obiektu: macierze (16 liczb) i kolory (3 liczby) jako tablice (z wątku kafli). */
 export interface InstData { geo: GeoName; mat: PropMat; m: Float32Array; c?: Float32Array }
 
@@ -208,5 +233,46 @@ export function buildProps(t: TileData, world: World | null, ground: ((x: number
   }
   const out: InstData[] = [];
   for (const i of [trunk, crown, cone, pole, head, bench, shelter, glass]) { const d = i.data(); if (d) out.push(d); }
+  // ogrodzenia posesji (tools/lib/plots.ts): przęsła co ok. 2 m po terenie, słupki, bramy (otwarte: wjazd odsunięty, furtka uchylona)
+  if (t.fe?.length) {
+    const pan = { pick: new Inst('fPanel', 'fPick'), bars: new Inst('fPanel', 'fBars'), mesh: new Inst('fPanel', 'fMesh') }, box = new Inst('fBox', 'fStone');
+    const STYLE = [ // [przęsło, wysokość przęsła, podmurówka, kolor słupków / muru]
+      { p: 'pick' as const, h: 1.25, base: 0, col: new THREE.Color(.42, .3, .19), post: .09 },
+      { p: 'bars' as const, h: 1.15, base: .35, col: new THREE.Color(.62, .58, .52), post: .22 },
+      { p: 'mesh' as const, h: 1.4, base: .12, col: new THREE.Color(.45, .48, .46), post: .07 },
+      { p: null, h: 1.55, base: 0, col: new THREE.Color(.78, .74, .66), post: .3 },
+    ];
+    const gateCol = new THREE.Color(.2, .22, .24);
+    for (const f of t.fe) {
+      const st = STYLE[f.k] ?? STYLE[0];
+      for (let i = 0; i + 3 < f.s.length; i += 4) {
+        const ax = f.s[i], az = f.s[i + 1], bx = f.s[i + 2], bz = f.s[i + 3], L = Math.hypot(bx - ax, bz - az); if (L < .2) continue;
+        const n = Math.max(1, Math.round(L / 2)), yaw = Math.atan2(-(bz - az), bx - ax);
+        for (let q = 0; q < n; q++) {
+          const t0 = q / n, t1 = (q + 1) / n, mx = ax + (bx - ax) * (t0 + t1) / 2, mz = az + (bz - az) * (t0 + t1) / 2, y = Y(mx, mz) - .05, len = L / n;
+          if (st.base) box.add(mx, y, mz, yaw, len, st.base + .05, .2, st.col);
+          if (st.p) pan[st.p].add(mx, y + st.base, mz, yaw, len, st.h, 1);
+          else box.add(mx, y, mz, yaw, len, st.h, .22, st.col); // mur
+          const px = ax + (bx - ax) * t0, pz = az + (bz - az) * t0; box.add(px, Y(px, pz) - .05, pz, yaw, st.post, st.base + st.h + .12, st.post, st.col);
+        }
+        box.add(bx, Y(bx, bz) - .05, bz, yaw, st.post, st.base + st.h + .12, st.post, st.col);
+      }
+      for (let i = 0; i + 4 < f.g.length; i += 5) {
+        const ax = f.g[i], az = f.g[i + 1], bx = f.g[i + 2], bz = f.g[i + 3], k = f.g[i + 4], L = Math.hypot(bx - ax, bz - az); if (L < .3) continue;
+        const ux = (bx - ax) / L, uz = (bz - az) / L, nx = uz, nz = -ux; // do wnętrza działki (po lewej)
+        const yaw = Math.atan2(-uz, ux), h = Math.max(1.2, st.base + st.h);
+        // słupki bramy (murowane)
+        for (const [px, pz] of [[ax, az], [bx, bz]]) box.add(px, Y(px, pz) - .05, pz, yaw, .32, h + .25, .32, st.col);
+        if (k === 1) { // brama wjazdowa przesuwna: odsunięta wzdłuż płotu po stronie działki
+          const mx = ax - ux * L / 2 + nx * .25, mz = az - uz * L / 2 + nz * .25;
+          pan.bars.add(mx, Y(mx, mz), mz, yaw, L, h - .1, 1, gateCol);
+        } else { // furtka uchylona do środka (zawias przy pierwszym słupku)
+          const a = yaw + 1.25, cx = ax + (Math.cos(1.25) * ux + Math.sin(1.25) * nx) * L / 2, cz = az + (Math.cos(1.25) * uz + Math.sin(1.25) * nz) * L / 2;
+          pan.bars.add(cx, Y(cx, cz), cz, a, L, h - .1, 1, gateCol);
+        }
+      }
+    }
+    for (const q of [pan.pick, pan.bars, pan.mesh, box]) { const d = q.data(); if (d) out.push(d); }
+  }
   return { inst: out, lamps: lampPos };
 }

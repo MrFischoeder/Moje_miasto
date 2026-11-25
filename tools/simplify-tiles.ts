@@ -9,6 +9,7 @@ import pc from 'polygon-clipping';
 import type { Flat, TileBuilding, TileData, TileIndex, TileRoad } from '../shared/src/tiles/types';
 import { writeTiles } from './lib/common';
 import { cityPavements, inferPassages, normalizeRoads } from './lib/roads';
+import { makePlots } from './lib/plots';
 import { CITIES, type CityKey } from '../shared/src/data/cities';
 import { makeProj } from '../shared/src/data/projection';
 import { obb } from '../shared/src/interiors/geom';
@@ -179,6 +180,7 @@ for (const f of readdirSync(src)) {
 }
 const rn = normalizeRoads(tiles); console.log(`ulice: ${rn.roads} odcinków, wyrównane krótkie: ${rn.absorbed}, płynne zwężenia: ${rn.tapers}`);
 const ps = inferPassages(tiles); console.log(`bramy przejazdowe: przez budynek ${ps.through}, ślepe końce przy ścianie ${ps.deadEnd}`);
+const pl = makePlots(tiles); console.log(`posesje z płotem: ${pl.plots} (pominięte ${pl.skipped}), odcinki płotu ${pl.segs}`);
 const pv = cityPavements(tiles); console.log(`chodniki: ulice miejskie ${pv.urban} (dodane chodniki ${pv.added}), podmiejskie ${pv.suburban}`);
 const ix = writeTiles(city, tiles, dst, idx.source + ' · uproszczone (tools/simplify-tiles.ts)');
 const kb = (a: number) => (a / 1024 / 1024).toFixed(1) + ' MB';
