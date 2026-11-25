@@ -30,7 +30,7 @@ HW_NODE = {'traffic_signals', 'crossing', 'stop', 'give_way', 'street_lamp'}
 
 def want_way(t):
     return ('building' in t or 'building:part' in t or 'highway' in t or t.get('railway') in RAIL or t.get('landuse') in LANDUSE
-            or t.get('leisure') in LEISURE or t.get('natural') in NATURAL or t.get('waterway') == 'riverbank' or 'water' in t
+            or t.get('leisure') in LEISURE or t.get('natural') in NATURAL or t.get('waterway') in ('riverbank', 'river', 'stream', 'canal', 'ditch', 'drain') or 'water' in t
             or t.get('amenity') in ('parking', 'grave_yard') or t.get('place') == 'square' or 'shop' in t or 'amenity' in t
             or t.get('historic') in ('monument', 'memorial') or t.get('tourism') == 'artwork')
 

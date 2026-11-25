@@ -440,6 +440,17 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     fillPoly(F[st.order >= 2 ? 1 : 0], outer, holes, LIFT, st.fill, g);
   }
 
+  // --- cieki: wstęga wody na osi koryta (wysokość z osi, brzegi wyższe w modelu terenu zasłaniają jej krawędzie) ---
+  for (const q of t.w ?? []) {
+    const pts = toXZ(q.p), hw = q.wd / 2; if (pts.length < 2) continue;
+    const yAt = (x: number, z: number) => (g ? g(x, z) : 0) + LIFT + .04;
+    const off: XZ[] = pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1; return [-dz / L * hw, dx / L * hw]; });
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const p = pts[i], r = pts[i + 1], o0 = off[i], o1 = off[i + 1], y0 = yAt(p[0], p[1]), y1 = yAt(r[0], r[1]);
+      F[0].quad([p[0] - o0[0], y0, p[1] - o0[1]], [r[0] - o1[0], y1, r[1] - o1[1]], [r[0] + o1[0], y1, r[1] + o1[1]], [p[0] + o0[0], y0, p[1] + o0[1]], C.waterTop, [0, 1, 0]);
+    }
+  }
+
   // --- drogi ---
   const junctions: XZ[] = t.g.filter(g => g.jn).map(g => [g.x, g.z]);
   const roadW = new Map<number, number>(); // id węzła -> szerokość drogi

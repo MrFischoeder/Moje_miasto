@@ -11,7 +11,7 @@ import { pip, type XZ } from '../world/collision';
 import { clipRing, ringArea, splitPolyline, tileRange } from './clip';
 import {
   TILE_SIZE, TILE_VERSION, tileKey, tileOf,
-  type AreaKind, type Flat, type GraphNode, type NodeKind, type RailKind, type RoadClass, type TileData, type TileNode,
+  type AreaKind, type Flat, type GraphNode, type NodeKind, type RailKind, type RoadClass, type TileData, type TileNode, type WaterwayKind,
 } from './types';
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -193,6 +193,19 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
       const tt = tile(tx, ty); if (!tt) continue;
       const bw = bi && arcs ? [r1(bi.a[0]), r1(bi.a[1]), r1(bi.b[0]), r1(bi.b[1]), r1(bi.s + bi.dir * arcs[i0]), bi.dir, r1(bi.total)] : undefined;
       tt.l.push({ id: w.id, k, p: flat(pts.slice(i0, i1 + 1)), ...(br ? { br } : {}), ...(bw ? { bw } : {}) });
+    }
+  }
+
+  // --- cieki: rzeki, strumienie, kanały, rowy (bez przepustów i odcinków pod ziemią) ---
+  const WW: Record<string, [WaterwayKind, number]> = { river: ['river', 12], canal: ['canal', 7], stream: ['stream', 3], ditch: ['ditch', 1.5], drain: ['ditch', 1.5] };
+  for (const w of raw.ways.values()) {
+    const t = w.tags; if (!t || !t.waterway) continue; const spec = WW[t.waterway]; if (!spec) continue;
+    if ((t.tunnel && t.tunnel !== 'no') || t.location === 'underground') continue;
+    const pts = raw.wayCoords(w).map(([lo, la]) => proj(la, lo)); if (pts.length < 2) continue;
+    const wd = Math.max(.8, Math.min(60, num(t.width) ?? spec[1]));
+    for (const [tx, ty, i0, i1] of splitPolyline(pts)) {
+      const tt = tile(tx, ty); if (!tt) continue;
+      (tt.w ??= []).push({ id: w.id, k: spec[0], p: flat(pts.slice(i0, i1 + 1)), wd, ...(t.name ? { n: t.name } : {}) });
     }
   }
 

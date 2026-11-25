@@ -10,7 +10,7 @@ import type { XZ } from '@miasto/shared/world/collision';
 
 type Ground = (x: number, z: number) => number;
 /** podział komórki 500 m z dokładnym terenem (NMT) blisko gracza: co 5 m */
-const DEM_CELLS = 100;
+const DEM_CELLS = 125; // siatka 4 m: zgodna z krokiem kafli NMT (wały, koryta, skarpy)
 
 export class GroundGrid {
   readonly mat: THREE.MeshLambertMaterial;

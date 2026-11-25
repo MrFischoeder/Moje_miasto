@@ -66,6 +66,10 @@ export interface TileArea { id: number; k: AreaKind; o: Flat; i?: Flat[] }
 export type RailKind = 'rail' | 'tram' | 'light_rail' | 'subway' | 'narrow_gauge';
 export interface TileRail { id: number; k: RailKind; p: Flat; br?: number; bw?: number[] }
 
+/** Ciek (rzeka, strumień, kanał, rów) jako linia osi z szerokością koryta [m]; woda leży w korycie z modelu terenu */
+export type WaterwayKind = 'river' | 'stream' | 'canal' | 'ditch';
+export interface TileWaterway { id: number; k: WaterwayKind; p: Flat; wd: number; n?: string }
+
 export type NodeKind = 'signals' | 'crossing' | 'stop' | 'give_way' | 'lamp' | 'tram_stop' | 'entrance' | 'station';
 export interface TileNode {
   id: number; k: NodeKind; x: number; z: number;
@@ -101,6 +105,8 @@ export interface TileData {
   r: TileRoad[];
   a: TileArea[];
   l: TileRail[];
+  /** cieki (linie osi) */
+  w?: TileWaterway[];
   n: TileNode[];
   g: GraphNode[];
   poi: TilePoi[];

@@ -164,8 +164,9 @@ function simplifyTile(t: TileData): TileData {
     return { ...a, o: flat(o), ...(i.length ? { i } : {}) };
   });
   const rails = t.l.map(l => ({ ...l, p: flat(dp(ring(l.p), .7)) }));
+  const ways = (t.w ?? []).map(q => ({ ...q, p: flat(dp(ring(q.p), .8)) }));
   const poi = t.poi.map(p => p.b != null && idMap.has(p.b) ? { ...p, b: idMap.get(p.b) } : p);
-  return { ...t, b: out, r: roads, a: areas, l: rails, poi };
+  return { ...t, b: out, r: roads, a: areas, l: rails, poi, ...(ways.length ? { w: ways } : {}) };
 }
 
 const idx = JSON.parse(readFileSync(join(src, 'index.json'), 'utf8')) as TileIndex, tiles = new Map<string, TileData>();
