@@ -25,6 +25,7 @@ import { obb } from '@miasto/shared/interiors/geom';
 import { partsCover } from '@miasto/shared/tiles/parts';
 import { installWindows, type WindowUniforms } from './windows';
 import { FACADE, PAL } from '../../render/palette';
+import { QUAY_W, quaySegments } from '@miasto/shared/world/quays';
 import { assembleInst, buildProps, PropMaterials, type InstData, type StopPoint } from './props';
 import { installLamps, lampUniforms, MAX_LAMPS, type LampUniforms } from '../lampLight';
 
@@ -67,7 +68,7 @@ export class TileMaterials {
 // kolory low-poly (render/palette.ts)
 const C = {
   road: PAL.asphalt, mark: PAL.marking, center: PAL.markingY, path: PAL.path, zebra: PAL.zebra, pole: PAL.pole,
-  waterTop: PAL.water, bank: PAL.bank, deck: PAL.deck, railing: PAL.railing,
+  waterTop: PAL.water, bank: PAL.bank, quayWall: [.5, .46, .4] as RGB, quayCap: [.7, .68, .64] as RGB, quayPave: [.6, .57, .52] as RGB, quayLine: [.38, .36, .33] as RGB, bankGrass: PAL.park, deck: PAL.deck, railing: PAL.railing,
 };
 const AREA: Record<AreaKind, { fill: RGB; order: number }> = {
   park: { fill: PAL.park, order: 1 }, forest: { fill: PAL.forest, order: 1 }, cemetery: { fill: PAL.cemetery, order: 1 },
@@ -511,8 +512,9 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   };
   for (const a of t.a) {
     const outer = toXZ(a.o), holes = (a.i || []).map(toXZ), st = AREA[a.k];
-    if (a.k === 'water' && g) { // z terenem: woda leży w dolinie, bez obniżania
-      fillPoly(F[0], outer, holes, LIFT, C.waterTop, g);
+    if (a.k === 'water' && g) { // z terenem: płaska tafla na poziomie wody (tools/lib/waterBanks.ts); starsze dane: po terenie
+      if (a.wl != null) { const wl = a.wl; fillPoly(F[0], outer, holes, 0, C.waterTop, () => wl + .02); }
+      else fillPoly(F[0], outer, holes, LIFT, C.waterTop, g);
       continue;
     }
     if (a.k === 'water') {
@@ -524,6 +526,23 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       continue;
     }
     fillPoly(F[st.order >= 2 ? 1 : 0], outer, holes, LIFT, st.fill, g);
+  }
+
+  // --- nabrzeża: mur od wody do korony po gładkim obrysie z OSM, kamienna krawędź (opaska) i pas bruku w głąb lądu ---
+  if (g) for (const q of quaySegments(t)) {
+    const { a, b: c, ta, tb, n, wl } = q, w = QUAY_W, lo = wl - 1.2, nx = n[0], nz = n[1];
+    if (!q.wall) { // skarpa: od lustra wody do korony 4 m w głąb lądu (przy wodzie kamienny narzut, wyżej trawa)
+      const s = 4;
+      const y = (top: number, d: number) => wl - .4 + (top - wl + .4) * Math.min(1, (d + .3) / 4.3) + .03; // jak teren skarpy (tools/lib/waterBanks.ts)
+      S.quad([a[0] - nx * .3, y(ta, -.3), a[1] - nz * .3], [c[0] - nx * .3, y(tb, -.3), c[1] - nz * .3], [c[0] + nx * 1.2, y(tb, 1.2), c[1] + nz * 1.2], [a[0] + nx * 1.2, y(ta, 1.2), a[1] + nz * 1.2], C.quayWall);
+      S.quad([a[0] + nx * 1.2, y(ta, 1.2), a[1] + nz * 1.2], [c[0] + nx * 1.2, y(tb, 1.2), c[1] + nz * 1.2], [c[0] + nx * s, y(tb, s), c[1] + nz * s], [a[0] + nx * s, y(ta, s), a[1] + nz * s], C.bankGrass);
+      continue;
+    }
+    S.quad([a[0], lo, a[1]], [c[0], lo, c[1]], [c[0], tb, c[1]], [a[0], ta, a[1]], C.quayWall);                                  // mur (od strony wody)
+    S.quad([a[0], ta, a[1]], [c[0], tb, c[1]], [c[0] + nx * .45, tb + .12, c[1] + nz * .45], [a[0] + nx * .45, ta + .12, a[1] + nz * .45], C.quayCap); // opaska (granit)
+    S.quad([a[0] - nx * .02, ta, a[1] - nz * .02], [c[0] - nx * .02, tb, c[1] - nz * .02], [c[0] - nx * .02, tb + .12, c[1] - nz * .02], [a[0] - nx * .02, ta + .12, a[1] - nz * .02], C.quayCap);
+    S.quad([a[0] + nx * .45, ta + .03, a[1] + nz * .45], [c[0] + nx * .45, tb + .03, c[1] + nz * .45], [c[0] + nx * w, tb + .03, c[1] + nz * w], [a[0] + nx * w, ta + .03, a[1] + nz * w], C.quayPave); // bruk
+    SL.seg([a[0], ta + .13, a[1]], [c[0], tb + .13, c[1]], C.quayLine);
   }
 
   // --- cieki: wstęga wody na osi koryta (wysokość z osi, brzegi wyższe w modelu terenu zasłaniają jej krawędzie) ---

@@ -5,6 +5,7 @@ import { CITIES, type CityData, type CityKey } from '../data/cities';
 import { makeProj, normName, type Proj } from '../data/projection';
 import type { Tags } from '../osm/features';
 import { Activity } from './activity';
+import { QUAY_W, quaySegments } from './quays';
 import { TILE_SIZE, tileKey, type Flat, type TileData } from '../tiles/types';
 import { CAR_PTS, PolyIndex, type XZ } from './collision';
 import { RegionIndex, type Region, type Support, type Surface } from './regions';
@@ -102,6 +103,12 @@ export class World implements Surface {
       }
     };
     for (const r of t.r) if (r.br) deck(toXZ(r.p), r.w / 2 + (r.sw ? 2.5 : .6), r.bw);
+    // nabrzeża: pas bruku na wysokości korony (teren pod nim przy murze obniżony: tools/lib/waterBanks.ts)
+    for (const q of quaySegments(t)) {
+      if (!q.wall) continue;
+      const ex = (q.b[0] - q.a[0]) * .02, ez = (q.b[1] - q.a[1]) * .02, w = QUAY_W;
+      this.decks.add([[q.a[0] - ex, q.a[1] - ez], [q.b[0] + ex, q.b[1] + ez], [q.b[0] + ex + q.n[0] * w, q.b[1] + ez + q.n[1] * w], [q.a[0] - ex + q.n[0] * w, q.a[1] - ez + q.n[1] * w]], (q.ta + q.tb) / 2, undefined, k);
+    }
     for (const l of t.l) if (l.br) deck(toXZ(l.p), 2.4, l.bw);
     this.addPassages(t, k); this.addFences(t, k); this.deckVersion++;
     this.interiors.addTile(t);

@@ -59,7 +59,10 @@ export class GroundGrid {
   private buildCell(x: number, y: number, n: number): void {
     const k = tileKey(x, y), bx = x * TILE_SIZE, bz = y * TILE_SIZE, S = TILE_SIZE / n, e = .02, g = this.ground;
     const all = [...(this.holes.get(k) || []), ...(this.water.get(k) || [])];
-    const out: number[] = [], Y = (px: number, pz: number) => g ? g(px, pz) : 0;
+    // siatka rzadsza niż teren (daleko): wierzchołek = najniższy punkt otoczenia, żeby skosy między dnem rzeki
+    // a brzegiem nie przebijały płaskiej tafli wody (tools/lib/waterBanks.ts)
+    const lo = g && n < DEM_CELLS ? S / 2 : 0;
+    const out: number[] = [], Y = (px: number, pz: number) => !g ? 0 : !lo ? g(px, pz) : Math.min(g(px, pz), g(px - lo, pz), g(px + lo, pz), g(px, pz - lo), g(px, pz + lo));
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const a = bx + i * S, b = bz + j * S;
       const hs = all.map(h => clipRing(h, a + e, b + e, a + S - e, b + S - e)).filter(h => h.length >= 3);

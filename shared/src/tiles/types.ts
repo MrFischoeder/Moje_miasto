@@ -63,7 +63,15 @@ export interface TileRoad {
 }
 
 export type AreaKind = 'park' | 'forest' | 'water' | 'parking' | 'square' | 'cemetery' | 'pitch';
-export interface TileArea { id: number; k: AreaKind; o: Flat; i?: Flat[] }
+export interface TileArea {
+  id: number; k: AreaKind; o: Flat; i?: Flat[];
+  /** woda: poziom tafli [m, układ gry] (tools/lib/waterBanks.ts) */
+  wl?: number;
+  /** woda: wysokość korony brzegu w wierzchołkach pierścieni [zewnętrzny, ...dziury] */
+  qt?: number[][];
+  /** woda: rodzaj brzegu w wierzchołkach: 0 naturalny (niski), 1 mur nabrzeża z brukiem, 2 skarpa */
+  qk?: number[][];
+}
 
 export type RailKind = 'rail' | 'tram' | 'light_rail' | 'subway' | 'narrow_gauge';
 export interface TileRail { id: number; k: RailKind; p: Flat; br?: number; bw?: number[] }
