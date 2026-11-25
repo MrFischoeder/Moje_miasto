@@ -32,11 +32,19 @@ vFacA = aFacA; vFacB = aFacB; vFacC = aFacC; vWPos = (modelMatrix * vec4(positio
 varying vec4 vFacA; varying vec4 vFacB; varying vec4 vFacC; varying vec3 vWPos;
 uniform float uLit; uniform vec4 uDoorA[${MAX_DOORS}]; uniform vec4 uDoorB[${MAX_DOORS}]; uniform int uDoorN;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+// wejścia: otwór w murze; wokół brama (obramienie), a w strefie bramy bez okien parteru
+float doorZone = 0.0, portal = 0.0;
 for (int i = 0; i < ${MAX_DOORS}; i++) {
   if (i >= uDoorN) break;
   vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPos.xz - a.xy;
-  if (abs(dot(d, a.zw)) < b.z && abs(dot(d, vec2(-a.w, a.z))) < b.w && vWPos.y > b.x && vWPos.y < b.y) discard;
+  float al = abs(dot(d, a.zw)), ac = abs(dot(d, vec2(-a.w, a.z)));
+  if (al < b.z && ac < b.w && vWPos.y > b.x && vWPos.y < b.y) discard;
+  if (ac < b.w && vWPos.y > b.x - 0.2) {
+    if (al < b.z + 1.3 && vWPos.y < b.y + 1.1) doorZone = 1.0;
+    if (al < b.z + 0.32 && vWPos.y < b.y + 0.36) portal = 1.0;
+  }
 }
+if (portal > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.4, 0.37), 0.75);
 // cokół: część ściany poniżej poziomu parteru (budynek na stoku) ciemniejsza, bez okien
 if (vFacA.z > 0.5 && vFacA.y < -0.02) diffuseColor.rgb *= 0.72;
 // faktura muru: cegła (1) albo ciosy kamienne (2); spoiny wygaszane z odległością
@@ -60,7 +68,7 @@ if (matW > 2.5 && vFacA.z > 0.5 && vFacB.x > 0.5) {
   diffuseColor.rgb *= mix(1.0, 0.9 + 0.2 * hb, far);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.74, 0.68) * 0.8, max(mu, mv) * 0.55 * far);
 }
-if (vFacA.z > 0.5 && vFacB.x > 0.5) {
+if (vFacA.z > 0.5 && vFacB.x > 0.5 && doorZone < 0.5) {
   float sp = vFacB.x, L = vFacA.z, n = floor((L - 0.6) / sp);
   if (n >= 1.0) {
     float off = (L - n * sp) * 0.5, lu = (vFacA.x - off) / sp, ci = floor(lu);

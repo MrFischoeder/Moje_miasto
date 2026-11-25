@@ -42,7 +42,7 @@ export class TileMaterials {
   /** fizyczne okna przy graczu */
   readonly physWin = new WindowMaterials();
   xray = false;
-  constructor() { for (const m of [this.build, this.flat, this.raised, this.solid]) installLamps(m, this.lamps); }
+  constructor() { for (const m of [this.build, this.flat, this.raised, this.solid]) installLamps(m, this.lamps); this.physWin.useDoors(this.windows); }
   readonly edge = new THREE.LineBasicMaterial({ color: 0x7dffb0, transparent: true });
   /** warstwy płaskie na gruncie: nie zapisują głębi (grunt zasłania za nie), kolejność rysowania = renderOrder */
   readonly flat = new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false, transparent: false, side: THREE.DoubleSide });

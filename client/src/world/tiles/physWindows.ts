@@ -2,6 +2,7 @@
 // Rozmieszczenie dokładnie jak okna z shadera (windows.ts), które dalej rysują okna w oddali.
 // Dane liczone w wątku kafli (computeTile), siatki tworzone tylko dla fragmentów kafla blisko kamery.
 import * as THREE from 'three';
+import { MAX_DOORS, type WindowUniforms } from './windows';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** liczb na okno: x, y, z (środek), kąt, szerokość, wysokość, los zapalenia */
@@ -72,15 +73,33 @@ export class WindowMaterials {
   readonly geo = unitWindow();
   readonly uLit = { value: 0 };
   readonly mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  /** wejścia do budynków (te same co w shaderze ścian): okna w strefie bramy nie są rysowane */
+  private doors: WindowUniforms | null = null;
+  useDoors(d: WindowUniforms): void { this.doors = d; this.mat.needsUpdate = true; }
   constructor() {
     const U = this.uLit;
     this.mat.onBeforeCompile = sh => {
       sh.uniforms.uLit = U;
+      const D = this.doors; if (D) Object.assign(sh.uniforms, { uDoorA: D.uDoorA, uDoorB: D.uDoorB, uDoorN: D.uDoorN });
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aGlass; attribute float aHash; uniform float uLit; varying float vLitW;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLitW = aGlass * step(aHash, uLit);');
+        .replace('#include <common>', '#include <common>\nattribute float aGlass; attribute float aHash; uniform float uLit; varying float vLitW; varying vec3 vWPosD;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+vLitW = aGlass * step(aHash, uLit);
+#ifdef USE_INSTANCING
+vWPosD = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+#else
+vWPosD = (modelMatrix * vec4(transformed, 1.0)).xyz;
+#endif`);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vLitW;')
+        .replace('#include <common>', `#include <common>
+varying float vLitW; varying vec3 vWPosD;
+uniform vec4 uDoorA[${MAX_DOORS}]; uniform vec4 uDoorB[${MAX_DOORS}]; uniform int uDoorN;`)
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+for (int i = 0; i < ${MAX_DOORS}; i++) {
+  if (i >= uDoorN) break;
+  vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPosD.xz - a.xy;
+  if (abs(dot(d, a.zw)) < b.z + 1.3 && abs(dot(d, vec2(-a.w, a.z))) < 1.2 && vWPosD.y > b.x - 0.3 && vWPosD.y < b.y + 1.1) discard;
+}`)
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.8, 0.45) * 0.85 * vLitW;');
     };
   }
