@@ -68,6 +68,8 @@ export interface PlayerState {
    * Rośnie, gdy symulacja sama ustawia kierunek patrzenia pieszego
    * (teleport, wyjście z pojazdu). Klient przejmuje wtedy yaw/pitch z bytu.
    */
+  /** kupione rzeczy: nazwa -> liczba */
+  inv?: Record<string, number>;
   /** warianty aut posiadane legalnie (kupione albo przerejestrowane) */
   owned?: number[];
   viewSeq: number;
@@ -106,6 +108,8 @@ export type Command =
   | { type: 'cab'; on: boolean }
   /** giełda: kupno auta z ogłoszenia (przy sprzedającym) */
   | { type: 'marketBuy'; id: string }
+  /** sklep / lokal (punkt OSM): kupno towaru u ekspedienta */
+  | { type: 'shopBuy'; poi: number; item: number }
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
   | { type: 'teleport'; x: number; z: number }

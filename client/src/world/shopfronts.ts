@@ -17,7 +17,7 @@ const SHOP_AMEN = new Set(['pharmacy', 'bank', 'post_office', 'bureau_de_change'
 export const SHOP_Y0 = .45, SHOP_Y1 = 3.05;
 
 /** Witryna: środek na licu ściany, kierunek wzdłuż ściany, normalna na zewnątrz, szerokość, poziom podstawy. */
-export interface Front { p: TilePoi; c: XZ; u: XZ; n: XZ; w: number; base: number; food: boolean; text: string }
+export interface Front { p: TilePoi; c: XZ; u: XZ; n: XZ; w: number; base: number; food: boolean; text: string; /** ściana: początek, długość, położenie środka witryny */ a: XZ; L: number; t: number }
 
 export const isFrontPoi = (p: TilePoi) => p.b != null && (p.c === 'shop' || (p.c === 'amenity' && (FOOD.has(p.t) || SHOP_AMEN.has(p.t))));
 
@@ -51,7 +51,7 @@ export function shopFronts(t: TileData, world: World | null): Front[] {
     for (const off of [0, W + .8, -(W + .8), 2 * (W + .8), -2 * (W + .8)]) { const c2 = tc + off; if (c2 < W / 2 + .8 || c2 > best.L - W / 2 - .8) continue; if (taken.every(([a0, a1]) => c2 + W / 2 + .5 < a0 || c2 - W / 2 - .5 > a1)) { tc = c2; ok = true; break; } }
     if (!ok) continue; taken.push([tc - W / 2, tc + W / 2]); used.set(key, taken);
     const a = ring[best.i], c: XZ = [a[0] + best.u[0] * tc, a[1] + best.u[1] * tc];
-    out.push({ p, c, u: best.u, n: best.n, w: W, base: world ? world.baseOf(ring) : 0, food: FOOD.has(p.t), text: signText(p) });
+    out.push({ p, c, u: best.u, n: best.n, w: W, base: world ? world.baseOf(ring) : 0, food: FOOD.has(p.t), text: signText(p), a, L: best.L, t: tc });
   }
   return out;
 }
@@ -105,9 +105,18 @@ export function buildFront(f: Front): THREE.Object3D {
       for (const sd of [-1, 1]) { const cx = x + sd * .62; box(cx - .2, cx + .2, .44, .48, z - .2, z + .2, ch); box(cx + sd * .17 - .03, cx + sd * .17 + .03, .48, .95, z - .2, z + .2, ch); box(cx - .03, cx + .03, 0, .44, z - .03, z + .03, [.15, .15, .15]); }
     }
   }
+  // ekspedient za ladą (sklep) albo za barem (lokal), przodem do witryny – widoczny w godzinach otwarcia (signs.ts)
+  const CP: number[] = [], CC: number[] = [];
+  { const P0 = P.length, C0 = C.length, cx = f.food ? 0 : w - .95, cz = f.food ? -D + 1.15 : -1.95, shirt: RGB = f.food ? [.12, .12, .14] : [.85, .25, .2], skin: RGB = [.9, .74, .6];
+    box(cx - .2, cx - .04, 0, .85, cz - .1, cz + .1, [.2, .22, .3]); box(cx + .04, cx + .2, 0, .85, cz - .1, cz + .1, [.2, .22, .3]);
+    box(cx - .26, cx + .26, .85, 1.45, cz - .14, cz + .14, shirt); box(cx - .12, cx + .12, 1.45, 1.72, cz - .12, cz + .12, skin);
+    box(cx - .14, cx + .14, 1.68, 1.78, cz - .13, cz + .13, [.25, .16, .1]);
+    if (!f.food) box(cx - .25, cx + .25, .95, 1.3, cz + .14, cz + .17, [.15, .4, .2]); // fartuch
+    CP.push(...P.splice(P0)); CC.push(...C.splice(C0)); }
   const grp = new THREE.Group();
   const mk = (pos: number[], col: number[], mat: THREE.Material) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const m = new THREE.Mesh(g, mat); m.userData.own = true; return m; };
-  const room = mk(P, C, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })); room.userData.box = true; grp.add(room);
+  const clerk = mk(CP, CC, new THREE.MeshBasicMaterial({ vertexColors: true })); clerk.userData.clerk = true; clerk.userData.box = true; grp.add(clerk);
+  const room = mk(P, C, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })); room.userData.room = true; grp.add(room);
   // szyba (lekko niebieska, półprzezroczysta) i rama witryny
   quad([[-w, y0, -.04], [w, y0, -.04], [w, y1, -.04], [-w, y1, -.04]], [.62, .78, .88], true);
   const glass = mk(G, GC, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .22, depthWrite: false, side: THREE.DoubleSide })); glass.userData.box = true; grp.add(glass);

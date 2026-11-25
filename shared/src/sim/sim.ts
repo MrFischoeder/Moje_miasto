@@ -10,6 +10,7 @@ import { Rules } from '../game/rules';
 import { TaxiService } from '../game/taxi';
 import { CabJobs } from '../game/cabJob';
 import { MarketService } from '../game/marketService';
+import { isOpen, shopKind, SHOP_R } from '../game/shops';
 import { CAB_OK, CAR_PRICE, DZIUPLA, DZIUPLA_R, REREG_SHARE } from '../game/cars';
 import { DOOR_BROKEN, DOOR_LOCKED, DOOR_OPEN } from '../interiors/interiors';
 import { SIM_DT } from './loop';
@@ -197,6 +198,7 @@ export class Simulation {
       this.exitVehicle(p, false); const w = this.entity(p.walker);
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
+    if (c.type === 'shopBuy') return this.shopBuy(p, Number(c.poi), Number(c.item));
     if (c.type === 'buyCar') return this.buyCar(p, c.v);
     if (c.type === 'marketBuy') return this.market ? this.market.buy(p, this.entity(p.walker), String(c.id)) : 'Giełda jest niedostępna.';
     if (c.type === 'rereg') return this.rereg(p);
@@ -348,6 +350,25 @@ export class Simulation {
     if (at) { w.x = at.x; w.y = at.y; w.z = at.z; w.yaw = at.yaw; }
     const g = this.world.support(w.x, w.z, w.y); if (g) { w.y = g.h; w.reg = g.r ? g.r.id : -1; } else w.reg = -1;
     w.pitch = 0; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0;
+  }
+
+  // ---------- sklepy i lokale (ekspedient) ----------
+  /** Zakup u ekspedienta: sklep otwarty, gracz pieszo przy sklepie, pieniądze; jedzenie i leki leczą. */
+  shopBuy(p: PlayerState, poiId: number, item: number): string {
+    if (p.vehicle != null || p.ride) return 'Wysiądź i podejdź do sklepu.';
+    const w = this.entity(p.walker); let poi = null;
+    for (const t of this.world.tiles.values()) { const q = t.poi.find(o => o.id === poiId); if (q) { poi = q; break; } }
+    if (!poi) return 'Nie ma takiego sklepu.';
+    if (Math.hypot(poi.x - w.x, poi.z - w.z) > SHOP_R) return 'Podejdź bliżej do sklepu.';
+    const k = shopKind(poi), it = k.items[item], h = this.transit ? this.transit.local().sec / 3600 : 12, cur = this.rules?.money.cur ?? 'zł';
+    if (!it) return 'Nie ma takiego towaru.';
+    if (!isOpen(k, h)) return `Zamknięte. Otwarte ${k.open}:00–${k.close}:00.`;
+    const price = Math.round(it.price * (this.world.key === 'londyn' ? .35 : 1) * 100) / 100;
+    if (p.money < price) return `${k.clerk}: „Brakuje panu ${(price - p.money).toFixed(2)} ${cur}.”`;
+    p.money = Math.round((p.money - price) * 100) / 100;
+    const inv = p.inv ??= {}; inv[it.n] = (inv[it.n] ?? 0) + 1;
+    if (it.heal && p.hp < 100) p.hp = Math.min(100, p.hp + it.heal);
+    return `${k.clerk}: „Proszę bardzo.” ${it.n} za ${price.toFixed(2)} ${cur}${it.heal ? ` (+${it.heal} zdrowia)` : ''}.`;
   }
 
   // ---------- auta gracza: salon i dziupla ----------

@@ -173,7 +173,7 @@ function buildDoorLeaves(list: Iterable<{ d: DoorDef; plan: Plan; open: boolean 
     let H: [number, number], S: [number, number], N: [number, number];
     if (d.axis === 'x') { H = [d.at, d.a + .005]; S = [0, 1]; N = [1, 0]; } else { H = [d.a + .005, d.ext ? -Math.min(facadeDepth(plan, d.a, -d.at), facadeDepth(plan, (d.a + d.b) / 2, -d.at), facadeDepth(plan, d.b, -d.at)) + T + .005 : d.at]; S = [1, 0]; N = [0, 1]; } // drzwi wejściowe: lico skrzydła równo z (rzeczywistą) fasadą
     if (open) { const s = S; S = N; N = [-s[0], -s[1]]; }
-    const col: RGB = d.ext ? [.36, .25, .16] : [.88, .86, .8], edge: RGB = d.ext ? [.2, .14, .09] : [.5, .48, .44];
+    const shopDoor = d.ext && plan.typ === 'sklep', col: RGB = shopDoor ? [.55, .72, .82] : d.ext ? [.36, .25, .16] : [.88, .86, .8], edge: RGB = shopDoor ? [.2, .22, .25] : d.ext ? [.2, .14, .09] : [.5, .48, .44]; // sklep: drzwi szklane
     const y0 = d.y0 + .005, y1 = d.y1 - .005;
     const pt = (s: number, n: number, h: number) => P(H[0] + S[0] * s + N[0] * n, H[1] + S[1] * s + N[1] * n, h);
     const nW = (sx: number, sy: number): V3 => { const [ax, az] = toWorld(f, 0, 0), [bx, bz] = toWorld(f, sx, sy); return [bx - ax, 0, bz - az]; };

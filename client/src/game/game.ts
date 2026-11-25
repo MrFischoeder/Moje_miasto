@@ -205,6 +205,7 @@ export class Game {
     this.world3d.add(view.group);
     this.interiors = new InteriorView(world); this.world3d.add(this.interiors.group);
     this.view!.signs.doorsAt = () => world.interiors.doors().map(d => ({ c: d.c, w: d.w }));
+    this.view!.signs.hourAt = () => this.transit ? this.transit.local().sec / 3600 : 12;
     if (transit) {
       this.transit = new TransitSystem(transit, world, s.clock);
       const lc: Record<string, string> = {}; for (const l of world.city.lines) lc[l.n] = l.c;

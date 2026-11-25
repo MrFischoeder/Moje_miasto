@@ -143,6 +143,7 @@ export class Room {
     if (cmd.type === 'mode' && ['walk', 'car', 'heli'].includes(cmd.mode)) msg = this.sim.command(c.player.id, cmd);
     else if (cmd.type === 'enter' || cmd.type === 'alight' || cmd.type === 'kick') msg = this.sim.command(c.player.id, { type: cmd.type });
     else if (cmd.type === 'buyCar') msg = this.sim.command(c.player.id, { type: 'buyCar', v: Number(cmd.v) });
+    else if (cmd.type === 'shopBuy') msg = this.sim.command(c.player.id, { type: 'shopBuy', poi: Number(cmd.poi), item: Number(cmd.item) });
     else if (cmd.type === 'marketBuy') msg = this.sim.command(c.player.id, { type: 'marketBuy', id: String(cmd.id).slice(0, 40) });
     else if (cmd.type === 'rereg') msg = this.sim.command(c.player.id, { type: 'rereg' });
     else if (cmd.type === 'cab') msg = this.sim.command(c.player.id, { type: 'cab', on: !!cmd.on });
@@ -247,8 +248,8 @@ export class Room {
     for (const c of this.clients.values()) {
       const p = c.player, tx = this.sim.taxi?.info(p.id) ?? null, cab = this.sim.cab?.info(p.id) ?? null, veh = p.vehicle != null ? this.sim.entities.get(p.vehicle) : undefined;
       const legal = !!veh && veh.kind === 'car' && veh.legal === p.id, owned = p.owned ?? [];
-      const sig = `${Math.round(p.hp)}|${p.money.toFixed(2)}|${p.wanted}|${p.dead > 0}|${tx ? `${tx.st}:${tx.id}:${Math.round(tx.eta / 5)}:${tx.fare}` : ''}|${cab ? `${cab.st}:${cab.target}:${cab.pay}:${cab.earned}` : ''}|${legal}|${owned.join(',')}|${veh?.kind ?? ''}|${this.sim.market?.sold.size ?? 0}`;
-      if (sig !== c.meSig) { c.meSig = sig; this.sendJson(c.conn, { t: 'me', hp: Math.round(p.hp), money: p.money, wanted: p.wanted, dead: p.dead > 0, cur: R?.money.cur ?? 'zł', taxi: tx, cab, legal, owned, sold: [...(this.sim.market?.sold ?? [])].slice(-60) }); }
+      const sig = `${Math.round(p.hp)}|${p.money.toFixed(2)}|${p.wanted}|${p.dead > 0}|${tx ? `${tx.st}:${tx.id}:${Math.round(tx.eta / 5)}:${tx.fare}` : ''}|${cab ? `${cab.st}:${cab.target}:${cab.pay}:${cab.earned}` : ''}|${legal}|${owned.join(',')}|${veh?.kind ?? ''}|${this.sim.market?.sold.size ?? 0}|${JSON.stringify(p.inv ?? {})}`;
+      if (sig !== c.meSig) { c.meSig = sig; this.sendJson(c.conn, { t: 'me', hp: Math.round(p.hp), money: p.money, wanted: p.wanted, dead: p.dead > 0, cur: R?.money.cur ?? 'zł', taxi: tx, cab, legal, owned, sold: [...(this.sim.market?.sold ?? [])].slice(-60), inv: p.inv ?? {} }); }
     }
     if (this.sim.doorEvents.length) this.broadcast({ t: 'doors', s: this.sim.doorEvents.splice(0) });
     if (R) for (const e of R.events.splice(0)) { const c = this.clients.get(e.pid); if (c) this.sendJson(c.conn, { t: 'event', text: e.text, kind: e.kind }); }

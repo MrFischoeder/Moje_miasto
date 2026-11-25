@@ -5,6 +5,8 @@ import './phone.css';
 import { NPCS } from '@miasto/shared/game/jobs';
 import { CAB_OK, CAR_PRICE, DZIUPLA, REREG_SHARE } from '@miasto/shared/game/cars';
 import { VEH } from '@miasto/shared/sim/vehicles';
+import { isOpen, shopKind } from '@miasto/shared/game/shops';
+import type { TilePoi } from '@miasto/shared/tiles/types';
 import type { ServerMsg } from '@miasto/shared/net/protocol';
 import type { Game } from '../game/game';
 import { PhoneMap, type Marker } from './mapView';
@@ -268,6 +270,25 @@ export class Phone {
         if (legal && okCar) { const go = h('button', 'btn ok', '▶ Zacznij pracę'); go.style.cssText = 'display:block;margin:10px auto'; go.onclick = () => { s?.sendCommand({ type: 'cab', on: true }); setTimeout(render, 400); }; job.append(go); }
       }
       page.append(box); this.live = true;
+    };
+    this.current = render; render();
+  }
+
+  /** Sklep / lokal: ekspedient i towary (zakup sprawdza serwer) */
+  shopApp(p: TilePoi, name: string): void {
+    this.toggle(true);
+    const render = () => {
+      const { page } = this.page(name, () => this.home()), s = this.game.session, cur = s?.me.cur ?? 'zł', k = shopKind(p), list = h('div', 'list');
+      const lt = this.game.transit?.local(), hour = lt ? lt.sec / 3600 : 12, open = isOpen(k, hour), sc = this.game.world?.key === 'londyn' ? .35 : 1;
+      list.append(h('div', 'row', `<div class="av" style="background:${open ? '#30d158' : '#8e8e93'}">🧑‍💼</div><div class="tx"><b>${esc(k.clerk)} · ${esc(k.k)}</b><span>${open ? 'Otwarte' : 'Zamknięte'} · ${k.open}:00–${k.close}:00 · twoje pieniądze: ${(s?.me.money ?? 0).toFixed(2)} ${esc(cur)}</span></div>`));
+      if (!open) list.append(h('div', 'empty', 'Sklep jest teraz zamknięty. Wróć w godzinach otwarcia.'));
+      k.items.forEach((it, i) => {
+        const price = Math.round(it.price * sc * 100) / 100, have = s?.me.inv?.[it.n] ?? 0;
+        const r = h('div', 'row', `<div class="av" style="background:#3a3a3c">🛒</div><div class="tx"><b>${esc(it.n)}</b><span>${price.toFixed(2)} ${esc(cur)}${it.heal ? ` · +${it.heal} zdrowia` : ''}${have ? ` · masz: ${have}` : ''}</span></div>`);
+        if (open) { const b = h('button', 'btn ok', 'Kup'); b.onclick = e => { e.stopPropagation(); s?.sendCommand({ type: 'shopBuy', poi: p.id, item: i }); setTimeout(render, 500); }; r.append(b); }
+        list.append(r);
+      });
+      page.append(list); this.live = true;
     };
     this.current = render; render();
   }

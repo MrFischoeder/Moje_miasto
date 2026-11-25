@@ -250,3 +250,12 @@ describe('giełda samochodowa', () => {
     expect(new Set(a.map(q => q.v)).size).toBeGreaterThan(4);
   });
 });
+
+describe('sklepy i ekspedient', () => {
+  it('rodzaj sklepu, godziny otwarcia (także po północy) i towary', async () => {
+    const { shopKind, isOpen } = await import('../src/game/shops');
+    const z = shopKind({ id: 1, c: 'shop', t: 'convenience', x: 0, z: 0 }), bar = shopKind({ id: 2, c: 'amenity', t: 'pub', x: 0, z: 0 });
+    expect(z.items.length).toBeGreaterThan(3); expect(isOpen(z, 12)).toBe(true); expect(isOpen(z, 3)).toBe(false);
+    expect(isOpen(bar, 1)).toBe(true); expect(isOpen(bar, 9)).toBe(false); expect(bar.items.some(i => i.n === 'Piwo')).toBe(true);
+  });
+});

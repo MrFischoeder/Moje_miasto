@@ -102,7 +102,11 @@ const ui: GameUI = {
       if (sale) break;
     }
     if (sale) act = `Kup auto (${sale.price} ${g.session!.me.cur})`;
-    const ab = $('actBtn'), kb = $('kickBtn'); (ab as HTMLElement & { sale?: string | null }).sale = sale?.id ?? null;
+    // sklep / lokal przy witrynie (pieszo): ekspedient i towary w telefonie
+    let shop: { p: import('@miasto/shared/tiles/types').TilePoi; name: string } | null = null;
+    if (!act && g.mode === 'walk' && !ride && g.view) { let bd = 7; for (const f of g.view.signs.fronts) { const d = Math.hypot(f.c[0] - e.x, f.c[1] - e.z); if (d < bd) { bd = d; shop = { p: f.p, name: f.text }; } } }
+    if (shop) act = `🛒 ${shop.name}`;
+    const ab = $('actBtn'), kb = $('kickBtn'); (ab as HTMLElement & { sale?: string | null }).sale = sale?.id ?? null; (ab as HTMLElement & { shop?: typeof shop }).shop = shop;
     ab.hidden = !act; ab.innerHTML = act + '<span class="k">E</span>'; ab.className = locked ? 'ghost' : '';
     kb.hidden = !kick; kb.innerHTML = 'Wyważ<span class="k">B</span>';
     const cab = g.session?.me.cab, cabHint = cab?.target ? ` · ${cab.st === 'pickup' ? 'klient' : 'cel kursu'}: ${Math.round(Math.hypot(cab.target[0] - e.x, cab.target[1] - e.z))} m` : cab ? ' · czekasz na zlecenie' : '';
@@ -141,11 +145,11 @@ const phone: Phone = new Phone(game);
 const phoneBtn = $('phoneBtn');
 phone.onUnread = n => { phoneBtn.innerHTML = 'Telefon' + (n ? `<span class="n">${n}</span>` : ''); };
 phoneBtn.onclick = () => phone.toggle();
-game.action = a => { if (a === 'chat') openChat(); else if (a === 'phone') phone.toggle(); else origAction(a); };
+game.action = a => { const sh = ($('actBtn') as HTMLElement & { shop?: { p: import('@miasto/shared/tiles/types').TilePoi; name: string } | null }).shop; if (a === 'chat') openChat(); else if (a === 'phone') phone.toggle(); else if (a === 'interact' && sh && !$('actBtn').hidden) phone.shopApp(sh.p, sh.name); else origAction(a); }; // E przy sklepie: ekspedient
 game.input.attachTouch($('joy'), $('knob'), $('upB'), $('dnB'));
 
 $('xrayBtn').onclick = () => game.toggleXray();
-$('actBtn').onclick = () => { const sale = ($('actBtn') as HTMLElement & { sale?: string | null }).sale; if (sale) game.session?.sendCommand({ type: 'marketBuy', id: sale }); else game.action('interact'); setTimeout(() => ui.slowFrame(game), 150); };
+$('actBtn').onclick = () => { const el = $('actBtn') as HTMLElement & { sale?: string | null; shop?: { p: import('@miasto/shared/tiles/types').TilePoi; name: string } | null }; if (el.sale) game.session?.sendCommand({ type: 'marketBuy', id: el.sale }); else if (el.shop) phone.shopApp(el.shop.p, el.shop.name); else game.action('interact'); setTimeout(() => ui.slowFrame(game), 150); };
 $('kickBtn').onclick = () => { game.action('kick'); setTimeout(() => ui.slowFrame(game), 150); };
 $('walkBtn').onclick = () => game.action('modeWalk');
 $('carBtn').onclick = () => game.action('modeCar');
