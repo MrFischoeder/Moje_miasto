@@ -36,7 +36,7 @@ export class InteriorView {
   constructor(private world: World) { this.group.name = 'wnętrza'; }
 
   /** Przebudowa po zmianie zestawu pięter; wycięcia drzwi w ścianach budynków. */
-  update(x: number, z: number, doors: WindowUniforms | null): void {
+  update(x: number, z: number, doors: WindowUniforms | null, extra: { c: [number, number]; u: [number, number]; w: number; y0: number; y1: number }[] = []): void {
     const I = this.world.interiors;
     if (I.version !== this.version) {
       this.version = I.version;
@@ -52,7 +52,7 @@ export class InteriorView {
       this.doorObjs = buildDoorLeaves(I.liveDoors()); for (const o of this.doorObjs) this.group.add(o);
     }
     if (doors) {
-      const ds = I.doors().map(d => ({ d, dist: Math.hypot(d.c[0] - x, d.c[1] - z) })).sort((a, b) => a.dist - b.dist).slice(0, MAX_DOORS);
+      const ds = [...I.doors(), ...extra].map(d => ({ d, dist: Math.hypot(d.c[0] - x, d.c[1] - z) })).sort((a, b) => a.dist - b.dist).slice(0, MAX_DOORS);
       ds.forEach(({ d }, i) => { doors.uDoorA.value[i].set(d.c[0], d.c[1], d.u[0], d.u[1]); doors.uDoorB.value[i].set(d.y0, d.y1, d.w / 2, .9); });
       doors.uDoorN.value = ds.length;
     }

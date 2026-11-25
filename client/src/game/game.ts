@@ -375,7 +375,7 @@ export class Game {
     // wnętrza budynków wokół gracza (ten sam algorytm co na serwerze: przewidywanie ruchu się zgadza)
     if (this.interiors) {
       if (now - this.lastInt > 300) { this.lastInt = now; const me = s0Pos(this); w.interiors.sync(me ? [me] : []); }
-      this.interiors.update(P.x, P.z, this.view!.streamer.mats.windows);
+      this.interiors.update(P.x, P.z, this.view!.streamer.mats.windows, this.view!.signs.holes);
     }
     T.lap('wnętrza');
     if (now - this.lastSlow > 500) {

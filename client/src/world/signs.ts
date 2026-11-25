@@ -6,6 +6,7 @@ import type { TileData } from '@miasto/shared/tiles/types';
 import type { World } from '@miasto/shared/world/world';
 import { pip } from '@miasto/shared/world/collision';
 import { CELL } from '@miasto/shared/world/grid';
+import { buildFront, isFrontPoi, shopFronts, SHOP_Y0, SHOP_Y1, type Front } from './shopfronts';
 
 const FONT = '"Chakra Petch", sans-serif';
 
@@ -18,7 +19,7 @@ function sprite(lines: string[], bg: string, fg: string, accent: string, w: numb
   sp.scale.set(w, w * H / 512, 1); return sp;
 }
 
-interface Sign { x: number; z: number; y: number; make(): THREE.Object3D; shared?: boolean }
+interface Sign { x: number; z: number; y: number; make(): THREE.Object3D; shared?: boolean; front?: Front }
 
 /** Tabliczka: biała, czarny napis, czerwony pasek (styl miejskiej informacji); materiał wspólny dla nazwy. */
 const PLATES = new Map<string, THREE.MeshLambertMaterial>();
@@ -93,7 +94,11 @@ export class Signs {
           if (n) done.add(leg.name);
         }
       }
+      // witryny sklepów i lokali na parterach (szyld z nazwą zamiast unoszącej się tabliczki)
+      const fronts = shopFronts(t, world), withFront = new Set(fronts.map(f => f.p.id));
+      for (const f of fronts) this.list.push({ x: f.c[0], z: f.c[1], y: f.base, front: f, make: () => buildFront(f) });
       for (const p of t.poi) {
+        if (withFront.has(p.id) || (isFrontPoi(p) && false)) continue;
         if (p.c === 'pomnik' && (p.t === 'dwarf' || !p.n)) continue; // krasnale i bezimienne: bez tabliczek
         const text = signText(p), sub = p.a;
         this.list.push({ x: p.x, z: p.z, y: ground(p.x, p.z), make: () => { const sp = sprite(sub ? [text, sub] : [text], 'rgba(0,0,0,.8)', '#fff', p.c === 'shop' ? '#ffbe5a' : '#7dffb0', 4); sp.position.y = 3.4; return sp; } });
@@ -102,8 +107,12 @@ export class Signs {
     this.clear();
   }
 
+  /** Otwory witryn w pobliżu (dla shadera fasad: jak drzwi wejściowe) */
+  holes: { c: [number, number]; u: [number, number]; w: number; y0: number; y1: number }[] = [];
+
   update(x: number, z: number, r = 110): void {
-    const near = new Set<number>();
+    const near = new Set<number>(); this.holes = [];
+    this.list.forEach(s => { const f = s.front; if (f && Math.abs(s.x - x) < r && Math.abs(s.z - z) < r) this.holes.push({ c: f.c, u: f.u, w: f.w, y0: f.base + SHOP_Y0, y1: f.base + SHOP_Y1 }); });
     this.list.forEach((s, i) => {
       if (Math.abs(s.x - x) > r || Math.abs(s.z - z) > r) return; near.add(i); if (this.live.has(i)) return;
       const o = s.make(); o.position.x = s.x; o.position.z = s.z; o.position.y += s.y; this.group.add(o); this.live.set(i, o);
@@ -113,7 +122,10 @@ export class Signs {
 
   clear(): void { for (const [i, o] of this.live) this.drop(i, o); }
   private drop(i: number, o: THREE.Object3D): void {
-    o.traverse(c => { if (c instanceof THREE.Sprite) { c.material.map?.dispose(); c.material.dispose(); } }); // tabliczki: materiał wspólny, zostaje
+    o.traverse(c => {
+      if (c instanceof THREE.Sprite) { c.material.map?.dispose(); c.material.dispose(); } // tabliczki: materiał wspólny, zostaje
+      else if (c.userData.own && c instanceof THREE.Mesh) { c.geometry.dispose(); const m = c.material as THREE.MeshBasicMaterial; m.map?.dispose(); m.dispose(); } // witryny
+    });
     this.group.remove(o); this.live.delete(i);
   }
 }

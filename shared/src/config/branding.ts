@@ -13,6 +13,12 @@ const GENERIC: Record<string, string> = {
   mobile_phone: 'Telefony', electronics: 'Elektronika', beauty: 'Kosmetyczka', optician: 'Optyk', dentist: 'Dentysta', doctors: 'Lekarz',
   school: 'Szkoła', kindergarten: 'Przedszkole', place_of_worship: 'Kościół', theatre: 'Teatr', cinema: 'Kino', library: 'Biblioteka',
   police: 'Policja', fire_station: 'Straż pożarna', hospital: 'Szpital', hotel: 'Hotel',
+  souvenirs: 'Pamiątki', gift: 'Upominki', jewelry: 'Jubiler', toys: 'Zabawki', sports: 'Sport', furniture: 'Meble', hardware: 'Sklep żelazny',
+  doityourself: 'Market budowlany', variety_store: 'Wszystko po 5 zł', greengrocer: 'Warzywniak', confectionery: 'Cukiernia', pastry: 'Cukiernia',
+  tobacco: 'Tytoń', newsagent: 'Prasa', chemist: 'Drogeria', cosmetics: 'Kosmetyki', perfumery: 'Perfumeria', bag: 'Torebki', watches: 'Zegarki',
+  ice_cream: 'Lody', biergarten: 'Ogródek piwny', computer: 'Komputery', copyshop: 'Ksero', laundry: 'Pralnia', dry_cleaning: 'Pralnia',
+  travel_agency: 'Biuro podróży', pet: 'Zoologiczny', art: 'Galeria sztuki', music: 'Muzyka', wine: 'Wina', coffee: 'Kawa', tea: 'Herbaciarnia',
+  second_hand: 'Second hand', charity: 'Sklep charytatywny', mall: 'Galeria handlowa', bureau_de_change: 'Kantor', frame: 'Ramiarnia', tailor: 'Krawiec',
 };
 
 /** Prosta, powtarzalna parodia nazwy (zamiana kilku liter). */
