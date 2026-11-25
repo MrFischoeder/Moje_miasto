@@ -1,5 +1,7 @@
-// Pojazdy komunikacji miejskiej: wszystkie w pobliżu w jednym dynamicznym buforze (jeden mesh + jedne linie),
-// przebudowywanym co klatkę z rozkładu i zegara. Składy (tramwaj, metro, pociąg) mają wagony na łukach toru.
+// Pojazdy komunikacji miejskiej z rozkładu i zegara. Wydajność: model wagonu budowany raz (na rodzaj, linię
+// i miejsce w składzie) i tylko przesuwany; szczegóły (szyby, fotele, pasażerowie) tylko blisko gracza, dalej
+// prosta bryła jako instancje (jedno wywołanie rysowania na rodzaj), odświeżana co kilka klatek.
+// Składy (tramwaj, metro, pociąg) mają wagony na łukach toru.
 import * as THREE from 'three';
 import type { TransitSystem } from '@miasto/shared/transit/system';
 import { LENGTH, type ActiveTrip, type TransitKind } from '@miasto/shared/transit/timetable';
@@ -30,13 +32,37 @@ class Dyn {
   }
 }
 
-const hashKey = (k: string) => { let h = 0; for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0; return Math.abs(h) % 1000; };
+/** Jakość komunikacji (menu Wydajność): pełna albo lżejsza (mniejszy zasięg rysowania i szczegółów, rzadsze odświeżanie). */
+export const TRANSIT_Q = { light: false };
+const QUAL = { full: { draw: 800, detail: 150, every: 3 }, light: { draw: 500, detail: 70, every: 5 } };
+
+/** Geometria statyczna z bufora roboczego (kopia: dokładny rozmiar). */
+function freeze(d: Dyn): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(d.P.slice(0, d.n * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(d.C.slice(0, d.n * 3), 3));
+  g.computeBoundingSphere(); return g;
+}
+interface SegModel { fill: THREE.BufferGeometry; glass: THREE.BufferGeometry; lines: THREE.BufferGeometry }
+const M4 = new THREE.Matrix4(), VX = new THREE.Vector3(), VY = new THREE.Vector3(), VZ = new THREE.Vector3();
+/** Macierz wagonu: początek w A, oś x wzdłuż A→B (z pochyleniem), z w prawo (strona drzwi), skala x. */
+function segMatrix(A: { x: number; y: number; z: number }, B: { x: number; y: number; z: number }, sx: number, out: THREE.Matrix4): THREE.Matrix4 {
+  const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z, h = Math.hypot(dx, dz) || 1, L = Math.hypot(h, dy);
+  VX.set(dx / L * sx, dy / L * sx, dz / L * sx); VZ.set(-dz / h, 0, dx / h); VY.set(dx / L, dy / L, dz / L).cross(VZ).negate();
+  out.makeBasis(VX, VY, VZ); out.setPosition(A.x, A.y, A.z); return out;
+}
 
 export class TransitView {
   readonly group = new THREE.Group();
-  private fill = new Dyn(); private lines = new Dyn(); private glass = new Dyn();
   private colors = new Map<number, [RGB, RGB]>();
   private mats: (THREE.MeshBasicMaterial | THREE.LineBasicMaterial)[] = [];
+  private matFill: THREE.MeshBasicMaterial; private matGlass: THREE.MeshBasicMaterial; private matLine: THREE.LineBasicMaterial;
+  /** modele wagonów (rodzaj|linia|wagon|czoło|tył) i obiekty bliskich wagonów (kurs#wagon) */
+  private models = new Map<string, SegModel>();
+  private near = new Map<string, { obj: THREE.Group; model: string }>();
+  /** dalekie wagony: instancje prostej bryły na rodzaj */
+  private far = new Map<TransitKind, THREE.InstancedMesh>();
+  private farGeo = new Map<TransitKind, THREE.BufferGeometry>();
+  private frame = 0;
   /** materiały bez oświetlenia: przyciemnienie nocą (wnętrza pojazdów lekko jaśniejsze – oświetlenie w środku) */
   setLight(day: number): void { const k = .3 + .7 * day; for (const m of this.mats) m.color.setScalar(k); }
   private signs = new Map<string, THREE.Sprite>();
@@ -48,37 +74,88 @@ export class TransitView {
       const c = hex(lineColors[r.n] || (r.c && r.c !== '#FFFFFF' && r.c !== '#ffffff' ? r.c : DEFAULT_COL[r.t]));
       this.colors.set(i, [c, [c[0] * .35, c[1] * .35, c[2] * .35]]); // low-poly: pełny kolor linii, ciemniejsze krawędzie
     }
-    const m = new THREE.Mesh(this.fill.geo, new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide }));
-    const l = new THREE.LineSegments(this.lines.geo, new THREE.LineBasicMaterial({ vertexColors: true }));
+    this.matFill = new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide });
+    this.matLine = new THREE.LineBasicMaterial({ vertexColors: true });
     // szyby: półprzezroczyste (widać pasażerów), bez zapisu głębi
-    const g = new THREE.Mesh(this.glass.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide }));
-    g.renderOrder = 2; m.frustumCulled = l.frustumCulled = g.frustumCulled = false; this.group.add(m, l, g);
-    this.mats = [m.material as THREE.MeshBasicMaterial, l.material as THREE.LineBasicMaterial, g.material as THREE.MeshBasicMaterial];
+    this.matGlass = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide });
+    this.mats = [this.matFill, this.matLine, this.matGlass];
   }
 
-  /** Przebudowa dla pojazdów w promieniu R od (x, z); `hide` = kurs, którym jedzie gracz w widoku z wnętrza. */
+  /** Model wagonu w układzie lokalnym (od 0 do długości wagonu wzdłuż x, prawa strona +z), budowany raz. */
+  private model(kind: TransitKind, route: number, j: number, front: boolean, rear: boolean): string {
+    const key = `${kind}|${route}|${j}|${front ? 1 : 0}${rear ? 1 : 0}`;
+    if (!this.models.has(key)) {
+      const spec = CAR[kind], cl = LENGTH[kind] / spec.n - .6, [fc, ec] = this.colors.get(route)!, F = new Dyn(), G = new Dyn(), Ln = new Dyn();
+      this.car(F, G, Ln, { x: 0, y: 0, z: 0 }, { x: cl, y: 0, z: 0 }, spec.w, spec.h, spec.lift, fc, ec, front, rear, kind, (route * 37 + j * 7) % 1000);
+      this.models.set(key, { fill: freeze(F), glass: freeze(G), lines: freeze(Ln) });
+    }
+    return key;
+  }
+
+  /** Prosta bryła wagonu (dalekie pojazdy): pudło z pasem okien, długość 1 (skalowana), wysokość i szerokość rodzaju. */
+  private farMesh(kind: TransitKind): THREE.InstancedMesh {
+    let im = this.far.get(kind); if (im) return im;
+    const spec = CAR[kind], D = new Dyn(), w = spec.w / 2, y0 = spec.lift, y1 = y0 + spec.h, yw0 = y0 + spec.h * .36, yw1 = y0 + spec.h * .86;
+    const city = kind === 'tram' || kind === 'bus', body: RGB = city ? [.92, .92, .9] : hex(DEFAULT_COL[kind]), low: RGB = kind === 'tram' ? [.1, .26, .55] : [.22, .24, .28], win: RGB = [.2, .26, .3];
+    const q = (a: number[], b: number[], c: number[], d: number[], col: RGB) => { for (const v of [a, b, c, a, c, d]) D.push(v[0], v[1], v[2], col); };
+    for (const s of [-1, 1]) {
+      const k = s > 0 ? .85 : .7, sh = (c: RGB): RGB => [c[0] * k, c[1] * k, c[2] * k], z = s * w;
+      q([0, y0, z], [1, y0, z], [1, yw0 * .7 + y0 * .3, z], [0, yw0 * .7 + y0 * .3, z], sh(low));
+      q([0, yw0 * .7 + y0 * .3, z], [1, yw0 * .7 + y0 * .3, z], [1, yw0, z], [0, yw0, z], sh(body));
+      q([0, yw0, z], [1, yw0, z], [1, yw1, z], [0, yw1, z], win);
+      q([0, yw1, z], [1, yw1, z], [1, y1, z], [0, y1, z], sh(body));
+    }
+    q([0, y1, -w], [1, y1, -w], [1, y1, w], [0, y1, w], body);
+    for (const x of [0, 1]) q([x, y0, -w], [x, y0, w], [x, y1, w], [x, y1, -w], [body[0] * .8, body[1] * .8, body[2] * .8]);
+    const geo = freeze(D); this.farGeo.set(kind, geo);
+    im = new THREE.InstancedMesh(geo, this.matFill, 64); im.count = 0; im.frustumCulled = false; this.far.set(kind, im); this.group.add(im);
+    return im;
+  }
+
+  /** Pojazdy w promieniu R od (x, z); `hide` = kurs, którym jedzie gracz w widoku z wnętrza. */
   update(x: number, z: number, R: number, hide: string | null = null): void {
-    this.fill.reset(); this.lines.reset(); this.glass.reset();
-    this.visible = this.sys.near([x - R, z - R, x + R, z + R]);
-    const near = new Set<string>();
+    const Q = TRANSIT_Q.light ? QUAL.light : QUAL.full, RD = Math.min(R, Q.draw), farTick = this.frame++ % Q.every === 0;
+    this.visible = this.sys.near([x - RD, z - RD, x + RD, z + RD]);
+    const used = new Set<string>(), signs = new Set<string>(), farN = new Map<TransitKind, number>();
     for (const a of this.visible) {
       if (a.key === hide) continue;
-      const k = a.p.kind, spec = CAR[k], L = LENGTH[k], cl = L / spec.n, [fc, ec] = this.colors.get(a.p.route)!;
+      const k = a.p.kind, spec = CAR[k], L = LENGTH[k], cl = L / spec.n;
+      const mid = this.sys.pose(a.p, a.st.s), d = Math.hypot(mid.x - x, mid.z - z);
+      if (d > Q.detail) { // daleko: prosta bryła (odświeżana co kilka klatek)
+        if (!farTick) continue;
+        const im = this.farMesh(k); let n = farN.get(k) ?? 0;
+        for (let j = 0; j < spec.n; j++) {
+          if (n >= im.instanceMatrix.count) { const big = new THREE.InstancedMesh(this.farGeo.get(k)!, this.matFill, im.instanceMatrix.count * 2); big.frustumCulled = false; big.instanceMatrix.array.set(im.instanceMatrix.array); this.group.remove(im); im.dispose(); this.group.add(big); this.far.set(k, big); return this.update(x, z, R, hide); }
+          const s1 = a.st.s + L / 2 - j * cl, s0 = s1 - cl + .6;
+          im.setMatrixAt(n++, segMatrix(this.sys.pose(a.p, s0), this.sys.pose(a.p, s1), cl - .6, M4));
+        }
+        farN.set(k, n); continue;
+      }
+      // blisko: szczegółowy model wagonu (budowany raz), tylko przesuwany
       for (let j = 0; j < spec.n; j++) {
-        const s1 = a.st.s + L / 2 - j * cl, s0 = s1 - cl + .6;
-        const A = this.sys.pose(a.p, s0), B = this.sys.pose(a.p, s1);
-        this.car(A, B, spec.w, spec.h, spec.lift, fc, ec, j === 0, j === spec.n - 1, k, hashKey(a.key) + j * 7);
+        const s1 = a.st.s + L / 2 - j * cl, s0 = s1 - cl + .6, A = this.sys.pose(a.p, s0), B = this.sys.pose(a.p, s1);
+        const mk = this.model(k, a.p.route, j, j === 0, j === spec.n - 1), ok = a.key + '#' + j; used.add(ok);
+        let o = this.near.get(ok);
+        if (!o || o.model !== mk) {
+          if (o) this.group.remove(o.obj);
+          const m = this.models.get(mk)!, obj = new THREE.Group(), g = new THREE.Mesh(m.glass, this.matGlass); g.renderOrder = 2;
+          obj.add(new THREE.Mesh(m.fill, this.matFill), new THREE.LineSegments(m.lines, this.matLine), g); obj.matrixAutoUpdate = false;
+          o = { obj, model: mk }; this.near.set(ok, o); this.group.add(obj);
+        }
+        const dx = B.x - A.x, dz = B.z - A.z, len = Math.hypot(dx, dz, B.y - A.y) || 1;
+        segMatrix(A, B, 1, o.obj.matrix); void len; o.obj.matrixWorldNeedsUpdate = true;
       }
       // numer linii nad czołem (tylko blisko)
       const front = this.sys.pose(a.p, a.st.s + L / 2);
       if (Math.abs(front.x - x) < 90 && Math.abs(front.z - z) < 90 && k !== 'ferry') {
-        near.add(a.key); let sp = this.signs.get(a.key);
-        if (!sp) { sp = this.sign(this.sys.tt.data.routes[a.p.route].n, a.p.head, fc); this.signs.set(a.key, sp); this.group.add(sp); }
+        signs.add(a.key); let sp = this.signs.get(a.key);
+        if (!sp) { const fc = this.colors.get(a.p.route)![0]; sp = this.sign(this.sys.tt.data.routes[a.p.route].n, a.p.head, fc); this.signs.set(a.key, sp); this.group.add(sp); }
         sp.position.set(front.x, front.y + spec.h + spec.lift + .9, front.z);
       }
     }
-    for (const [key, sp] of this.signs) if (!near.has(key)) { this.group.remove(sp); sp.material.map?.dispose(); sp.material.dispose(); this.signs.delete(key); }
-    this.fill.flush(); this.lines.flush(); this.glass.flush();
+    for (const [key, o] of this.near) if (!used.has(key)) { this.group.remove(o.obj); this.near.delete(key); }
+    for (const [key, sp] of this.signs) if (!signs.has(key)) { this.group.remove(sp); sp.material.map?.dispose(); sp.material.dispose(); this.signs.delete(key); }
+    if (farTick) for (const [k, im] of this.far) { im.count = farN.get(k) ?? 0; im.instanceMatrix.needsUpdate = true; }
   }
 
   /**
@@ -86,10 +163,9 @@ export class TransitView {
    * ze słupkami, skośna przednia szyba (czoło składu), drzwi po prawej stronie, podłoga, fotele i pasażerowie.
    * Barwy: tramwaj biały z niebieskim pasem dolnym, autobus biały; kolor linii jako pas pod oknami.
    */
-  private car(A: { x: number; y: number; z: number }, B: { x: number; y: number; z: number }, w: number, h: number, lift: number, fc: RGB, ec: RGB, front: boolean, rear: boolean, kind: TransitKind, seed: number): void {
+  private car(F: Dyn, G: Dyn, Ln: Dyn, A: { x: number; y: number; z: number }, B: { x: number; y: number; z: number }, w: number, h: number, lift: number, fc: RGB, ec: RGB, front: boolean, rear: boolean, kind: TransitKind, seed: number): void {
     const dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L, nx = -uz * w / 2, nz = ux * w / 2;
     const c = (p: typeof A, s: number, y: number, du = 0): number[] => [p.x + nx * s + ux * du, p.y + lift + y, p.z + nz * s + uz * du];
-    const F = this.fill, G = this.glass, Ln = this.lines;
     const tri = (D: Dyn, a: number[], b: number[], cc: number[], col: RGB) => { for (const v of [a, b, cc]) D.push(v[0], v[1], v[2], col); };
     const quad = (D: Dyn, a: number[], b: number[], cc: number[], d: number[], col: RGB) => { tri(D, a, b, cc, col); tri(D, a, cc, d, col); };
     const city = kind === 'tram' || kind === 'bus';
@@ -156,7 +232,8 @@ export class TransitView {
 
   dispose(): void {
     for (const sp of this.signs.values()) { sp.material.map?.dispose(); sp.material.dispose(); }
-    this.fill.geo.dispose(); this.lines.geo.dispose(); this.glass.geo.dispose();
+    for (const m of this.models.values()) { m.fill.dispose(); m.glass.dispose(); m.lines.dispose(); }
+    for (const g of this.farGeo.values()) g.dispose(); for (const im of this.far.values()) im.dispose();
     this.group.traverse(o => { const m = o as THREE.Mesh; if (m.material) (m.material as THREE.Material).dispose(); });
   }
 }

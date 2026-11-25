@@ -8,6 +8,7 @@ import type { SaveState } from '@miasto/shared/sim/types';
 import { Game, type GameUI } from './game/game';
 import { Phone } from './phone/phone';
 import { setVehicleQuality, VEHICLE_Q } from './player/vehicles';
+import { TRANSIT_Q } from './world/transitView';
 import { VEH } from '@miasto/shared/sim/vehicles';
 import { cellName, fmtLatLon, gridOf, unprojPoint } from '@miasto/shared/data/grid';
 import { parseOsmText } from './osm/parse';
@@ -248,6 +249,10 @@ function logEvent(text: string): void {
 }
 
 // wydajność: modele pojazdów proste / szczegółowe (zapamiętane; auta przebudowują się od razu)
+const komSel = $<HTMLSelectElement>('komSel');
+try { TRANSIT_Q.light = localStorage.getItem('mm.komunikacja') === '1'; } catch { /* brak pamięci przeglądarki */ }
+komSel.value = TRANSIT_Q.light ? '1' : '0';
+komSel.onchange = () => { TRANSIT_Q.light = komSel.value === '1'; try { localStorage.setItem('mm.komunikacja', komSel.value); } catch { /* */ } logEvent(`zmiana: komunikacja miejska ${TRANSIT_Q.light ? 'lżejsza (zasięg 500 m, szczegóły 70 m)' : 'pełna (zasięg 800 m, szczegóły 150 m)'}`); };
 const autaSel = $<HTMLSelectElement>('autaSel');
 autaSel.value = VEHICLE_Q.hq ? '1' : '0';
 autaSel.onchange = () => { setVehicleQuality(autaSel.value === '1'); logEvent(`zmiana: pojazdy ${autaSel.value === '1' ? 'szczegółowe' : 'proste'}`); };
