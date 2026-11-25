@@ -85,6 +85,7 @@ export class Room {
   private welcome(c: Conn, pid: number): void {
     this.sendJson(c, { t: 'welcome', v: PROTOCOL_VERSION, you: pid, city: this.world.key, session: this.id, tick: this.sim.tick, hz: SIM_HZ, time: this.clock.now(), scale: this.clock.scale });
     this.sendJson(c, { t: 'doors', s: this.world.interiors.doorStates(), all: true });
+    this.sendJson(c, { t: 'interiors', on: this.world.interiors.enabled });
   }
 
   get full(): boolean { return this.clients.size >= this.opt.maxPlayers; }
@@ -127,10 +128,13 @@ export class Room {
     else if (m.t === 'save' && this.opt.local) this.sendJson(c.conn, { t: 'saved', data: this.sim.serialize() });
     else if (m.t === 'load' && this.opt.local) this.loadState(c, m.data);
     else if (m.t === 'setTime' && this.opt.local) this.setTime(m.sec, m.scale);
-    else if (m.t === 'setInteriors' && this.opt.local) this.sim.setInteriors(!!m.on);
+    else if (m.t === 'setInteriors' && (this.opt.local || this.opt.dev)) { // serwer testowy: świat z wnętrzami albo bez (pomiar wydajności)
+      const on = !!m.on; this.sim.setInteriors(on);
+      if (!this.opt.local) { this.broadcast({ t: 'interiors', on }); this.broadcast({ t: 'chat', from: '', color: c.player.color, text: `${c.player.name} ${on ? 'włącza' : 'wyłącza'} wnętrza budynków`, sys: true }); }
+    }
     else if (m.t === 'setTraffic' && (this.opt.local || this.opt.dev)) { // serwer testowy: limity ruchu z suwaków (pomiar wydajności)
       this.sim.setTrafficLimits(+m.cars, +m.peds);
-      if (!this.opt.local) { const t = this.sim.traffic?.maxPerPlayer, q = this.sim.peds?.max; this.broadcast({ t: 'chat', from: '', color: c.player.color, text: `${c.player.name} ustawia ruch: auta ${t}, piesi ${q} na gracza`, sys: true }); }
+      if (!this.opt.local) { const t = this.sim.traffic?.maxPerPlayer ?? Math.max(0, Math.min(500, Math.round(+m.cars))), q = this.sim.peds?.max ?? Math.max(0, Math.min(400, Math.round(+m.peds))); this.broadcast({ t: 'chat', from: '', color: c.player.color, text: `${c.player.name} ustawia ruch: auta ${t}, piesi ${q} na gracza`, sys: true }); }
     }
   }
 

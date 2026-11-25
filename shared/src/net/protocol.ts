@@ -117,6 +117,8 @@ export type ServerMsg =
   | { t: 'event'; text: string; kind: 'crime' | 'arrest' | 'death' | 'info' }
   /** stan drzwi we wnętrzach: zmiany (albo pełna lista przy dołączeniu) [id, otwarte] */
   | { t: 'doors'; s: [string, boolean][]; all?: boolean }
+  /** tryb wnętrz budynków na serwerze (testowy przełącznik: bez wnętrz = bez mieszkań, lokali i wejść) */
+  | { t: 'interiors'; on: boolean }
   | { t: 'stats'; tickMs: number; tickMsMax: number; entities: number; cars: number; peds: number; police: number; interiors: number }
   | { t: 'players'; list: PlayerInfo[] }
   | { t: 'chat'; from: string; color: string; text: string; sys?: boolean }

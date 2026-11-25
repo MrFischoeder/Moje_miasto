@@ -93,4 +93,17 @@ describe('współrzędne i siatka mapy', () => {
     const p2 = parsePlace(c, g, '51,1097; 17,0328')!; expect(Math.hypot(p2[0] - x, p2[1] - z)).toBeLessThan(.01);
     expect(parsePlace(c, g, 'coś')).toBeNull();
   });
+  it('serwer testowy: przełącznik wnętrz i limity ruchu dla wszystkich graczy; zwykły serwer ignoruje', () => {
+    for (const dev of [true, false]) {
+      const room = new Room('t', world, null, { dev }), a = new Fake(), b = new Fake();
+      const pa = room.join(a, 'A')!; room.join(b, 'B');
+      expect(a.json.find(m => m.t === 'interiors')).toMatchObject({ on: true });
+      room.message(pa, JSON.stringify({ t: 'setInteriors', on: false }));
+      expect(world.interiors.enabled).toBe(!dev);
+      expect(b.json.some(m => m.t === 'interiors' && m.on === false)).toBe(dev);
+      room.message(pa, JSON.stringify({ t: 'setTraffic', cars: 450, peds: 380 }));
+      if (dev) expect(b.json.some(m => m.t === 'chat' && m.sys && /auta 450, piesi 380/.test(m.text))).toBe(true);
+      world.interiors.setEnabled(true);
+    }
+  });
 });

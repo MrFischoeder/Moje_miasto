@@ -47,6 +47,8 @@ export interface GameUI {
   onChat(l: ChatLine): void;
   /** wiadomość telefonu */
   onPm?(m: Extract<import('@miasto/shared/net/protocol').ServerMsg, { t: 'pm' }>): void;
+  /** serwer zmienił tryb wnętrz */
+  onInteriors?(on: boolean): void;
   onEvent(text: string, kind: 'crime' | 'arrest' | 'death' | 'info'): void;
   onPlayers(game: Game): void;
   setBusy(on: boolean): void;
@@ -184,6 +186,7 @@ export class Game {
     const s = this.session = new NetSession(world, tr);
     s.onChat = l => this.ui.onChat(l);
     s.onPm = m => this.ui.onPm?.(m);
+    s.onInteriors = on => { this.interiorsOn = on; this.ui.onInteriors?.(on); };
     s.onEvent = (t, k) => this.ui.onEvent(t, k);
     s.onPlayers = () => this.ui.onPlayers(this);
     s.onError = t => this.ui.setStatus(t);
@@ -235,7 +238,8 @@ export class Game {
   /** Włącza / wyłącza wnętrza budynków (klient i lokalny serwer razem). Zwraca false w grze sieciowej. */
   setInteriorsOn(on: boolean): boolean {
     this.interiorsOn = on;
-    if (this.online || !this.session) return !this.online;
+    if (!this.session) return true;
+    if (this.online) { this.session.setInteriors(on); return true; } // serwer sieciowy: tylko w trybie testowym, odpowiada komunikatem 'interiors'
     this.session.world.interiors.setEnabled(on); this.session.setInteriors(on); return true;
   }
 

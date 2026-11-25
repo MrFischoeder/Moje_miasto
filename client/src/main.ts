@@ -53,6 +53,7 @@ const ui: GameUI = {
   onMenu: openMenu,
   onChat(l) { addChat(l.from, l.color, l.text, l.sys); },
   onPm(m) { phone?.onPm(m); },
+  onInteriors(on) { const c = $<HTMLInputElement>('intChk'); if (c.checked !== on) { c.checked = on; logEvent(`serwer: wnętrza budynków ${on ? 'włączone' : 'wyłączone'}`); } },
   onEvent(text, kind) {
     const box = $('evt'), d = document.createElement('div'); d.className = kind; d.textContent = text; box.append(d);
     while (box.children.length > 3) box.firstChild!.remove();
@@ -202,7 +203,8 @@ game.interiorsOn = intChk.checked;
 intChk.onchange = () => {
   try { localStorage.setItem('mm.wnetrza', intChk.checked ? '1' : '0'); } catch { /* brak dostępu */ }
   logEvent(`zmiana: wnętrza budynków ${intChk.checked ? 'włączone' : 'wyłączone'}`);
-  if (!game.setInteriorsOn(intChk.checked)) $('status').textContent = 'W grze sieciowej o wnętrzach decyduje serwer.';
+  game.setInteriorsOn(intChk.checked);
+  if (game.online) $('status').textContent = 'Zmiana wnętrz wysłana do serwera (działa na serwerze testowym).';
 };
 
 // dziennik testu (plik .txt, klawisz L): wiersze pomiarów co sekundę i zdarzenia – każda zmiana ustawień wydajności

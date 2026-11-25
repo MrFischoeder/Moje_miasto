@@ -48,6 +48,8 @@ export class NetSession {
   /** własny stan z serwera: zdrowie, pieniądze, gwiazdki */
   readonly me = { hp: 100, money: 0, wanted: 0, dead: false, cur: 'zł' };
   onEvent: (text: string, kind: 'crime' | 'arrest' | 'death' | 'info') => void = () => {};
+  /** serwer zmienił tryb wnętrz (gra sieciowa) */
+  onInteriors: (on: boolean) => void = () => {};
   onChat: (l: ChatLine) => void = () => {};
   /** wiadomości telefonu (gracze, NPC, zlecenia) */
   onPm: (m: Extract<ServerMsg, { t: 'pm' }>) => void = () => {};
@@ -98,6 +100,7 @@ export class NetSession {
       else if (m.t === 'time') this.clock.set(m.time, m.scale);
       else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur });
       else if (m.t === 'event') this.onEvent(m.text, m.kind);
+      else if (m.t === 'interiors') { this.world.interiors.setEnabled(m.on); this.onInteriors(m.on); }
       else if (m.t === 'doors') { const I = this.world.interiors; if (m.all) I.resetDoors(); for (const [id, open] of m.s) I.setDoor(id, open); }
       else if (m.t === 'stats') { const { t: _t, ...rest } = m; void _t; this.serverStats = rest; }
       else if (m.t === 'saved') { this.savedWait?.(m.data); this.savedWait = null; }
