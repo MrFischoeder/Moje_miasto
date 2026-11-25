@@ -23,13 +23,13 @@ export function installWindows(m: THREE.Material): WindowUniforms {
     Object.assign(sh.uniforms, U);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
-attribute vec4 aFacA; attribute vec4 aFacB; attribute vec4 aFacC;
-varying vec4 vFacA; varying vec4 vFacB; varying vec4 vFacC; varying vec3 vWPos;`)
+attribute vec4 aFacA; attribute vec4 aFacB; attribute vec4 aFacC; attribute vec4 aFacD;
+varying vec4 vFacA; varying vec4 vFacB; varying vec4 vFacC; varying vec4 vFacD; varying vec3 vWPos;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-vFacA = aFacA; vFacB = aFacB; vFacC = aFacC; vWPos = (modelMatrix * vec4(position, 1.0)).xyz;`);
+vFacA = aFacA; vFacB = aFacB; vFacC = aFacC; vFacD = aFacD; vWPos = (modelMatrix * vec4(position, 1.0)).xyz;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec4 vFacA; varying vec4 vFacB; varying vec4 vFacC; varying vec3 vWPos;
+varying vec4 vFacA; varying vec4 vFacB; varying vec4 vFacC; varying vec4 vFacD; varying vec3 vWPos;
 uniform float uLit; uniform vec4 uDoorA[${MAX_DOORS}]; uniform vec4 uDoorB[${MAX_DOORS}]; uniform int uDoorN;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 // wejścia: otwór w murze; wokół brama (obramienie); okna parteru przy wejściu znikają w całości (niżej, test środka okna)
@@ -80,6 +80,9 @@ if (vFacA.z > 0.5 && vFacB.x > 0.5) {
     float ffade = 1.0 - smoothstep(0.03, 0.09, px);
     // okno w strefie wejścia (środek okna do 1,3 m od otworu drzwi, parter): bez okna, zamiast ucinania w połowie
     bool gone = false;
+    // brama przejazdowa w tej ścianie: okno nachodzące na otwór (z zapasem 0,3 m) i niżej niż sklepienie – bez okna
+    if (vFacD.y > vFacD.x) { float xc = off + (ci + 0.5) * sp, hwW = vFacB.y * 0.5 + 0.3, wb = vFacB.w + k * vFacA.w + vFacC.x;
+      if (xc + hwW > vFacD.x && xc - hwW < vFacD.y && wb < vFacD.z + 0.2) gone = true; }
     if (uDoorN > 0) {
       float dt = off + (ci + 0.5) * sp - vFacA.x, yC = vWPos.y + (vFacB.w + k * vFacA.w + vFacC.x + vFacB.z * 0.5 - vFacA.y);
       for (int i = 0; i < ${MAX_DOORS}; i++) {

@@ -306,6 +306,8 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
 
   // --- budynki: ściany, dach, krawędzie (dach, podstawa, narożniki > 25°) ---
   const FA: number[] = [], FB: number[] = [], FC: number[] = [];
+  /** otwór bramy przejazdowej w ścianie: [od, do] wzdłuż ściany [m], wysokość sklepienia nad podstawą [m] (okna obok i nad nim: całe albo wcale) */
+  const FD: number[] = [];
   const facPad = () => { while (FA.length < B.P.length / 3 * 4) { FA.push(0, 0, 0, 0); FB.push(0, 0, 0, 0); FC.push(0, 0, 0, 0); } };
   // obrys budynku złożonego z części (building:part) nie jest rysowany: części go zastępują (inaczej ściany się nakładają i migoczą)
   const insideXZ = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
@@ -454,12 +456,14 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         const w0 = WIN.length;
         if (!isChurch && !hidden) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
         if (cuts.length) for (let q = WIN.length - WIN_STRIDE; q >= w0; q -= WIN_STRIDE) { // okna fizyczne w otworze bramy: usunięte
-          const tq = ((WIN[q] - a[0]) * dx + (WIN[q + 2] - a[1]) * dz) / (m * m), ylo = WIN[q + 1] - WIN[q + 5] / 2;
-          if (ylo < passTop + .05 && cuts.some(([c0, c1]) => tq > c0 - .08 && tq < c1 + .08)) WIN.splice(q, WIN_STRIDE);
+          const tq = ((WIN[q] - a[0]) * dx + (WIN[q + 2] - a[1]) * dz) / (m * m), ylo = WIN[q + 1] - WIN[q + 5] / 2, hw = (kfc.ww / 2 + .3) / m;
+          if (ylo < passTop + .2 && cuts.some(([c0, c1]) => tq > c0 - hw && tq < c1 + hw)) WIN.splice(q, WIN_STRIDE);
         }
         if (st === 'blok' && !isHole && stLevels && stLevels.lv >= 4 && nrm[2] > -.25) balc.push([a, c, nrm[0], nrm[2], m]);
+        while (FD.length < n0 * 4) FD.push(0, 0, 0, 0);
+        const cut = cuts[0], cutD = cut ? [cut[0] * m, cut[1] * m, cutTop(cut[0], cut[1]) - base, 0] : [0, 0, 0, 0];
         for (let k = n0; k < B.P.length / 3; k++) {
-          const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
+          const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2]; FD.push(...cutD);
           FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(sp, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 4 : 0));
         }
       }
@@ -728,7 +732,8 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   const add = (lines: boolean, mat: MatName, order: number, a: Attrs) => layers.push({ lines, mat, order, a });
   if (!B.empty) {
     facPad(); const a = B.attrs();
-    a.aFacA = { array: new Float32Array(FA), size: 4 }; a.aFacB = { array: new Float32Array(FB), size: 4 }; a.aFacC = { array: new Float32Array(FC), size: 4 };
+    while (FD.length < FA.length) FD.push(0, 0, 0, 0);
+    a.aFacA = { array: new Float32Array(FA), size: 4 }; a.aFacB = { array: new Float32Array(FB), size: 4 }; a.aFacC = { array: new Float32Array(FC), size: 4 }; a.aFacD = { array: new Float32Array(FD.slice(0, FA.length)), size: 4 };
     add(false, 'build', 0, a);
   }
   if (!BE.empty) { const a = BE.attrs(); delete a.color; add(true, 'edge', 0, a); }
