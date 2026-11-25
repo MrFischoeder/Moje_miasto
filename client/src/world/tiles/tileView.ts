@@ -568,7 +568,33 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   // jezdnie (do chodników: chodnik przerwany tam, gdzie przecina inną jezdnię — wylot ulicy, wjazd)
   const carSegs: { id: number; a: XZ; b: XZ; hw: number }[] = [];
   for (const q of t.r) if (isVehicleRoad(q.k) && !q.tu && !q.br) { const pp = toXZ(q.p); for (let i = 0; i + 1 < pp.length; i++) carSegs.push({ id: q.id, a: pp[i], b: pp[i + 1], hw: q.w / 2 + .2 }); }
-  const onOtherRoad = (x: number, z: number, self: number) => carSegs.some(sg => { if (sg.id === self) return false; const dx = sg.b[0] - sg.a[0], dz = sg.b[1] - sg.a[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - sg.a[0]) * dx + (z - sg.a[1]) * dz) / L2)); return Math.hypot(sg.a[0] + dx * u - x, sg.a[1] + dz * u - z) < sg.hw; });
+  // siatka odcinków jezdni (komórki 16 m) do szybkich zapytań o sąsiednie jezdnie
+  const CG = 16, cgrid = new Map<string, typeof carSegs>();
+  for (const sg of carSegs) { const m = sg.hw + 3; for (let gx = Math.floor((Math.min(sg.a[0], sg.b[0]) - m) / CG); gx <= Math.floor((Math.max(sg.a[0], sg.b[0]) + m) / CG); gx++) for (let gz = Math.floor((Math.min(sg.a[1], sg.b[1]) - m) / CG); gz <= Math.floor((Math.max(sg.a[1], sg.b[1]) + m) / CG); gz++) { const k = gx + ',' + gz; let l = cgrid.get(k); if (!l) cgrid.set(k, l = []); l.push(sg); } }
+  const segsAt = (x: number, z: number) => cgrid.get(Math.floor(x / CG) + ',' + Math.floor(z / CG)) ?? [];
+  const closest = (sg: typeof carSegs[number], x: number, z: number): XZ => { const dx = sg.b[0] - sg.a[0], dz = sg.b[1] - sg.a[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - sg.a[0]) * dx + (z - sg.a[1]) * dz) / L2)); return [sg.a[0] + dx * u, sg.a[1] + dz * u]; };
+  const onOtherRoad = (x: number, z: number, self: number) => segsAt(x, z).some(sg => { if (sg.id === self) return false; const c = closest(sg, x, z); return Math.hypot(c[0] - x, c[1] - z) < sg.hw; });
+  /** Szczelina od krawędzi jezdni (punkt e, kierunek na zewnątrz nx, nz) do innej jezdni: 0..GAP m albo -1 (wtedy jezdnia się poszerza i domyka szczelinę). */
+  const GAP = 2.5;
+  const gapTo = (ex: number, ez: number, nx: number, nz: number, self: number) => {
+    let best = -1;
+    for (const sg of segsAt(ex + nx * 1.2, ez + nz * 1.2)) {
+      if (sg.id === self) continue;
+      const c = closest(sg, ex, ez), dx = c[0] - ex, dz = c[1] - ez, d = Math.hypot(dx, dz); if ((dx * nx + dz * nz) < .5 * d) continue; // nie po tej stronie
+      const gap = d - (sg.hw - .2); if (gap > .05 && gap < GAP && (best < 0 || gap < best)) best = gap;
+    }
+    return best;
+  };
+  /** Krążek (zaokrąglenie łuku / końca jezdni) w punkcie c o promieniu R na wysokości y. */
+  const disc = (buf: Buf, c: XZ, R: number, y: number, col: RGB) => { const N = 12; for (let k = 0; k < N; k++) { const a0 = k / N * Math.PI * 2, a1 = (k + 1) / N * Math.PI * 2; buf.tri([c[0], y, c[1]], [c[0] + Math.cos(a1) * R, y, c[1] + Math.sin(a1) * R], [c[0] + Math.cos(a0) * R, y, c[1] + Math.sin(a0) * R], col, [0, 1, 0]); } };
+  /** Zaokrąglenia: końce łamanej i załamania powyżej ok. 20° (bez wcięć i szpar na łukach i przy skrzyżowaniach). */
+  const joins = (buf: Buf, p: XZ[], R: Off, ys: Ys, col: RGB, dy: number) => {
+    for (let i = 0; i < p.length; i++) {
+      let turn = i === 0 || i === p.length - 1;
+      if (!turn) { const a = p[i - 1], b = p[i], c = p[i + 1], u = norm2(b[0] - a[0], b[1] - a[1]), v = norm2(c[0] - b[0], c[1] - b[1]); turn = !!u && !!v && u[0] * v[0] + u[1] * v[1] < .94; }
+      if (turn) disc(buf, p[i], o(R, i), yAt(ys, i, dy), col);
+    }
+  };
   const drawRoad = (r: TileRoad) => {
     const p = densify(toXZ(r.p), SEG), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k), ys = r.br ? deckYs(p, r.bw) : gys(p);
     for (let i = 0; i < r.j.length; i += 2) roadW.set(r.j[i + 1], Math.max(roadW.get(r.j[i + 1]) || 0, r.w));
@@ -582,7 +608,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         if (otherBridge(mp[0] + mn[0] * sd * (ext + 1.5), mp[1] + mn[1] * sd * (ext + 1.5), r.id)) continue;
         wall(S, p, n, s0, ys, -.02, .95, BAL_IN); wall(S, p, n, s1, ys, -.6, .95, BAL_OUT); strip(S, p, n, Math.min(s0, s1), Math.max(s0, s1), ys, BAL_TOP, .97); }
     }
-    if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); return; }
+    if (!veh) { strip(F[2], p, n, -hw, hw, ys, C.path); joins(F[2], p, hw, ys, C.path, 0); return; }
     // zmienna szerokość: płynne zwężenie na ok. 30 m przy końcach z wa / wb (tools/lib/roads.ts)
     let H: Off = hw;
     if (r.wa != null || r.wb != null) {
@@ -590,8 +616,16 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       const L = arc[arc.length - 1], T = Math.min(30, L / 2.2), sm = (x: number) => x * x * (3 - 2 * x);
       H = arc.map(s => { let w = r.w; if (r.wa != null && s < T) w = r.wa + (r.w - r.wa) * sm(s / T); if (r.wb != null && s > L - T) w = r.wb + (w - r.wb) * sm((L - s) / T); return w / 2; });
     }
-    const nH = offMap(H, v => -v);
-    strip(F[3], p, n, nH, H, ys, r.tu ? [.03, .04, .045] : C.road);
+    // szczeliny do sąsiednich jezdni (do 2,5 m): jezdnia poszerzona po tej stronie, aż się zetkną
+    let L: Off = H, Rr: Off = H;
+    if (!r.br && !r.tu) {
+      const Hs = p.map((_, i) => o(H, i));
+      L = Hs.map((h, i) => { const g = gapTo(p[i][0] - n[i][0] * h, p[i][1] - n[i][1] * h, -n[i][0], -n[i][1], r.id); return g < 0 ? h : h + g + .15; });
+      Rr = Hs.map((h, i) => { const g = gapTo(p[i][0] + n[i][0] * h, p[i][1] + n[i][1] * h, n[i][0], n[i][1], r.id); return g < 0 ? h : h + g + .15; });
+    }
+    const nH = offMap(L, v => -v), col = r.tu ? [.03, .04, .045] as RGB : C.road;
+    strip(F[3], p, n, nH, Rr, ys, col);
+    joins(F[3], p, H, ys, col, 0);
     const skip = near(hw + 4);
     if (r.sw) for (const side of [-1, 1]) {
       if (!((side < 0 && r.sw & 1) || (side > 0 && r.sw & 2))) continue;

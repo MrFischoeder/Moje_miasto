@@ -7,6 +7,10 @@ import type { TileData } from '@miasto/shared/tiles/types';
 
 export interface MiniView { x: number; y: number; z: number; yaw: number; mode: Mode; xray: boolean; under: boolean; height: number; others?: { x: number; z: number; color: string }[]; transit?: { x: number; z: number; color: string }[] }
 
+const layers: HTMLCanvasElement[] = []; let li = 0;
+/** Pomocnicza warstwa rysowania (po jednej na wywołanie, wielokrotnego użytku). */
+function layer(W: number): HTMLCanvasElement { const c = layers[li % 2] ?? (layers[li % 2] = document.createElement('canvas')); li++; if (c.width !== W) { c.width = W; c.height = W; } return c; }
+
 export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: MiniView): void {
   const mctx = mini.getContext('2d')!, W = mini.width; mctx.clearRect(0, 0, W, W); if (!world) return;
   const city = world.city, MODE = C.mode;
@@ -27,10 +31,17 @@ export function renderMinimap(mini: HTMLCanvasElement, world: World | null, C: M
       if (!near(t)) continue;
       for (const a of t.a) { mctx.fillStyle = a.k === 'water' ? 'rgba(60,140,255,.45)' : a.k === 'park' || a.k === 'forest' ? 'rgba(60,200,100,.18)' : 'rgba(150,170,170,.12)'; path(a.o, true); mctx.fill(); }
     }
-    mctx.strokeStyle = 'rgba(207,233,255,.5)'; mctx.lineCap = 'round';
-    for (const t of world.tiles.values()) {
-      if (!near(t)) continue;
-      for (const r of t.r) { mctx.lineWidth = Math.max(2 * lw, r.w); mctx.strokeStyle = r.ln ? 'rgba(207,233,255,.5)' : 'rgba(150,210,180,.3)'; path(r.p); mctx.stroke(); }
+    // ulice: rysowane bez przezroczystości na osobnej warstwie (zaokrąglone łączenia i końce), nakładane raz z przezroczystością
+    // — bez jaśniejszych plam i szwów tam, gdzie odcinki dróg na siebie zachodzą
+    for (const [jezdnie, col, alpha] of [[false, '#96d2b4', .3], [true, '#cfe9ff', .5]] as const) {
+      const L = layer(W), lc = L.getContext('2d')!; lc.setTransform(1, 0, 0, 1, 0, 0); lc.clearRect(0, 0, W, W);
+      lc.translate(W / 2, W / 2); lc.rotate(C.yaw); lc.scale(s, s); lc.translate(-C.x, -C.z);
+      lc.strokeStyle = col; lc.lineCap = 'round'; lc.lineJoin = 'round';
+      for (const t of world.tiles.values()) {
+        if (!near(t)) continue;
+        for (const r of t.r) { if (!!r.ln !== jezdnie) continue; lc.lineWidth = Math.max(2 * lw, r.w); lc.beginPath(); for (let i = 0; i < r.p.length; i += 2) i ? lc.lineTo(r.p[i], r.p[i + 1]) : lc.moveTo(r.p[i], r.p[i + 1]); lc.stroke(); }
+      }
+      mctx.save(); mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.beginPath(); mctx.arc(W / 2, W / 2, W / 2 - 2, 0, 7); mctx.clip(); mctx.globalAlpha = alpha; mctx.drawImage(L, 0, 0); mctx.restore();
     }
   }
   mctx.globalAlpha = under ? 1 : .45;
