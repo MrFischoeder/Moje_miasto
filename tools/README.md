@@ -29,6 +29,16 @@ Rzeki i kanały: lustro wody z pomiaru nad wodą, co najmniej 2,5 m poniżej brz
 
 ## Teren z NMT (GUGiK, LiDAR, siatka 1 m)
 
+Wrocław (pobieranie automatyczne z opendata Geoportalu, ok. 20 min, 143 arkusze LiDAR 2019/2024):
+
+```bash
+npx tsx tools/nmt-fetch.ts --city wroclaw                                  # skorowidz + arkusze -> .cache/nmt/wroclaw (siatka 2 m)
+npx tsx tools/nmt-import.ts --city wroclaw --src .cache/nmt/wroclaw --step 4   # kafle terenu 4 m + model zgrubny
+```
+
+Model NMT nie ma budynków ani drzew; zawiera koryta rzek (lustro wody poniżej brzegu), wały przeciwpowodziowe,
+nasypy, skarpy, wzgórza i drobną rzeźbę pól. Cieki z OSM (rzeki, strumienie, kanały, rowy) są rysowane jako woda na osi koryta.
+
 Dokładny teren dla gry: kafle 500 m z wysokościami co 2 m (dokładność rzędu centymetrów) w `client/public/terrain/<miasto>/`.
 Gra, lokalny serwer i serwer sieciowy dołączają je do kafli mapy; tam, gdzie ich nie ma, działa model zgrubny (Copernicus 30 m).
 

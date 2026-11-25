@@ -54,11 +54,18 @@ export function parseXyz(text: string, center: [number, number]): Raster {
 
 /** Wartość rastra w punkcie PL-1992 (dwuliniowo); NaN poza zasięgiem / bez danych. */
 export function sampleRaster(r: Raster, E: number, N: number): number {
-  const [a, b] = r.swap ? [N, E] : [E, N], fa = (a - r.a0) / r.step, fb = (r.b1 - b) / r.step;
-  if (fa < 0 || fb < 0 || fa > r.na - 1 || fb > r.nb - 1) return NaN;
-  const i = Math.min(r.na - 2, Math.floor(fa)), j = Math.min(r.nb - 2, Math.floor(fb)), u = fa - i, w = fb - j, k = j * r.na + i, d = r.d;
+  const [a, b] = r.swap ? [N, E] : [E, N];
+  let fa = (a - r.a0) / r.step, fb = (r.b1 - b) / r.step;
+  // do 1,5 komórki poza skrajnymi środkami: wartość z krawędzi (styki arkuszy bez szczelin)
+  if (fa < -1.5 || fb < -1.5 || fa > r.na - 1 + 1.5 || fb > r.nb - 1 + 1.5) return NaN;
+  fa = Math.max(0, Math.min(r.na - 1, fa)); fb = Math.max(0, Math.min(r.nb - 1, fb));
+  const i = Math.max(0, Math.min(r.na - 2, Math.floor(fa))), j = Math.max(0, Math.min(r.nb - 2, Math.floor(fb))), u = fa - i, w = fb - j, k = j * r.na + i, d = r.d;
   if (r.na < 2 || r.nb < 2) return d[0];
-  return (d[k] * (1 - u) + d[k + 1] * u) * (1 - w) + (d[k + r.na] * (1 - u) + d[k + r.na + 1] * u) * w;
+  const v = (d[k] * (1 - u) + d[k + 1] * u) * (1 - w) + (d[k + r.na] * (1 - u) + d[k + r.na + 1] * u) * w;
+  if (!Number.isNaN(v)) return v;
+  // brak danych w części sąsiedztwa: średnia z dostępnych narożników
+  let s = 0, c = 0; for (const q of [d[k], d[k + 1], d[k + r.na], d[k + r.na + 1]]) if (!Number.isNaN(q)) { s += q; c++; }
+  return c ? s / c : NaN;
 }
 
 /** Odwrotność projekcji gry (lokalna, równoodległościowa wokół początku miasta). */
