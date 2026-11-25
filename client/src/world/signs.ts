@@ -108,11 +108,21 @@ export class Signs {
   }
 
   /** Otwory witryn w pobliżu (dla shadera fasad: jak drzwi wejściowe) */
-  holes: { c: [number, number]; u: [number, number]; w: number; y0: number; y1: number }[] = [];
+  holes: { c: [number, number]; u: [number, number]; w: number; y0: number; y1: number; up?: number }[] = [];
+  /** drzwi wejściowe budynków z wnętrzem (świat): witryna, w której są takie drzwi, nie ma makiety ani otworu */
+  doorsAt: (() => { c: [number, number]; w: number }[]) | null = null;
 
   update(x: number, z: number, r = 110): void {
     const near = new Set<number>(); this.holes = [];
-    this.list.forEach(s => { const f = s.front; if (f && Math.abs(s.x - x) < r && Math.abs(s.z - z) < r) this.holes.push({ c: f.c, u: f.u, w: f.w, y0: f.base + SHOP_Y0, y1: f.base + SHOP_Y1 }); });
+    const doors = this.doorsAt?.() ?? [];
+    const blocked = (f: Front) => doors.some(d => Math.hypot(d.c[0] - f.c[0], d.c[1] - f.c[1]) < f.w / 2 + d.w / 2 + .6);
+    this.list.forEach((s, i) => {
+      const f = s.front; if (!f || Math.abs(s.x - x) > r || Math.abs(s.z - z) > r) return;
+      const blk = blocked(f), o = this.live.get(i);
+      if (o) o.traverse(c => { if (c.userData.box) c.visible = !blk; }); // makieta wnętrza i szyba znikają, szyld zostaje
+      if (!blk) this.holes.push({ c: f.c, u: f.u, w: f.w, y0: f.base + SHOP_Y0, y1: f.base + SHOP_Y1, up: 1.5 });
+      else this.holes.push({ c: f.c, u: f.u, w: .01, y0: f.base + .5, y1: f.base + .51, up: 3.6 }); // tylko strefa bez okien: od parteru po szyld
+    });
     this.list.forEach((s, i) => {
       if (Math.abs(s.x - x) > r || Math.abs(s.z - z) > r) return; near.add(i); if (this.live.has(i)) return;
       const o = s.make(); o.position.x = s.x; o.position.z = s.z; o.position.y += s.y; this.group.add(o); this.live.set(i, o);

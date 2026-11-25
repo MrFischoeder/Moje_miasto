@@ -98,7 +98,8 @@ uniform vec4 uDoorA[${MAX_DOORS}]; uniform vec4 uDoorB[${MAX_DOORS}]; uniform in
 for (int i = 0; i < ${MAX_DOORS}; i++) {
   if (i >= uDoorN) break;
   vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPosD.xz - a.xy;
-  if (abs(dot(d, a.zw)) < b.z + 1.3 && abs(dot(d, vec2(-a.w, a.z))) < 1.2 && vWPosD.y > b.x - 0.3 && vWPosD.y < b.y + 1.1) discard;
+  float up = b.w > 100.0 ? b.w - 100.0 : 0.0; // witryna: także okna nad nią (szyld)
+  if (abs(dot(d, a.zw)) < b.z + 1.3 && abs(dot(d, vec2(-a.w, a.z))) < 1.2 && vWPosD.y > b.x - 0.3 && vWPosD.y < b.y + 1.1 + up) discard;
 }`)
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.8, 0.45) * 0.85 * vLitW;');
     };

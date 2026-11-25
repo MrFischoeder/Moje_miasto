@@ -107,15 +107,15 @@ export function buildFront(f: Front): THREE.Object3D {
   }
   const grp = new THREE.Group();
   const mk = (pos: number[], col: number[], mat: THREE.Material) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const m = new THREE.Mesh(g, mat); m.userData.own = true; return m; };
-  grp.add(mk(P, C, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  const room = mk(P, C, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })); room.userData.box = true; grp.add(room);
   // szyba (lekko niebieska, półprzezroczysta) i rama witryny
   quad([[-w, y0, -.04], [w, y0, -.04], [w, y1, -.04], [-w, y1, -.04]], [.62, .78, .88], true);
-  grp.add(mk(G, GC, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .22, depthWrite: false, side: THREE.DoubleSide })));
+  const glass = mk(G, GC, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .22, depthWrite: false, side: THREE.DoubleSide })); glass.userData.box = true; grp.add(glass);
   const F: number[] = [], FC: number[] = [], frame: RGB = f.food ? [.2, .14, .1] : [.18, .19, .21];
   const fb = (x0: number, x1: number, a0: number, a1: number) => { for (const i of [0, 1, 2, 0, 2, 3]) { const q = [[x0, a0, .03], [x1, a0, .03], [x1, a1, .03], [x0, a1, .03]][i]; F.push(...q); FC.push(...frame); } };
   fb(-w - .12, w + .12, y0 - .12, y0); fb(-w - .12, w + .12, y1, y1 + .1); fb(-w - .12, -w, y0, y1); fb(w, w + .12, y0, y1);
   for (let x = -w + 1.8; x < w - .4; x += 1.8) fb(x - .04, x + .04, y0, y1); // szprosy
-  grp.add(mk(F, FC, new THREE.MeshBasicMaterial({ vertexColors: true })));
+  const fr = mk(F, FC, new THREE.MeshBasicMaterial({ vertexColors: true })); fr.userData.box = true; grp.add(fr);
   // szyld nad witryną
   const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 160; const x = cv.getContext('2d')!;
   const bgs = f.food ? ['#3b1f12', '#14321e', '#5a1414', '#1d1d40'] : ['#0c3a5e', '#5e0c2a', '#1e1e1e', '#0f4d34', '#6a3a00'], bg = bgs[hash(f.text) % bgs.length];

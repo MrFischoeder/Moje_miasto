@@ -204,6 +204,7 @@ export class Game {
     const view = this.view = new CityView(world, source, this.xray);
     this.world3d.add(view.group);
     this.interiors = new InteriorView(world); this.world3d.add(this.interiors.group);
+    this.view!.signs.doorsAt = () => world.interiors.doors().map(d => ({ c: d.c, w: d.w }));
     if (transit) {
       this.transit = new TransitSystem(transit, world, s.clock);
       const lc: Record<string, string> = {}; for (const l of world.city.lines) lc[l.n] = l.c;

@@ -39,9 +39,9 @@ float dfx = dFdx(vFacA.x), dfy = dFdy(vFacA.x); vec2 dgx = dFdx(vWPos.xz), dgy =
 for (int i = 0; i < ${MAX_DOORS}; i++) {
   if (i >= uDoorN) break;
   vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPos.xz - a.xy;
-  float al = abs(dot(d, a.zw)), ac = abs(dot(d, vec2(-a.w, a.z)));
-  if (al < b.z && ac < b.w && vWPos.y > b.x && vWPos.y < b.y) discard;
-  if (ac < b.w && vWPos.y > b.x - 0.2) {
+  float al = abs(dot(d, a.zw)), ac = abs(dot(d, vec2(-a.w, a.z))), dep = b.w > 100.0 ? 0.9 : b.w;
+  if (al < b.z && ac < dep && vWPos.y > b.x && vWPos.y < b.y) discard;
+  if (ac < dep && vWPos.y > b.x - 0.2) {
     if (al < b.z + 0.32 && vWPos.y < b.y + 0.36) portal = 1.0;
   }
 }
@@ -111,8 +111,9 @@ if (vFacA.z > 0.5 && vFacB.x > 0.5) {
         if (i >= uDoorN) break;
         vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPos.xz - a.xy;
         float sg = useX ? sign(dot(dgx, a.zw) * dfx) : sign(dot(dgy, a.zw) * dfy);
-        float t = dot(d, a.zw) + sg * dt, ac = abs(dot(d, vec2(-a.w, a.z)));
-        if (abs(t) < b.z + 1.3 && ac < b.w && yC > b.x - 0.2 && yC < b.y + 1.1) gone = true;
+        // witryna (b.w > 100): strefa bez okien wyżej o b.w - 100 m (szyld nad witryną)
+        float t = dot(d, a.zw) + sg * dt, ac = abs(dot(d, vec2(-a.w, a.z))), dep = b.w > 100.0 ? 0.9 : b.w, up = b.w > 100.0 ? b.w - 100.0 : 0.0;
+        if (abs(t) < b.z + 1.3 && ac < dep && yC > b.x - 0.2 && yC < b.y + 1.1 + up) gone = true;
       }
     }
     if (k >= 0.0 && k < vFacC.y && !gone) {
