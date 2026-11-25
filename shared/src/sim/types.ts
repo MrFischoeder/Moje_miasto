@@ -104,6 +104,8 @@ export type Command =
   | { type: 'buyCar'; v: number }
   | { type: 'rereg' }
   | { type: 'cab'; on: boolean }
+  /** giełda: kupno auta z ogłoszenia (przy sprzedającym) */
+  | { type: 'marketBuy'; id: string }
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
   | { type: 'teleport'; x: number; z: number }

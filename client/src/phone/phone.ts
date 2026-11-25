@@ -140,6 +140,7 @@ export class Phone {
       ['💼', 'Zlecenia', '#ff453a', () => this.jobs()],
       ['🚕', 'Taxi', '#ffcc00', () => this.taxiApp()],
       ['🚗', 'Auta', '#5e5ce6', () => this.carsApp()],
+      ['🏷️', 'Giełda', '#ff375f', () => this.marketApp()],
     ];
     for (const [ic, name, bg, fn, badge] of apps) {
       const a = h('div', 'app', `<div class="icon" style="background:${bg}">${ic}</div><span>${name}</span>${badge ? `<div class="badge">${badge}</div>` : ''}`); a.onclick = fn; home.append(a);
@@ -271,6 +272,34 @@ export class Phone {
     this.current = render; render();
   }
 
+  /** Giełda samochodowa: ogłoszenia „Sprzedam…”, miejsce spotkania, kupno przy sprzedającym */
+  marketApp(open?: string): void {
+    const render = () => {
+      const s = this.game.session, cur = s?.me.cur ?? 'zł', L = this.game.marketListings(), sold = new Set(s?.me.sold ?? []), p = this.myPos();
+      const item = open ? L.find(q => q.id === open) : undefined;
+      if (item) {
+        const { page } = this.page('Ogłoszenie', () => { open = undefined; render(); }), box = h('div', 'list');
+        const d = p ? Math.round(Math.hypot(item.x - p.x, item.z - p.z)) : 0;
+        box.append(h('div', 'row', `<div class="av" style="background:#ff375f">🚗</div><div class="tx"><b>${esc(item.title)}</b><span>${item.price} ${esc(cur)} · ${esc(item.desc)}</span></div>`));
+        box.append(h('div', 'empty', `Sprzedający: <b>${esc(item.seller)}</b>, tel. ${esc(item.phone)}<br>Spotkanie: przystanek <b>${esc(item.place)}</b> · ${d} m stąd<br>Przyjedź na miejsce i podejdź do sprzedającego, żeby kupić auto (z papierami na ciebie).`));
+        const acts = h('div', 'acts'), map = h('button', 'btn blue', '🗺️ Pokaż na mapie'), buy = h('button', 'btn ok', sold.has(item.id) ? 'Sprzedane' : `Kup za ${item.price} ${cur}`);
+        map.onclick = () => this.mapApp([item.x, item.z]);
+        buy.onclick = () => { if (sold.has(item.id)) return; s?.sendCommand({ type: 'marketBuy', id: item.id }); setTimeout(render, 600); };
+        acts.append(map, buy); acts.style.cssText = 'display:flex;gap:8px;justify-content:center;margin:12px'; box.append(acts);
+        page.append(box); this.live = true; return;
+      }
+      const { page } = this.page('Giełda', () => this.home()), list = h('div', 'list');
+      list.append(h('div', 'empty', `${L.length} ogłoszeń · nowe co 6 godzin (czas gry). Twoje pieniądze: ${(s?.me.money ?? 0).toFixed(0)} ${esc(cur)}`));
+      for (const q of L) {
+        const d = p ? Math.round(Math.hypot(q.x - p.x, q.z - p.z)) : 0, sd = sold.has(q.id);
+        const r = h('div', 'row', `<div class="av" style="background:${sd ? '#3a3a3c' : '#ff375f'}">${sd ? '✓' : '🚗'}</div><div class="tx"><b>${esc(q.title)}</b><span>${sd ? 'Sprzedane' : `${q.price} ${esc(cur)}`} · ${esc(q.place)} · ${d < 1000 ? d + ' m' : (d / 1000).toFixed(1) + ' km'}</span></div>`);
+        r.onclick = () => { open = q.id; render(); }; list.append(r);
+      }
+      page.append(list); this.live = true;
+    };
+    this.current = render; render();
+  }
+
   /** Auta: salon (kupno legalnego auta) i dziupla (przerejestrowanie kradzionego) */
   carsApp(): void {
     const render = () => {
@@ -322,6 +351,7 @@ export class Phone {
       if (this.job?.target) mk.push({ x: this.job.target[0], z: this.job.target[1], color: '#ff453a', label: 'Cel zlecenia', kind: 'job' });
       if (sel) mk.push({ x: sel[0], z: sel[1], color: '#0a84ff', kind: 'sel' });
       const cab = this.game.session?.me.cab; if (cab?.target) mk.push({ x: cab.target[0], z: cab.target[1], color: '#ffcc00', label: cab.st === 'pickup' ? 'Klient' : 'Cel kursu', kind: 'job' });
+      for (const q of this.game.marketListings()) if (!(this.game.session?.me.sold ?? []).includes(q.id)) mk.push({ x: q.x, z: q.z, color: '#ff375f', label: q.title.replace('Sprzedam ', ''), kind: 'job' });
       const dzp = DZIUPLA[this.game.world?.key ?? '']; if (dzp) mk.push({ x: dzp.x, z: dzp.z, color: '#8e8e93', label: 'Dziupla', kind: 'job' });
       const tx = this.game.session?.me.taxi; if (tx) { const e = this.game.session?.entity(tx.id); if (e) mk.push({ x: e.x, z: e.z, color: '#ffcc00', label: 'Taksówka', kind: 'player' }); mk.push({ x: tx.dest[0], z: tx.dest[1], color: '#ffcc00', label: 'Cel kursu', kind: 'job' }); }
       if (p) mk.push({ x: p.x, z: p.z, color: '#0a84ff', kind: 'me', yaw: p.yaw });

@@ -9,6 +9,7 @@ import { Pedestrians } from '../traffic/peds';
 import { Rules } from '../game/rules';
 import { TaxiService } from '../game/taxi';
 import { CabJobs } from '../game/cabJob';
+import { MarketService } from '../game/marketService';
 import { CAB_OK, CAR_PRICE, DZIUPLA, DZIUPLA_R, REREG_SHARE } from '../game/cars';
 import { DOOR_BROKEN, DOOR_LOCKED, DOOR_OPEN } from '../interiors/interiors';
 import { SIM_DT } from './loop';
@@ -50,6 +51,8 @@ export class Simulation {
   taxi: TaxiService | null = null;
   /** praca gracza jako kierowca taksówki */
   cab: CabJobs | null = null;
+  /** giełda samochodowa: auta i sprzedający na miejscach ogłoszeń */
+  market: MarketService | null = null;
 
   /** zasady gry: przestępstwa, policja, zdrowie, pieniądze */
   rules: Rules | null = null;
@@ -82,6 +85,12 @@ export class Simulation {
       notify: (p, text) => this.rules?.notify(p, text), pay: (p, a) => { p.money = Math.round((p.money + a) * 100) / 100; },
       get cur() { return sim.rules?.money.cur ?? 'zł'; }, scale,
     });
+    this.market = new MarketService({
+      world: this.world, graph: () => sim.traffic?.graph ?? null, stops: () => sim.transit?.tt.data.stops ?? [],
+      now: () => { if (!sim.transit) return null; const lt = sim.transit.local(); return { date: lt.date, sec: lt.sec }; },
+      spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw), despawn: id => { this.entities.delete(id); },
+      get cur() { return sim.rules?.money.cur ?? 'zł'; }, scale, side: this.world.key === 'londyn' ? -1 : 1,
+    });
     return this.traffic = new Traffic({
       world: this.world,
       spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw),
@@ -107,6 +116,7 @@ export class Simulation {
     this.peds?.step(SIM_DT, hour, pts);
     this.taxi?.step(SIM_DT);
     this.cab?.step(SIM_DT);
+    if (this.market && this.tick % 15 === 0) this.market.step(pts);
     this.rules?.step(SIM_DT, t);
   }
 
@@ -188,6 +198,7 @@ export class Simulation {
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
     if (c.type === 'buyCar') return this.buyCar(p, c.v);
+    if (c.type === 'marketBuy') return this.market ? this.market.buy(p, this.entity(p.walker), String(c.id)) : 'Giełda jest niedostępna.';
     if (c.type === 'rereg') return this.rereg(p);
     if (c.type === 'cab') { if (!this.cab) return 'Praca kierowcy jest dostępna tylko z ruchem ulicznym.'; return c.on ? this.cab.start(p) : this.cab.stop(p); }
     if (c.type === 'taxi') {

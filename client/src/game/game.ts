@@ -13,6 +13,7 @@ import { CityView } from '../world/cityView';
 import { loadTerrain } from '../world/terrainLoader';
 import { loadTransit } from '../world/transitLoader';
 import { TransitView } from '../world/transitView';
+import { listings, marketSeed, type Listing } from '@miasto/shared/game/market';
 import { AirView, loadAir } from '../world/airView';
 import { TransitSystem } from '@miasto/shared/transit/system';
 import type { TransitData } from '@miasto/shared/transit/timetable';
@@ -126,6 +127,14 @@ export class Game {
   get world(): World | null { return this.session?.world ?? null; }
   get mode(): Mode { return this.lastMode; }
   get cityName(): string { return this.world ? CITIES[this.world.key].name : ''; }
+  private mk: { seed: string; list: Listing[] } | null = null;
+  /** Ogłoszenia giełdy samochodowej (te same co na serwerze: ziarno z daty i pory gry). */
+  marketListings(): Listing[] {
+    const t = this.transit, w = this.world; if (!t || !w) return [];
+    const lt = t.local(), seed = marketSeed(lt.date, lt.sec);
+    if (this.mk?.seed !== seed) this.mk = { seed, list: listings(w.key, seed, t.tt.data.stops, w.key === 'londyn' ? .35 : 1) };
+    return this.mk.list;
+  }
 
   // ---------- start ----------
   /** Gra jednoosobowa: lokalny serwer w Workerze (z obiektami OSM z pliku albo bez). */

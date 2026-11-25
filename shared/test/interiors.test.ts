@@ -239,3 +239,14 @@ describe('skrzyżowania', () => {
     }
   });
 });
+
+describe('giełda samochodowa', () => {
+  it('20 ogłoszeń, takie same dla tego samego ziarna (klient = serwer), inne o innej porze', async () => {
+    const { listings, marketSeed } = await import('../src/game/market');
+    const stops: [string, number, number][] = Array.from({ length: 50 }, (_, i) => [`Przystanek ${i}`, i * 40, -i * 30]);
+    const a = listings('wroclaw', marketSeed('2026-11-25', 13 * 3600), stops), b = listings('wroclaw', marketSeed('2026-11-25', 14 * 3600), stops), c = listings('wroclaw', marketSeed('2026-11-25', 19 * 3600), stops);
+    expect(a.length).toBe(20); expect(b).toEqual(a); expect(c).not.toEqual(a);
+    for (const q of a) { expect(q.title.startsWith('Sprzedam ')).toBe(true); expect(q.price).toBeGreaterThan(0); }
+    expect(new Set(a.map(q => q.v)).size).toBeGreaterThan(4);
+  });
+});

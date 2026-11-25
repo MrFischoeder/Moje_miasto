@@ -95,7 +95,14 @@ const ui: GameUI = {
     else if (box) act = 'Przeszukaj';
     else if (ride || g.session?.me.taxi?.st === 'riding') act = 'Wysiądź';
     else if (g.mode === 'walk' && g.session) for (const q of g.session.entities()) if (q.kind !== 'walker' && Math.hypot(q.x - e.x, q.z - e.z) < 3.5 && Math.abs(q.y - e.y) < 2) { act = g.session.me.taxi?.id === q.id ? 'Wsiądź do taksówki' : q.npc && !q.parked ? 'Przejmij auto' : 'Wsiądź'; break; }
-    const ab = $('actBtn'), kb = $('kickBtn');
+    // giełda: sprzedający w pobliżu (pieszo) – kupno przyciskiem
+    let sale: { id: string; price: number; title: string } | null = null;
+    if (!act && g.mode === 'walk' && g.session) for (const q of g.marketListings()) if (!g.session.me.sold.includes(q.id) && Math.hypot(q.x - e.x, q.z - e.z) < 60) {
+      for (const o of g.session.entities()) if (o.kind === 'walker' && o.npc && Math.hypot(o.x - e.x, o.z - e.z) < 6) { sale = { id: q.id, price: q.price, title: q.title }; break; }
+      if (sale) break;
+    }
+    if (sale) act = `Kup auto (${sale.price} ${g.session!.me.cur})`;
+    const ab = $('actBtn'), kb = $('kickBtn'); (ab as HTMLElement & { sale?: string | null }).sale = sale?.id ?? null;
     ab.hidden = !act; ab.innerHTML = act + '<span class="k">E</span>'; ab.className = locked ? 'ghost' : '';
     kb.hidden = !kick; kb.innerHTML = 'Wyważ<span class="k">B</span>';
     const cab = g.session?.me.cab, cabHint = cab?.target ? ` · ${cab.st === 'pickup' ? 'klient' : 'cel kursu'}: ${Math.round(Math.hypot(cab.target[0] - e.x, cab.target[1] - e.z))} m` : cab ? ' · czekasz na zlecenie' : '';
@@ -138,7 +145,7 @@ game.action = a => { if (a === 'chat') openChat(); else if (a === 'phone') phone
 game.input.attachTouch($('joy'), $('knob'), $('upB'), $('dnB'));
 
 $('xrayBtn').onclick = () => game.toggleXray();
-$('actBtn').onclick = () => { game.action('interact'); setTimeout(() => ui.slowFrame(game), 150); };
+$('actBtn').onclick = () => { const sale = ($('actBtn') as HTMLElement & { sale?: string | null }).sale; if (sale) game.session?.sendCommand({ type: 'marketBuy', id: sale }); else game.action('interact'); setTimeout(() => ui.slowFrame(game), 150); };
 $('kickBtn').onclick = () => { game.action('kick'); setTimeout(() => ui.slowFrame(game), 150); };
 $('walkBtn').onclick = () => game.action('modeWalk');
 $('carBtn').onclick = () => game.action('modeCar');
