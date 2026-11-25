@@ -169,7 +169,7 @@ export function drawItem(G: GeoBuilder, it: Item, P: Loc, N: Dir, seed: number):
       box(.05, W - .05, 0, D - .05, 0, H - .1, WHITE, true); vline(W / 2, .03, H - .13, D - .05);
       box(0, W, 0, D, H - .1, H, CERAMIC); top(.08, W - .08, .1, D - .08, H, [.75, .85, .9]);
       box(W / 2 - .02, W / 2 + .02, .03, .15, H, H + .2, STEEL);
-      box(.05, W - .05, 0, .02, H + .35, H + 1.0, [.75, .85, .92]); // lustro
+      if (!it.win) box(.05, W - .05, 0, .02, H + .35, H + 1.0, [.75, .85, .92]); // lustro (nie na oknie)
       break;
     }
     case 'pralka': {

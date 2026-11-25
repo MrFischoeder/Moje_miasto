@@ -305,12 +305,33 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   // obrys budynku złożonego z części (building:part) nie jest rysowany: części go zastępują (inaczej ściany się nakładają i migoczą)
   const insideXZ = (o: XZ[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
   const coveredByParts = (o: XZ[]) => coverF(o.flat());
+  // ściany części budynków (building:part): obrys pokrywający się z nimi nie dostaje własnych okien
+  const partEdges: [number, number, number, number][] = [];
+  for (const q of t.b) if (q.part) for (let i = 0; i < q.o.length; i += 2) { const j = (i + 2) % q.o.length; partEdges.push([q.o[i], q.o[i + 1], q.o[j], q.o[j + 1]]); }
+  // ściany wspólne z sąsiednim budynkiem (ogniowe): bez okien (inaczej okna wystają przez ścianę sąsiada)
+  const EG = 8, edgeGrid = new Map<string, { id: number; e: [number, number, number, number] }[]>();
+  for (const q of t.b) for (let i = 0; i < q.o.length; i += 2) {
+    const j = (i + 2) % q.o.length, e: [number, number, number, number] = [q.o[i], q.o[i + 1], q.o[j], q.o[j + 1]];
+    for (let gx = Math.floor(Math.min(e[0], e[2]) / EG); gx <= Math.floor(Math.max(e[0], e[2]) / EG); gx++) for (let gz = Math.floor(Math.min(e[1], e[3]) / EG); gz <= Math.floor(Math.max(e[1], e[3]) / EG); gz++) {
+      const k = gx + ',' + gz; let l = edgeGrid.get(k); if (!l) edgeGrid.set(k, l = []); l.push({ id: q.id, e });
+    }
+  }
+  const sharedWall = (a: XZ, c: XZ, self: number) => {
+    for (const tq of [.3, .5, .7]) {
+      const x = a[0] + (c[0] - a[0]) * tq, z = a[1] + (c[1] - a[1]) * tq, l = edgeGrid.get(Math.floor(x / EG) + ',' + Math.floor(z / EG));
+      if (!l || !l.some(q => q.id !== self && segD(x, z, q.e) < .6)) return false;
+    }
+    return true;
+  };
+  const segD = (x: number, z: number, e: [number, number, number, number]) => { const dx = e[2] - e[0], dz = e[3] - e[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - e[0]) * dx + (z - e[1]) * dz) / L2)); return Math.hypot(e[0] + dx * u - x, e[1] + dz * u - z); };
+  const onPartWall = (a: XZ, c: XZ) => { for (const tq of [.25, .5, .75]) { const x = a[0] + (c[0] - a[0]) * tq, z = a[1] + (c[1] - a[1]) * tq; if (!partEdges.some(e => segD(x, z, e) < .6)) return false; } return true; };
   const coverF = partsCover(t);
   const WIN: number[] = [];
   // własne modele landmarków: budynki w ich obrysie zastępuje model
   const models = MODELS[t.city] ?? [];
   // mosty nie zastępują budynków (ich prostokąty bywają duże i obejmują sąsiednie bloki)
   const bldModels = models.filter(m => !m.model.startsWith('most') && !['grunwaldzki', 'zwierzyniecki', 'tumski', 'piaskowy', 'pokoju', 'pomorski'].includes(m.model));
+  const insideModel = (x: number, z: number) => bldModels.some(m => insideFlat(m.ring, x, z));
   const byModel = (b: TileBuilding) => {
     if (!bldModels.length) return false;
     const [x, z] = centroidFlat(b.o);
@@ -361,7 +382,8 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       const roofK: RGB = b.rc ? hex(b.rc) : kc.roof;
       addRoof(B, outer, wallTop, rh, 'gabled', across, roofK, col);
       const lvl = Math.max(2, Math.min(7, b.lv ?? Math.round((wallTop - mh) / 3.6))), lh = (wallTop - mh - .4) / lvl;
-      kfc = { ...fc, levels: lvl, levelH: lh, raise: .4, spacing: 2.7, ww: 1.15, wh: Math.min(2.3, lh * .56), sill: lh * .26 };
+      // budynki z wnętrzem: siatka okien z typologii (ta sama co okna mieszkań); pozostałe: okna kamienicy z szablonu
+      kfc = fc.typ ? fc : { ...fc, levels: lvl, levelH: lh, raise: .4, spacing: 2.7, ww: 1.15, wh: Math.min(2.3, lh * .56), sill: lh * .26 };
       gable = { a, c, n, y0: wallTop - base, rh };
     } else if (st && (!rs || rs === 'flat')) {
       const lv = b.lv ?? Math.max(1, Math.round((b.h - b.mh) / 3.1)), lh = (b.h - b.mh) / lv, fr = obb(outer);
@@ -383,6 +405,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     facPad();
     const matId = st === 'blok' && !mat ? 3 : mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
     const balc: [XZ, XZ, number, number, number][] = [];
+    const hasParts = !b.part && partEdges.length > 0 && partEdges.some(e => insideXZ(outer, (e[0] + e[2]) / 2, (e[1] + e[3]) / 2));
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
       const ccw = area2(ring) > 0 !== isHole, n = ring.length;
       for (let i = 0; i < n; i++) {
@@ -392,11 +415,14 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         // kolejność wierzchołków zgodna z normalną na zewnątrz (obrysy bywają w obu kierunkach)
         if (ccw) B.quad([c[0], wallBot, c[1]], [a[0], wallBot, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
         else B.quad([a[0], wallBot, a[1]], [c[0], wallBot, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
-        if (!isChurch) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
+        // ściana zakryta: obrys na ścianie części budynku albo wewnątrz własnego modelu landmarku – bez własnych okien
+        const hidden = (!b.part && hasParts && onPartWall(a, c)) || insideModel((a[0] + c[0]) / 2, (a[1] + c[1]) / 2) || sharedWall(a, c, b.id);
+        const sp = hidden ? 0 : kfc.spacing;
+        if (!isChurch && !hidden) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
         if (st === 'blok' && !isHole && stLevels && stLevels.lv >= 4 && nrm[2] > -.25) balc.push([a, c, nrm[0], nrm[2], m]);
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
-          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(kfc.spacing, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 4 : 0));
+          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(sp, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 4 : 0));
         }
       }
     }

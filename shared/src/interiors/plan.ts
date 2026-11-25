@@ -13,13 +13,14 @@ import CHAINS from './data/sieci.json';
 import FURN from './data/meble.json';
 
 export type Side = 0 | 1 | 2 | 3; // 0: y = y0 (front), 1: x = x1, 2: y = y1, 3: x = x0
-export interface Hole { side: Side; a: number; b: number; y0: number; y1: number; kind: 'door' | 'win' | 'open' }
+/** Otwór w ścianie pomieszczenia; okno: out = odległość lica fasady na zewnątrz od granicy pomieszczenia (głębokość wnęki) */
+export interface Hole { side: Side; a: number; b: number; y0: number; y1: number; kind: 'door' | 'win' | 'open'; out?: number }
 export interface Box { name: string; kind: string; r: Rect; y: number; h: number; holes: Hole[]; floor: boolean; ceil: boolean; accent?: string; unit: number }
 /** Powierzchnia (podest, bieg schodów): wysokość ya przy mniejszej współrzędnej osi, yb przy większej. */
 export interface Slab { r: Rect; axis: 'x' | 'y'; ya: number; yb: number; steps: boolean }
 export interface Walk extends Omit<Slab, 'steps'> { nm: string }
 /** Mebel: prostokąt w układzie budynku; f = ściana, przy której stoi (0: y0, 1: x1, 2: y1, 3: x0), front w stronę pokoju */
-export interface Item { r: Rect; y: number; h: number; k: string; n: string; c?: string; id?: string; unit: number; f?: Side }
+export interface Item { r: Rect; y: number; h: number; k: string; n: string; c?: string; id?: string; unit: number; f?: Side; /** okno w ścianie za meblem */ win?: true }
 /** Drzwi (skrzydło) w otworze: linia w układzie budynku (oś x: x = at, y od a do b; oś y: y = at, x od a do b), id stałe dla planu. */
 export interface DoorDef { id: string; axis: 'x' | 'y'; at: number; a: number; b: number; y0: number; y1: number; ext: boolean }
 export interface Level { k: number; boxes: Box[]; slabs: Slab[]; walks: Walk[]; items: Item[]; doors: DoorDef[]; ms: number }
@@ -36,11 +37,11 @@ export interface Core { r: Rect; street: boolean; yv: number; sealed?: boolean }
 export interface ExtDoor { x: number; w: number; tOut: number; g: number; yIn: number; c: XZ; u: XZ; y0: number; y1: number; fd: number; hf: number }
 export interface Plan {
   id: number; city: string; typ: Typology; cls: BuildingClass; frame: Frame; base: number; f0: number; H: number; levels: number;
-  units: Unit[]; cores: Core[]; corr: Rect | null; lobby: Rect | null; ext: ExtDoor[]; slots: [number, number][][];
+  units: Unit[]; cores: Core[]; corr: Rect | null; lobby: Rect | null; ext: ExtDoor[]; slots: [number, number, number][][];
   label: string; outer: XZ[]; holes: XZ[][];
 }
 
-export interface PlanWorld { ground(x: number, z: number): number; baseOf(pts: XZ[]): number; blocked(x: number, z: number): boolean }
+export interface PlanWorld { ground(x: number, z: number): number; baseOf(pts: XZ[]): number; blocked(x: number, z: number): boolean; inBuilding?(x: number, z: number): boolean }
 
 const now = (): number => (globalThis as unknown as { performance?: { now(): number } }).performance?.now() ?? Date.now();
 const SHOP_T = ['convenience', 'supermarket', 'discount'];
@@ -109,9 +110,14 @@ export function makePlan(b: TileBuilding, t: TileData, w: PlanWorld): Plan | nul
     if (Math.abs(a[1] - c[1]) < .4) s = near((a[1] + c[1]) / 2, -.25) ? 0 : near((a[1] + c[1]) / 2, D + .25) ? 2 : -1;
     else if (Math.abs(a[0] - c[0]) < .4) s = near((a[0] + c[0]) / 2, -.25) ? 3 : near((a[0] + c[0]) / 2, W + .25) ? 1 : -1;
     if (s < 0) continue;
+    // ściana wspólna z sąsiednim budynkiem (za nią budynek): bez okien, jak na fasadzie
+    const ox = s === 3 ? -.8 : s === 1 ? .8 : 0, oy = s === 0 ? -.8 : s === 2 ? .8 : 0;
+    if ([.3, .5, .7].every(q => { const [x, z] = toWorld(frame, a[0] + (c[0] - a[0]) * q + ox, a[1] + (c[1] - a[1]) * q + oy); return w.inBuilding ? w.inBuilding(x, z) : false; })) continue;
     for (const [s0, s1] of windowSlots(L, cls)) {
       const k = s === 0 || s === 2 ? 0 : 1, v0 = a[k] + (c[k] - a[k]) * s0 / L, v1 = a[k] + (c[k] - a[k]) * s1 / L;
-      p.slots[s].push([Math.min(v0, v1), Math.max(v0, v1)]);
+      // głębokość wnęki: lico fasady względem granicy prostokąta wnętrza (y = 0, y = D, x = 0, x = W)
+      const m = k === 0 ? (a[1] + c[1]) / 2 : (a[0] + c[0]) / 2, out = Math.max(0, s === 0 ? -m : s === 2 ? m - D : s === 3 ? -m : m - W);
+      p.slots[s].push([Math.min(v0, v1), Math.max(v0, v1), out]);
     }
   }
 
@@ -353,8 +359,8 @@ export function buildLevel(p: Plan, k: number): Level {
   const W = p.frame.W, D = p.frame.D, { sill, wh } = p.cls;
   for (const bx of L.boxes) {
     const r = bx.r, sides: [Side, boolean, number, number][] = [[0, r.y0 < .05, r.x0, r.x1], [2, r.y1 > D - .05, r.x0, r.x1], [3, r.x0 < .05, r.y0, r.y1], [1, r.x1 > W - .05, r.y0, r.y1]];
-    for (const [s, on, lo, hi] of sides) if (on) for (const [a, b] of p.slots[s]) if (a > lo + .12 && b < hi - .12 && !bx.holes.some(h => h.side === s && h.kind !== 'win' && h.a < b + .2 && h.b > a - .2))
-      bx.holes.push({ side: s, a, b, y0: F(k) + sill, y1: F(k) + sill + wh, kind: 'win' });
+    for (const [s, on, lo, hi] of sides) if (on) for (const [a, b, out] of p.slots[s]) if (a > lo + .12 && b < hi - .12 && !bx.holes.some(h => h.side === s && h.kind !== 'win' && h.a < b + .2 && h.b > a - .2))
+      bx.holes.push({ side: s, a, b, y0: F(k) + sill, y1: F(k) + sill + wh, kind: 'win', ...(out > .02 ? { out: Math.min(out, 1.2) } : {}) });
   }
   // meble
   const R = rng(`meble${p.id}/${k}`);
@@ -443,7 +449,8 @@ function furnish(bx: Box, R: Rng, L: Level, p: Plan, k: number): void {
       }
       if (!got || !keepsOpen(bx, [...placed.map(o => o.r), got])) continue;
       placed.push({ r: got, side: gs, d });
-      L.items.push({ r: got, y: bx.y, h: s.h, k: s.k, n: s.n, unit: bx.unit, ...(gs >= 0 ? { f: gs as Side } : {}), ...(s.c ? { c: s.c, id: `${p.id}/${k}/${bx.unit}/${bx.name}/${n++}` } : {}) });
+      const along = gs === 0 || gs === 2, winBehind = gs >= 0 && bx.holes.some(h => h.kind === 'win' && h.side === gs && h.a < (along ? got!.x1 : got!.y1) && h.b > (along ? got!.x0 : got!.y0));
+      L.items.push({ r: got, y: bx.y, h: s.h, k: s.k, n: s.n, unit: bx.unit, ...(gs >= 0 ? { f: gs as Side } : {}), ...(winBehind ? { win: true as const } : {}), ...(s.c ? { c: s.c, id: `${p.id}/${k}/${bx.unit}/${bx.name}/${n++}` } : {}) });
     }
   }
 }

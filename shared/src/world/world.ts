@@ -104,6 +104,8 @@ export class World implements Surface {
 
   // ---------- zapytania fizyki ----------
   /** Punkt zablokowany: budynek albo woda poza mostem (y: wysokość sprawdzającego, do wyboru poziomu). */
+  /** Punkt w obrysie budynku (bez wody). */
+  inBuilding(x: number, z: number): boolean { return this.buildings.hit(x, z); }
   blocked(x: number, z: number, y?: number): boolean {
     if (this.buildings.hit(x, z)) return true;
     if (!this.water.hit(x, z)) return false;

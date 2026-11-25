@@ -107,10 +107,13 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
         const a = Math.max(lo, h.a), b = Math.min(hi, h.b), h0 = Math.max(bx.y, h.y0), h1 = Math.min(top, h.y1);
         if (b - a > .02 && h1 - h0 > .02) {
           // boki otworu (normalna do środka otworu), nadproże (w dół), parapet okna (w górę)
-          G.quad(at(a, h0), atB(a, h0), atB(a, h1), at(a, h1), jamb, tang);
-          G.quad(at(b, h0), atB(b, h0), atB(b, h1), at(b, h1), jamb, [-tang[0], 0, -tang[2]]);
-          if (h1 < top - .01) G.quad(at(a, h1), at(b, h1), atB(b, h1), atB(a, h1), jamb, [0, -1, 0]);
-          if (h.kind === 'win' && h0 > bx.y + .01) G.quad(at(a, h0), at(b, h0), atB(b, h0), atB(a, h0), jamb, [0, 1, 0]);
+          // okno: wnęka aż do lica fasady (mur gruby jak odległość fasady od pokoju)
+          const o = h.kind === 'win' ? (h.out ?? 0) : 0, sg = s === 0 || s === 3 ? -1 : 1;
+          const atO = (t: number, hh: number) => along ? P(t, bnd + sg * o, hh) : P(bnd + sg * o, t, hh);
+          G.quad(at(a, h0), atO(a, h0), atO(a, h1), at(a, h1), jamb, tang);
+          G.quad(at(b, h0), atO(b, h0), atO(b, h1), at(b, h1), jamb, [-tang[0], 0, -tang[2]]);
+          if (h1 < top - .01) G.quad(at(a, h1), at(b, h1), atO(b, h1), atO(a, h1), jamb, [0, -1, 0]);
+          if (h.kind === 'win' && h0 > bx.y + .01) G.quad(at(a, h0), at(b, h0), atO(b, h0), atO(a, h0), mix(jamb, 1.06), [0, 1, 0]); // parapet
         }
         const c: RGB = h.kind === 'win' ? [.95, .95, .92] : edge;
         G.line(at(a, h0), at(a, h1), c); G.line(at(b, h0), at(b, h1), c); G.line(at(a, h1), at(b, h1), c); if (h.kind === 'win') G.line(at(a, h0), at(b, h0), c);
