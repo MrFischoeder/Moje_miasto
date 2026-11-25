@@ -46,7 +46,7 @@ export class NetSession {
   ready: Promise<void>;
   private readyRes!: () => void;
   /** własny stan z serwera: zdrowie, pieniądze, gwiazdki */
-  readonly me = { hp: 100, money: 0, wanted: 0, dead: false, cur: 'zł' };
+  readonly me: { hp: number; money: number; wanted: number; dead: boolean; cur: string; taxi: import('@miasto/shared/game/taxi').TaxiInfo | null } = { hp: 100, money: 0, wanted: 0, dead: false, cur: 'zł', taxi: null };
   onEvent: (text: string, kind: 'crime' | 'arrest' | 'death' | 'info') => void = () => {};
   /** serwer zmienił tryb wnętrz (gra sieciowa) */
   onInteriors: (on: boolean) => void = () => {};
@@ -98,7 +98,7 @@ export class NetSession {
       else if (m.t === 'chat') this.onChat({ ...m, at: performance.now() });
       else if (m.t === 'pm') this.onPm(m);
       else if (m.t === 'time') this.clock.set(m.time, m.scale);
-      else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur });
+      else if (m.t === 'me') Object.assign(this.me, { hp: m.hp, money: m.money, wanted: m.wanted, dead: m.dead, cur: m.cur, taxi: m.taxi ?? null });
       else if (m.t === 'event') this.onEvent(m.text, m.kind);
       else if (m.t === 'interiors') { this.world.interiors.setEnabled(m.on); this.onInteriors(m.on); }
       else if (m.t === 'doors') { const I = this.world.interiors; if (m.all) I.resetDoors(); for (const [id, code] of m.s) I.setDoor(id, typeof code === 'boolean' ? (code ? 1 : 0) : code); }

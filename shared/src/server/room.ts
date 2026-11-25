@@ -142,6 +142,7 @@ export class Room {
     let msg: string | undefined;
     if (cmd.type === 'mode' && ['walk', 'car', 'heli'].includes(cmd.mode)) msg = this.sim.command(c.player.id, cmd);
     else if (cmd.type === 'enter' || cmd.type === 'alight' || cmd.type === 'kick') msg = this.sim.command(c.player.id, { type: cmd.type });
+    else if (cmd.type === 'taxi') msg = this.sim.command(c.player.id, cmd.cancel ? { type: 'taxi', cancel: true } : { type: 'taxi', x: Number(cmd.x), z: Number(cmd.z) });
     else if (cmd.type === 'teleport' && (this.opt.local || this.opt.dev) && Number.isFinite(cmd.x) && Number.isFinite(cmd.z)) msg = this.sim.command(c.player.id, { type: 'teleport', x: cmd.x, z: cmd.z });
     else if (cmd.type === 'goStation' && Number.isInteger(cmd.station)) msg = this.sim.command(c.player.id, { type: 'goStation', station: cmd.station, street: !!cmd.street });
     if (msg) this.sendJson(c.conn, { t: 'chat', from: '', color: '#ffcc33', text: msg, sys: true });
@@ -240,8 +241,8 @@ export class Room {
   private sendMe(): void {
     const R = this.sim.rules;
     for (const c of this.clients.values()) {
-      const p = c.player, sig = `${Math.round(p.hp)}|${p.money.toFixed(2)}|${p.wanted}|${p.dead > 0}`;
-      if (sig !== c.meSig) { c.meSig = sig; this.sendJson(c.conn, { t: 'me', hp: Math.round(p.hp), money: p.money, wanted: p.wanted, dead: p.dead > 0, cur: R?.money.cur ?? 'zł' }); }
+      const p = c.player, tx = this.sim.taxi?.info(p.id) ?? null, sig = `${Math.round(p.hp)}|${p.money.toFixed(2)}|${p.wanted}|${p.dead > 0}|${tx ? `${tx.st}:${tx.id}:${Math.round(tx.eta / 5)}:${tx.fare}` : ''}`;
+      if (sig !== c.meSig) { c.meSig = sig; this.sendJson(c.conn, { t: 'me', hp: Math.round(p.hp), money: p.money, wanted: p.wanted, dead: p.dead > 0, cur: R?.money.cur ?? 'zł', taxi: tx }); }
     }
     if (this.sim.doorEvents.length) this.broadcast({ t: 'doors', s: this.sim.doorEvents.splice(0) });
     if (R) for (const e of R.events.splice(0)) { const c = this.clients.get(e.pid); if (c) this.sendJson(c.conn, { t: 'event', text: e.text, kind: e.kind }); }

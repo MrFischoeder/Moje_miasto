@@ -35,6 +35,8 @@ export class Phone {
   private job: { target?: [number, number]; npc: string } | null = null;
   private map: PhoneMap | null = null;
   private current: (() => void) | null = null; // odświeżenie otwartego ekranu
+  /** ekran odświeżany co sekundę (Taxi: stan kursu) */
+  private live = false;
   private vf = h('div'); private toastEl = h('div');
   private toastT = 0;
   /** sprzątanie po aparacie (nasłuch spustu) */
@@ -63,7 +65,7 @@ export class Phone {
       const t = e.target as HTMLElement | null; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && !this.el.contains(t)) return; // czat
       this.toggle(false);
     });
-    setInterval(() => { if (this.open) { this.tick(); } }, 1000);
+    setInterval(() => { if (this.open) { this.tick(); if (this.live) this.current?.(); } }, 1000);
     this.home();
   }
 
@@ -116,6 +118,7 @@ export class Phone {
 
   // ---------- ekrany ----------
   private page(title: string, back: () => void, extra = ''): { page: HTMLDivElement; head: HTMLDivElement } {
+    this.live = false;
     this.view.innerHTML = ''; const page = h('div', 'page'), head = h('div', 'head', `<span class="back">‹</span>${extra}<span>${esc(title)}</span>`);
     (head.querySelector('.back') as HTMLElement).onclick = back; page.append(head); this.view.append(page); return { page, head };
   }
@@ -133,6 +136,7 @@ export class Phone {
       ['📷', 'Aparat', '#636366', () => this.camera()],
       ['🖼️', 'Zdjęcia', '#ff9f0a', () => this.gallery()],
       ['💼', 'Zlecenia', '#ff453a', () => this.jobs()],
+      ['🚕', 'Taxi', '#ffcc00', () => this.taxiApp()],
     ];
     for (const [ic, name, bg, fn, badge] of apps) {
       const a = h('div', 'app', `<div class="icon" style="background:${bg}">${ic}</div><span>${name}</span>${badge ? `<div class="badge">${badge}</div>` : ''}`); a.onclick = fn; home.append(a);
@@ -226,11 +230,33 @@ export class Phone {
     this.current = render; render();
   }
 
-  /** Mapa całego miasta; focus: punkt do pokazania */
-  mapApp(focus?: [number, number]): void {
+  /** Taxi: zamówienie (cel wybierany na mapie), stan kursu, odwołanie */
+  taxiApp(): void {
+    const render = () => {
+      const { page } = this.page('Taxi', () => this.home()), box = h('div', 'list'), s = this.game.session, tx = s?.me.taxi ?? null, cur = s?.me.cur ?? 'zł';
+      if (!tx) {
+        box.append(h('div', 'empty', '🚕 Wybierz cel na mapie, a taksówka podjedzie po ciebie.<br>Opłata: 8 zł + ok. 3,20 zł za km (pobierana po kursie).'));
+        const b = h('button', 'btn blue', '🗺️ Wybierz cel na mapie'); b.onclick = () => this.mapApp(undefined, true); b.style.margin = '12px auto'; b.style.display = 'block';
+        box.append(b);
+      } else {
+        const where = esc(this.place(tx.dest[0], tx.dest[1]) || 'wybrany punkt');
+        const st = tx.st === 'coming' ? `Taksówka jedzie po ciebie · ok. ${tx.eta} s` : tx.st === 'waiting' ? 'Taksówka czeka obok – podejdź i wsiądź (E / „Wsiądź”)' : `W drodze · na miejscu za ok. ${tx.eta} s`;
+        box.append(h('div', 'row', `<div class="av" style="background:#ffcc00;color:#000">🚕</div><div class="tx"><b>${esc(st)}</b><span>Cel: ${where} · ok. ${tx.fare.toFixed(0)} ${esc(cur)}</span></div>`));
+        const acts = h('div', 'acts'), map = h('button', 'btn blue', '🗺️ Pokaż na mapie'), cancel = h('button', 'btn no', tx.st === 'riding' ? 'Wysiądź tutaj' : 'Odwołaj');
+        map.onclick = () => { const e = s?.entity(tx.id); this.mapApp(e ? [e.x, e.z] : tx.dest); };
+        cancel.onclick = () => { s?.sendCommand({ type: 'taxi', cancel: true }); setTimeout(render, 400); };
+        acts.append(map, cancel); acts.style.cssText = 'display:flex;gap:8px;justify-content:center;margin:12px'; box.append(acts);
+      }
+      page.append(box); this.live = true;
+    };
+    this.current = render; render();
+  }
+
+  /** Mapa całego miasta; focus: punkt do pokazania; taxi: wybór celu kursu */
+  mapApp(focus?: [number, number], taxi = false): void {
     const w = this.game.world; if (!w) return;
     if (!this.map || (this.map as unknown as { world: unknown }).world !== w) this.map = new PhoneMap(w);
-    const m = this.map, { page } = this.page('Mapa', () => this.home());
+    const m = this.map, { page } = this.page(taxi ? 'Taxi: wybierz cel' : 'Mapa', () => taxi ? this.taxiApp() : this.home());
     const pop = h('div', 'pop'), ui = h('div', 'mapui');
     const zin = h('div', '', '＋'), zout = h('div', '', '－'), me = h('div', '', '◎'), gr = h('div', '', '#');
     gr.title = 'Siatka kratek'; gr.style.opacity = m.showGrid ? '1' : '.5'; gr.onclick = () => { m.showGrid = !m.showGrid; gr.style.opacity = m.showGrid ? '1' : '.5'; m.draw(); };
@@ -248,6 +274,7 @@ export class Phone {
       mk.push(...this.pins);
       if (this.job?.target) mk.push({ x: this.job.target[0], z: this.job.target[1], color: '#ff453a', label: 'Cel zlecenia', kind: 'job' });
       if (sel) mk.push({ x: sel[0], z: sel[1], color: '#0a84ff', kind: 'sel' });
+      const tx = this.game.session?.me.taxi; if (tx) { const e = this.game.session?.entity(tx.id); if (e) mk.push({ x: e.x, z: e.z, color: '#ffcc00', label: 'Taksówka', kind: 'player' }); mk.push({ x: tx.dest[0], z: tx.dest[1], color: '#ffcc00', label: 'Cel kursu', kind: 'job' }); }
       if (p) mk.push({ x: p.x, z: p.z, color: '#0a84ff', kind: 'me', yaw: p.yaw });
       m.markers = mk; m.draw();
     };
@@ -257,11 +284,14 @@ export class Phone {
       const name = this.place(x, z);
       const ll = unprojPoint(w.city.o, x, z);
       pop.innerHTML = `<b>${esc(name && name !== '—' ? name : 'Wybrany punkt')}</b><div style="font-size:12px;opacity:.75">Kratka <b>${cellName(m.grid, x, z)}</b> · ${fmtLatLon(ll)}<br>x ${Math.round(x)}, z ${Math.round(z)}</div>`;
+      const cab = h('button', 'btn ok', '🚕 Taksówka tutaj'), fare = (() => { const p = this.myPos(); return p ? Math.round(8 + 3.2 * Math.hypot(x - p.x, z - p.z) * 1.3 / 1000) : 0; })();
+      cab.textContent = `🚕 Taksówka tutaj (ok. ${fare} ${this.game.session?.me.cur ?? 'zł'})`;
+      cab.onclick = () => { this.game.session?.sendCommand({ type: 'taxi', x, z }); pop.classList.remove('show'); sel = null; setTimeout(() => this.taxiApp(), 500); };
       const acts = h('div', 'acts'), tp = h('button', 'btn blue', '⚡ Teleportuj (wersja testowa)'), close = h('button', 'btn no', 'Zamknij'), cp = h('button', 'btn no', '⧉ Kopiuj współrzędne');
       cp.onclick = () => { navigator.clipboard?.writeText(`${fmtLatLon(ll)} (${cellName(m.grid, x, z)})`).catch(() => {}); cp.textContent = '✓ Skopiowano'; };
       tp.onclick = () => { this.game.session?.sendCommand({ type: 'teleport', x, z }); pop.classList.remove('show'); sel = null; setTimeout(() => { const p = this.myPos(); if (p) m.center(p.x, p.z); refresh(); }, 600); };
       close.onclick = () => { pop.classList.remove('show'); sel = null; refresh(); };
-      acts.append(tp, cp, close); pop.append(acts); pop.classList.add('show');
+      if (taxi) acts.append(cab, close); else acts.append(cab, tp, cp, close); pop.append(acts); pop.classList.add('show');
     };
     const p = this.myPos();
     if (focus) m.center(focus[0], focus[1], Math.max(m.s, .5)); else if (p) m.center(p.x, p.z);

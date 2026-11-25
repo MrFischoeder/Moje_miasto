@@ -93,8 +93,8 @@ const ui: GameUI = {
     let act = '', kick = false;
     if (useDoor) { act = locked ? 'Zamknięte' : dr!.open ? 'Zamknij' : (dr!.code & 4) ? 'Otwórz (wyważone)' : 'Otwórz'; kick = locked; }
     else if (box) act = 'Przeszukaj';
-    else if (ride) act = 'Wysiądź';
-    else if (g.mode === 'walk' && g.session) for (const q of g.session.entities()) if (q.kind !== 'walker' && Math.hypot(q.x - e.x, q.z - e.z) < 3.5 && Math.abs(q.y - e.y) < 2) { act = q.npc && !q.parked ? 'Przejmij auto' : 'Wsiądź'; break; }
+    else if (ride || g.session?.me.taxi?.st === 'riding') act = 'Wysiądź';
+    else if (g.mode === 'walk' && g.session) for (const q of g.session.entities()) if (q.kind !== 'walker' && Math.hypot(q.x - e.x, q.z - e.z) < 3.5 && Math.abs(q.y - e.y) < 2) { act = g.session.me.taxi?.id === q.id ? 'Wsiądź do taksówki' : q.npc && !q.parked ? 'Przejmij auto' : 'Wsiądź'; break; }
     const ab = $('actBtn'), kb = $('kickBtn');
     ab.hidden = !act; ab.innerHTML = act + '<span class="k">E</span>'; ab.className = locked ? 'ghost' : '';
     kb.hidden = !kick; kb.innerHTML = 'Wyważ<span class="k">B</span>';

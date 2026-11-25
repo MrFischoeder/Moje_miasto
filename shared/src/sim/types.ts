@@ -94,6 +94,8 @@ export type Command =
   | { type: 'enter' }
   /** kopniak w najbliższe drzwi (wyważanie zamkniętych na klucz) */
   | { type: 'kick' }
+  /** taksówka: zamówienie do celu (x, z) albo odwołanie */
+  | { type: 'taxi'; x?: number; z?: number; cancel?: boolean }
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
   | { type: 'teleport'; x: number; z: number }

@@ -7,6 +7,7 @@ import type { TransitSystem } from '../transit/system';
 import { Traffic } from '../traffic/traffic';
 import { Pedestrians } from '../traffic/peds';
 import { Rules } from '../game/rules';
+import { TaxiService } from '../game/taxi';
 import { DOOR_BROKEN, DOOR_LOCKED, DOOR_OPEN } from '../interiors/interiors';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
@@ -43,6 +44,8 @@ export class Simulation {
 
   /** piesi NPC wokół graczy */
   peds: Pedestrians | null = null;
+  /** taksówki na wezwanie (telefon) */
+  taxi: TaxiService | null = null;
 
   /** zasady gry: przestępstwa, policja, zdrowie, pieniądze */
   rules: Rules | null = null;
@@ -58,6 +61,15 @@ export class Simulation {
       place: (p, x, z) => this.place(p, x, z),
     });
     const sim = this;
+    this.taxi = new TaxiService({
+      world: this.world, graph: () => sim.traffic?.graph ?? null,
+      spawnCar: (x, y, z, yaw) => this.spawn('car', x, y, z, yaw), despawn: id => { this.entities.delete(id); },
+      walker: p => this.entity(p.walker), seat: (p, e) => this.enter(p, e, true),
+      unseat: (p, at) => { this.exitVehicle(p, true); if (at) { const w = this.entity(p.walker); w.x = at[0]; w.z = at[1]; w.y = this.world.surfaceAt(at[0], at[1], 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); } },
+      notify: (p, text) => this.rules?.notify(p, text),
+      charge: (p, a) => { const m = Math.min(p.money, Math.max(0, a)); p.money = Math.round((p.money - m) * 100) / 100; return m; },
+      get cur() { return sim.rules?.money.cur ?? 'zł'; }, side: this.world.key === 'londyn' ? -1 : 1,
+    }, this.world.key === 'londyn' ? .35 : 1);
     return this.traffic = new Traffic({
       world: this.world,
       spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw),
@@ -81,6 +93,7 @@ export class Simulation {
     const pts: { x: number; z: number }[] = []; for (const p of this.players.values()) { const w = this.entity(p.walker); pts.push({ x: w.x, z: w.z }); }
     this.traffic.step(SIM_DT, t, hour, pts);
     this.peds?.step(SIM_DT, hour, pts);
+    this.taxi?.step(SIM_DT);
     this.rules?.step(SIM_DT, t);
   }
 
@@ -161,6 +174,14 @@ export class Simulation {
       this.exitVehicle(p, false); const w = this.entity(p.walker);
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
+    if (c.type === 'taxi') {
+      if (!this.taxi) return 'Taksówki są dostępne tylko z ruchem ulicznym.';
+      if (c.cancel) return this.taxi.cancel(p);
+      if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) return; return this.taxi.order(p, [c.x!, c.z!]);
+    }
+    // pasażer taksówki: wysiadanie (E, tryb) z opłatą za przejechaną drogę
+    if (p.passenger && p.vehicle != null && this.taxi?.isTaxi(p.vehicle) && (c.type === 'enter' || c.type === 'mode' || c.type === 'alight')) return this.taxi.alight(p);
+    if (c.type === 'enter' && this.taxi?.tryBoard(p)) return;
     if (c.type === 'mode') this.setMode(p, c.mode, c.v);
     else if (c.type === 'kick') this.kick(p);
     else if (c.type === 'enter') { if (!this.board(p) && !this.door(p) && !this.search(p)) this.enterNearest(p); }

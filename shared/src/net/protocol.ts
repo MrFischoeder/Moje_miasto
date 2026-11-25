@@ -112,7 +112,7 @@ export type ServerMsg =
   | { t: 'welcome'; v: number; you: number; city: string; session: string; tick: number; hz: number; time: number; scale: number }
   | { t: 'time'; time: number; scale: number }
   /** stan własnego gracza (wysyłany tylko jemu, przy zmianie) */
-  | { t: 'me'; hp: number; money: number; wanted: number; dead: boolean; cur: string }
+  | { t: 'me'; hp: number; money: number; wanted: number; dead: boolean; cur: string; taxi?: import('../game/taxi').TaxiInfo | null }
   /** zdarzenie na środku ekranu */
   | { t: 'event'; text: string; kind: 'crime' | 'arrest' | 'death' | 'info' }
   /** stan drzwi we wnętrzach: zmiany (albo pełna lista przy dołączeniu) [id, otwarte] */

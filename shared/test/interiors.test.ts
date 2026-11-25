@@ -171,3 +171,24 @@ describe('drzwi', () => {
     sim.command(p.id, { type: 'enter' }); expect(w.interiors.isOpen(e.d.id)).toBe(true);
   });
 });
+
+describe('taksówka', () => {
+  it('zamówienie, dojazd, wsiadanie, kurs z opłatą i wysiadanie u celu', () => {
+    const w = worldAround('warszawa', -3, 1), sim = new Simulation(w); sim.enableTraffic();
+    const p = sim.addPlayer('a'), wk = sim.entity(p.walker); p.money = 500;
+    // gracz na jezdni (punkt grafu)
+    sim.stepTraffic(0, 12); const G = sim.traffic!.graph, e0 = G.edges.find(e => e.len > 60)!, q = { x: 0, z: 0, yaw: 0 }; G.pose(e0, e0.len / 2, 4, q);
+    Object.assign(wk, { x: q.x, z: q.z, y: w.surfaceAt(q.x, q.z, 1e6), reg: -1 });
+    const dest: [number, number] = [q.x + 900, q.z + 300];
+    const msg = sim.command(p.id, { type: 'taxi', x: dest[0], z: dest[1] }); expect(msg).toContain('Taksówka zamówiona');
+    let info = sim.taxi!.info(p.id)!; expect(info.st).toBe('coming');
+    for (let i = 0; i < 30 * 60 && sim.taxi!.info(p.id)?.st !== 'waiting'; i++) sim.stepTraffic(i / 30, 12);
+    info = sim.taxi!.info(p.id)!; expect(info.st).toBe('waiting');
+    const cab = sim.entity(info.id); Object.assign(wk, { x: cab.x + 2, z: cab.z }); // podejście do auta
+    sim.command(p.id, { type: 'enter' }); expect(p.vehicle).toBe(info.id); expect(p.passenger).toBe(true);
+    const m0 = p.money;
+    for (let i = 0; i < 30 * 20 && sim.taxi!.info(p.id); i++) { sim.stepTraffic(i / 30, 12); sim.endStep(); }
+    expect(sim.taxi!.info(p.id)).toBeNull(); expect(p.vehicle).toBeNull();
+    expect(p.money).toBeLessThan(m0); expect(Math.hypot(wk.x - dest[0], wk.z - dest[1])).toBeLessThan(60);
+  });
+});
