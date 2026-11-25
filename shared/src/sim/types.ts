@@ -29,6 +29,8 @@ export interface Entity {
   npc?: boolean;
   /** policja (radiowóz albo policjant) */
   police?: boolean;
+  /** auto zarejestrowane legalnie na gracza (id); brak = kradzione / bez papierów */
+  legal?: number;
   /** auto zaparkowane przy ulicy / na parkingu (bez kierowcy; NPC może do niego wsiąść i odjechać) */
   parked?: boolean;
   /** właściciel (pojazd przywoływany przez gracza) */
@@ -66,6 +68,8 @@ export interface PlayerState {
    * Rośnie, gdy symulacja sama ustawia kierunek patrzenia pieszego
    * (teleport, wyjście z pojazdu). Klient przejmuje wtedy yaw/pitch z bytu.
    */
+  /** warianty aut posiadane legalnie (kupione albo przerejestrowane) */
+  owned?: number[];
   viewSeq: number;
   /** kierunek patrzenia ustawiony przez symulację przy zmianie viewSeq */
   viewYaw?: number; viewPitch?: number;
@@ -96,6 +100,10 @@ export type Command =
   | { type: 'kick' }
   /** taksówka: zamówienie do celu (x, z) albo odwołanie */
   | { type: 'taxi'; x?: number; z?: number; cancel?: boolean }
+  /** salon: kupno auta (wariant VEH); dziupla: przerejestrowanie auta, którym gracz jedzie; praca kierowcy taksówki */
+  | { type: 'buyCar'; v: number }
+  | { type: 'rereg' }
+  | { type: 'cab'; on: boolean }
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
   | { type: 'teleport'; x: number; z: number }

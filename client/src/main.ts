@@ -98,7 +98,8 @@ const ui: GameUI = {
     const ab = $('actBtn'), kb = $('kickBtn');
     ab.hidden = !act; ab.innerHTML = act + '<span class="k">E</span>'; ab.className = locked ? 'ghost' : '';
     kb.hidden = !kick; kb.innerHTML = 'Wyważ<span class="k">B</span>';
-    const hint = useDoor ? ` · E: ${locked ? 'zamknięte na klucz · B: wyważ' : (dr!.open ? 'zamknij' : 'otwórz') + ' drzwi'}` : box ? ` · E: przeszukaj (${box.item.n})` : '';
+    const cab = g.session?.me.cab, cabHint = cab?.target ? ` · ${cab.st === 'pickup' ? 'klient' : 'cel kursu'}: ${Math.round(Math.hypot(cab.target[0] - e.x, cab.target[1] - e.z))} m` : cab ? ' · czekasz na zlecenie' : '';
+    const hint = cabHint + (useDoor ? ` · E: ${locked ? 'zamknięte na klucz · B: wyważ' : (dr!.open ? 'zamknij' : 'otwórz') + ' drzwi'}` : box ? ` · E: przeszukaj (${box.item.n})` : '');
     $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)) + hint; info(g);
     // współrzędne do testów: szerokość/długość geograficzna, kratka mapy, układ gry
     const city = g.world.city; $('coords').textContent = `📍 ${fmtLatLon(unprojPoint(city.o, e.x, e.z))} · kratka ${cellName(gridOf(city), e.x, e.z)} · x ${Math.round(e.x)} z ${Math.round(e.z)}`;
@@ -115,6 +116,7 @@ const ui: GameUI = {
     const w = g.world, P = g.pose, gr = w ? w.ground(P.x, P.z) : 0;
     const s = g.session, me = s?.player(), others = [];
     if (s && me) for (const p of s.players.values()) if (p.id !== me.id) { const e = s.entity(p.vehicle ?? p.walker); if (e) others.push({ x: e.x, z: e.z, color: p.color }); }
+    const cabT = g.session?.me.cab?.target; if (cabT) others.push({ x: cabT[0], z: cabT[1], color: '#ffcc00' }); // praca kierowcy: klient / cel kursu
     renderMinimap(mini, w, { ...P, yaw: g.mode === 'walk' ? g.viewYaw : P.yaw, mode: g.mode, xray: g.xray, under: P.y < gr - 1, height: P.y - gr, others, transit: g.transitDots() });
   },
 };

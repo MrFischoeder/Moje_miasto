@@ -8,6 +8,8 @@ import { Traffic } from '../traffic/traffic';
 import { Pedestrians } from '../traffic/peds';
 import { Rules } from '../game/rules';
 import { TaxiService } from '../game/taxi';
+import { CabJobs } from '../game/cabJob';
+import { CAB_OK, CAR_PRICE, DZIUPLA, DZIUPLA_R, REREG_SHARE } from '../game/cars';
 import { DOOR_BROKEN, DOOR_LOCKED, DOOR_OPEN } from '../interiors/interiors';
 import { SIM_DT } from './loop';
 import { carStep, heliStep, walkStep } from './vehicles';
@@ -46,6 +48,8 @@ export class Simulation {
   peds: Pedestrians | null = null;
   /** taksówki na wezwanie (telefon) */
   taxi: TaxiService | null = null;
+  /** praca gracza jako kierowca taksówki */
+  cab: CabJobs | null = null;
 
   /** zasady gry: przestępstwa, policja, zdrowie, pieniądze */
   rules: Rules | null = null;
@@ -70,6 +74,14 @@ export class Simulation {
       charge: (p, a) => { const m = Math.min(p.money, Math.max(0, a)); p.money = Math.round((p.money - m) * 100) / 100; return m; },
       get cur() { return sim.rules?.money.cur ?? 'zł'; }, side: this.world.key === 'londyn' ? -1 : 1,
     }, this.world.key === 'londyn' ? .35 : 1);
+    const scale = this.world.key === 'londyn' ? .35 : 1;
+    this.cab = new CabJobs({
+      world: this.world, graph: () => sim.traffic?.graph ?? null,
+      car: p => { if (p.vehicle == null || p.passenger) return null; const v = this.entities.get(p.vehicle); return v && v.kind === 'car' && v.legal === p.id && CAB_OK(v.v ?? 0) ? v : null; },
+      spawnPed: (x, y, z, yaw) => this.spawn('walker', x, y, z, yaw), despawn: id => { this.entities.delete(id); },
+      notify: (p, text) => this.rules?.notify(p, text), pay: (p, a) => { p.money = Math.round((p.money + a) * 100) / 100; },
+      get cur() { return sim.rules?.money.cur ?? 'zł'; }, scale,
+    });
     return this.traffic = new Traffic({
       world: this.world,
       spawn: (k, x, y, z, yaw) => this.spawn(k, x, y, z, yaw),
@@ -94,6 +106,7 @@ export class Simulation {
     this.traffic.step(SIM_DT, t, hour, pts);
     this.peds?.step(SIM_DT, hour, pts);
     this.taxi?.step(SIM_DT);
+    this.cab?.step(SIM_DT);
     this.rules?.step(SIM_DT, t);
   }
 
@@ -174,6 +187,9 @@ export class Simulation {
       this.exitVehicle(p, false); const w = this.entity(p.walker);
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
+    if (c.type === 'buyCar') return this.buyCar(p, c.v);
+    if (c.type === 'rereg') return this.rereg(p);
+    if (c.type === 'cab') { if (!this.cab) return 'Praca kierowcy jest dostępna tylko z ruchem ulicznym.'; return c.on ? this.cab.start(p) : this.cab.stop(p); }
     if (c.type === 'taxi') {
       if (!this.taxi) return 'Taksówki są dostępne tylko z ruchem ulicznym.';
       if (c.cancel) return this.taxi.cancel(p);
@@ -323,6 +339,32 @@ export class Simulation {
     w.pitch = 0; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0;
   }
 
+  // ---------- auta gracza: salon i dziupla ----------
+  private carPrice(v: number): number { return Math.round(CAR_PRICE[v] * (this.world.key === 'londyn' ? .35 : 1)); }
+  /** Kupno auta w salonie: wariant staje się legalnym autem gracza (przywoływanym w trybie Auto). */
+  buyCar(p: PlayerState, v: number): string {
+    if (!Number.isInteger(v) || !VEH[v]) return 'Nie ma takiego auta.';
+    const own = p.owned ??= []; if (own.includes(v)) return `Masz już: ${VEH[v].name}.`;
+    const price = this.carPrice(v), cur = this.rules?.money.cur ?? 'zł'; if (p.money < price) return `Za mało pieniędzy: ${VEH[v].name} kosztuje ${price} ${cur}.`;
+    p.money = Math.round((p.money - price) * 100) / 100; own.push(v);
+    // auto, którym gracz właśnie jedzie (ten sam model), od razu z papierami
+    if (p.vehicle != null) { const e = this.entities.get(p.vehicle); if (e && e.kind === 'car' && e.v === v && e.owner === p.id) e.legal = p.id; }
+    return `Kupiono: ${VEH[v].name} za ${price} ${cur}. Przywołasz je w trybie Auto (wybierz model w menu).`;
+  }
+  /** Dziupla: przerejestrowanie auta, którym gracz jedzie (kradzione / bez papierów), za część ceny. */
+  rereg(p: PlayerState): string {
+    const d = DZIUPLA[this.world.key]; if (!d) return 'W tym mieście nie ma dziupli.';
+    if (p.vehicle == null || p.passenger) return 'Przyjedź do dziupli autem, które chcesz przerejestrować.';
+    const e = this.entity(p.vehicle); if (e.kind !== 'car') return 'Tu przerejestrujesz tylko auto.';
+    if (e.legal === p.id) return 'To auto ma już papiery na ciebie.';
+    if (Math.hypot(e.x - d.x, e.z - d.z) > DZIUPLA_R) return `Podjedź do dziupli (${d.name}) – znacznik na mapie w telefonie.`;
+    const v = e.v ?? 0, fee = Math.round(this.carPrice(v) * REREG_SHARE), cur = this.rules?.money.cur ?? 'zł';
+    if (p.money < fee) return `Przerejestrowanie kosztuje ${fee} ${cur} – za mało pieniędzy.`;
+    p.money = Math.round((p.money - fee) * 100) / 100; e.legal = p.id; e.owner = p.id; e.npc = false; e.parked = false;
+    const own = p.owned ??= []; if (!own.includes(v)) own.push(v);
+    return `Auto (${VEH[v].name}) przerejestrowane na ciebie za ${fee} ${cur}. Ma teraz „papiery”.`;
+  }
+
   // ---------- pojazdy ----------
   /** Pojazd gracza danego typu (przywoływany klawiszem); tworzy go, gdy nie istnieje. */
   private personal(p: PlayerState, kind: 'car' | 'heli', variant?: number): Entity {
@@ -389,6 +431,7 @@ export class Simulation {
       }
       if (m === 'car') [x, z] = W.freeSpot(x, z, yaw);
       const v = this.personal(p, m, variant);
+      if (m === 'car') v.legal = (p.owned ?? []).includes(v.v ?? 0) ? p.id : undefined; // własne auto: legalne tylko kupione / przerejestrowane
       Object.assign(v, { x, z, yaw, y: m === 'heli' ? W.roofTop(x, z) + (under ? 40 : 0) : under ? W.ground(x, z) : W.surfaceAt(x, z, w.y), speed: 0, vx: 0, vz: 0, vy: 0, tilt: 0, roll: 0, air: false });
       this.enter(p, v);
       return;

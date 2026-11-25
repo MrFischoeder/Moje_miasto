@@ -92,3 +92,4 @@
 #phone .bar .close { margin-left: 8px; width: 26px; height: 26px; border-radius: 13px; border: 0; background: rgba(255, 255, 255, .18); color: #f2f4f7; font-size: 13px; line-height: 26px; padding: 0; cursor: pointer; }
 #phone .bar .close:hover { background: rgba(255, 59, 48, .8); }
 .btns { z-index: 60; }
+.list .sep{height:1px;background:#2c2c2e;margin:10px 0}

@@ -192,3 +192,34 @@ describe('taksówka', () => {
     expect(p.money).toBeLessThan(m0); expect(Math.hypot(wk.x - dest[0], wk.z - dest[1])).toBeLessThan(60);
   });
 });
+
+describe('auta gracza i praca kierowcy', () => {
+  it('salon, dziupla, praca kierowcy tylko legalnym autem: klient wsiada i płaci u celu', async () => {
+    const { DZIUPLA } = await import('../src/game/cars');
+    const w = worldAround('warszawa', -3, 1), sim = new Simulation(w); sim.enableTraffic();
+    const p = sim.addPlayer('a'); p.money = 5000;
+    sim.stepTraffic(0, 12); const G = sim.traffic!.graph, e0 = G.edges.find(e => e.len > 60)!, q = { x: 0, z: 0, yaw: 0 }; G.pose(e0, e0.len / 2, 2, q);
+    Object.assign(sim.entity(p.walker), { x: q.x, z: q.z, y: w.surfaceAt(q.x, q.z, 1e6), reg: -1 });
+    // auto bez papierów: praca niedostępna
+    sim.command(p.id, { type: 'mode', mode: 'car', v: 0 }); const car = sim.entity(p.vehicle!);
+    expect(car.legal).toBeUndefined(); expect(sim.command(p.id, { type: 'cab', on: true })).toContain('legalnego');
+    // dziupla: za daleko, potem na miejscu
+    expect(sim.command(p.id, { type: 'rereg' })).toContain('Podjedź');
+    const d = DZIUPLA.warszawa, x0 = car.x, z0 = car.z; Object.assign(car, { x: d.x, z: d.z });
+    const m0 = p.money; expect(sim.command(p.id, { type: 'rereg' })).toContain('przerejestrowane'); expect(car.legal).toBe(p.id); expect(p.money).toBeLessThan(m0);
+    Object.assign(car, { x: x0, z: z0 });
+    // salon: kupno innego modelu
+    expect(sim.command(p.id, { type: 'buyCar', v: 1 })).toContain('Kupiono'); expect(p.owned).toContain(1);
+    // praca kierowcy
+    expect(sim.command(p.id, { type: 'cab', on: true })).toContain('Zaczynasz');
+    let info = sim.cab!.info(p.id)!;
+    for (let i = 0; i < 30 * 10 && info.st === 'search'; i++) { sim.stepTraffic(i / 30, 12); info = sim.cab!.info(p.id)!; }
+    expect(info.st).toBe('pickup');
+    Object.assign(car, { x: info.target![0], z: info.target![1], speed: 0 }); sim.stepTraffic(11, 12); info = sim.cab!.info(p.id)!;
+    expect(info.st).toBe('ride');
+    const m1 = p.money; Object.assign(car, { x: info.target![0], z: info.target![1], speed: 0 }); sim.stepTraffic(12, 12);
+    info = sim.cab!.info(p.id)!; expect(info.rides).toBe(1); expect(p.money).toBeGreaterThan(m1);
+    // wyjście z auta kończy pracę
+    sim.command(p.id, { type: 'mode', mode: 'walk' }); sim.stepTraffic(13, 12); expect(sim.cab!.info(p.id)).toBeNull();
+  });
+});

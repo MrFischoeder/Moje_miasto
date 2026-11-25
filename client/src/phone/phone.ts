@@ -3,6 +3,8 @@
 // teleport w wersji deweloperskiej), Aparat (zdjęcia ekranu gry), Zdjęcia (galeria, wysyłanie, zapis na dysk).
 import './phone.css';
 import { NPCS } from '@miasto/shared/game/jobs';
+import { CAB_OK, CAR_PRICE, DZIUPLA, REREG_SHARE } from '@miasto/shared/game/cars';
+import { VEH } from '@miasto/shared/sim/vehicles';
 import type { ServerMsg } from '@miasto/shared/net/protocol';
 import type { Game } from '../game/game';
 import { PhoneMap, type Marker } from './mapView';
@@ -137,6 +139,7 @@ export class Phone {
       ['🖼️', 'Zdjęcia', '#ff9f0a', () => this.gallery()],
       ['💼', 'Zlecenia', '#ff453a', () => this.jobs()],
       ['🚕', 'Taxi', '#ffcc00', () => this.taxiApp()],
+      ['🚗', 'Auta', '#5e5ce6', () => this.carsApp()],
     ];
     for (const [ic, name, bg, fn, badge] of apps) {
       const a = h('div', 'app', `<div class="icon" style="background:${bg}">${ic}</div><span>${name}</span>${badge ? `<div class="badge">${badge}</div>` : ''}`); a.onclick = fn; home.append(a);
@@ -247,7 +250,51 @@ export class Phone {
         cancel.onclick = () => { s?.sendCommand({ type: 'taxi', cancel: true }); setTimeout(render, 400); };
         acts.append(map, cancel); acts.style.cssText = 'display:flex;gap:8px;justify-content:center;margin:12px'; box.append(acts);
       }
+      // praca: kierowca taksówki (tylko legalnym autem)
+      const job = box, cab = s?.me.cab ?? null; job.append(h('div', 'sep'));
+      job.append(h('div', 'row', `<div class="av" style="background:#ff9f0a">💼</div><div class="tx"><b>Praca: kierowca taksówki</b><span>${cab ? `Zarobek w tej zmianie: ${cab.earned.toFixed(2)} ${esc(cur)} · kursów: ${cab.rides}` : 'Woź klientów swoim legalnym autem i zarabiaj.'}</span></div>`));
+      if (cab) {
+        const p = this.myPos(), d = cab.target && p ? Math.round(Math.hypot(cab.target[0] - p.x, cab.target[1] - p.z)) : 0;
+        const st = cab.st === 'search' ? 'Czekasz na zlecenie…' : cab.st === 'pickup' ? `Jedź po klienta: ${d} m (zatrzymaj się obok)` : `Wieziesz klienta: do celu ${d} m · ok. ${cab.pay.toFixed(0)} ${esc(cur)}`;
+        job.append(h('div', 'empty', esc(st)));
+        const acts = h('div', 'acts'), map = h('button', 'btn blue', '🗺️ Cel na mapie'), stop = h('button', 'btn no', 'Zakończ zmianę');
+        map.onclick = () => { if (cab.target) this.mapApp(cab.target); }; stop.onclick = () => { s?.sendCommand({ type: 'cab', on: false }); setTimeout(render, 400); };
+        acts.append(map, stop); acts.style.cssText = 'display:flex;gap:8px;justify-content:center;margin:12px'; job.append(acts);
+      } else {
+        const v = s ? s.entity(s.player()?.vehicle ?? -1) : undefined, legal = !!s?.me.legal, okCar = !!v && v.kind === 'car' && CAB_OK(v.v ?? 0);
+        const why = !v ? 'Wsiądź za kierownicę swojego legalnego auta (kupionego w aplikacji Auta albo przerejestrowanego w dziupli).' : !okCar ? 'Tym pojazdem nie przewieziesz klientów.' : !legal ? 'To auto nie ma papierów na ciebie (kradzione albo bez rejestracji). Kup auto albo przerejestruj je w dziupli.' : 'Możesz zaczynać.';
+        job.append(h('div', 'empty', esc(why)));
+        if (legal && okCar) { const go = h('button', 'btn ok', '▶ Zacznij pracę'); go.style.cssText = 'display:block;margin:10px auto'; go.onclick = () => { s?.sendCommand({ type: 'cab', on: true }); setTimeout(render, 400); }; job.append(go); }
+      }
       page.append(box); this.live = true;
+    };
+    this.current = render; render();
+  }
+
+  /** Auta: salon (kupno legalnego auta) i dziupla (przerejestrowanie kradzionego) */
+  carsApp(): void {
+    const render = () => {
+      const { page } = this.page('Auta', () => this.home()), s = this.game.session, cur = s?.me.cur ?? 'zł', own = s?.me.owned ?? [], k = this.game.world?.key ?? 'wroclaw', sc = k === 'londyn' ? .35 : 1;
+      const list = h('div', 'list');
+      list.append(h('div', 'empty', `Twoje pieniądze: ${(s?.me.money ?? 0).toFixed(0)} ${esc(cur)}. Kupione auto przywołasz w trybie Auto (model w menu) – ma papiery, możesz nim pracować jako kierowca.`));
+      VEH.forEach((v, i) => {
+        const price = Math.round(CAR_PRICE[i] * sc), has = own.includes(i);
+        const r = h('div', 'row', `<div class="av" style="background:${has ? '#30d158' : '#3a3a3c'}">${has ? '✓' : '🚗'}</div><div class="tx"><b>${esc(v.name)}</b><span>${has ? 'Twoje (legalne)' : `${price} ${esc(cur)}`}${CAB_OK(i) ? ' · nadaje się na taksówkę' : ''}</span></div>`);
+        if (!has) { const b = h('button', 'btn ok', 'Kup'); b.onclick = e => { e.stopPropagation(); s?.sendCommand({ type: 'buyCar', v: i }); setTimeout(render, 500); }; r.append(b); }
+        list.append(r);
+      });
+      // dziupla
+      const d = DZIUPLA[k], dz = list;
+      if (d) {
+        const v = s ? s.entity(s.player()?.vehicle ?? -1) : undefined, p = this.myPos(), dist = p ? Math.round(Math.hypot(d.x - p.x, d.z - p.z)) : 0;
+        const fee = v && v.kind === 'car' ? Math.round(CAR_PRICE[v.v ?? 0] * sc * REREG_SHARE) : 0;
+        dz.append(h('div', 'row', `<div class="av" style="background:#8e8e93">🔧</div><div class="tx"><b>Dziupla: ${esc(d.name)}</b><span>Przerejestrowanie kradzionego auta „na lewo” (35% ceny) · ${dist} m stąd</span></div>`));
+        const acts = h('div', 'acts'), map = h('button', 'btn blue', '🗺️ Pokaż na mapie'); map.onclick = () => this.mapApp([d.x, d.z]); acts.append(map);
+        if (v && v.kind === 'car' && !s?.me.legal) { const rr = h('button', 'btn ok', `Przerejestruj (${fee} ${cur})`); rr.onclick = () => { s?.sendCommand({ type: 'rereg' }); setTimeout(render, 500); }; acts.append(rr); }
+        acts.style.cssText = 'display:flex;gap:8px;justify-content:center;margin:12px'; dz.append(acts);
+        if (v && v.kind === 'car') dz.append(h('div', 'empty', s?.me.legal ? 'Auto, którym jedziesz, ma papiery na ciebie.' : 'Auto, którym jedziesz, nie ma papierów (kradzione / bez rejestracji). Podjedź nim do dziupli.'));
+      }
+      page.append(list); this.live = true;
     };
     this.current = render; render();
   }
@@ -274,6 +321,8 @@ export class Phone {
       mk.push(...this.pins);
       if (this.job?.target) mk.push({ x: this.job.target[0], z: this.job.target[1], color: '#ff453a', label: 'Cel zlecenia', kind: 'job' });
       if (sel) mk.push({ x: sel[0], z: sel[1], color: '#0a84ff', kind: 'sel' });
+      const cab = this.game.session?.me.cab; if (cab?.target) mk.push({ x: cab.target[0], z: cab.target[1], color: '#ffcc00', label: cab.st === 'pickup' ? 'Klient' : 'Cel kursu', kind: 'job' });
+      const dzp = DZIUPLA[this.game.world?.key ?? '']; if (dzp) mk.push({ x: dzp.x, z: dzp.z, color: '#8e8e93', label: 'Dziupla', kind: 'job' });
       const tx = this.game.session?.me.taxi; if (tx) { const e = this.game.session?.entity(tx.id); if (e) mk.push({ x: e.x, z: e.z, color: '#ffcc00', label: 'Taksówka', kind: 'player' }); mk.push({ x: tx.dest[0], z: tx.dest[1], color: '#ffcc00', label: 'Cel kursu', kind: 'job' }); }
       if (p) mk.push({ x: p.x, z: p.z, color: '#0a84ff', kind: 'me', yaw: p.yaw });
       m.markers = mk; m.draw();
