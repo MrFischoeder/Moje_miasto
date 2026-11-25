@@ -206,6 +206,17 @@ $('newWr').onclick = () => create('wroclaw'); $('newW').onclick = () => create('
 
 // wydajność: wnętrza budynków (zapamiętane w przeglądarce)
 const intChk = $<HTMLInputElement>('intChk');
+// przyciski na górze menu (test wydajności): stan widoczny na przycisku, zsynchronizowany z polami w sekcji Wydajność
+$('ver').textContent = __VERSION__;
+const intBtn = $<HTMLButtonElement>('intBtn'), perfBtn = $<HTMLButtonElement>('perfBtn');
+const showTestBtns = () => {
+  intBtn.textContent = `Wnętrza budynków: ${intChk.checked ? 'WŁĄCZONE' : 'WYŁĄCZONE'}`; intBtn.className = intChk.checked ? '' : 'ghost';
+  const pc = document.getElementById('perfChk') as HTMLInputElement | null; perfBtn.textContent = `Licznik wydajności: ${pc?.checked ? 'WŁ.' : 'WYŁ.'}`;
+};
+intBtn.onclick = () => { intChk.checked = !intChk.checked; intChk.dispatchEvent(new Event('change')); };
+perfBtn.onclick = () => { const pc = $<HTMLInputElement>('perfChk'); pc.checked = !pc.checked; pc.dispatchEvent(new Event('change')); };
+$('perfSave2').onclick = () => $('perfSave').click();
+setInterval(showTestBtns, 500);
 try { intChk.checked = localStorage.getItem('mm.wnetrza') !== '0'; } catch { /* brak dostępu do pamięci */ }
 game.interiorsOn = intChk.checked;
 intChk.onchange = () => {
