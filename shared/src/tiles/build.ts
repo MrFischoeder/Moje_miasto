@@ -177,7 +177,7 @@ export function buildTiles(raw: RawOsm, cityKey: string, origin: [number, number
       }
       tt.r.push({
         id: w.id, p: flat(pts.slice(i0, i1 + 1)), k: info.k, w: r1(info.w), ln: info.ln, ...(info.ow ? { ow: info.ow } : {}),
-        ...(t.name ? { n: t.name } : {}), ...(br ? { br } : {}), ...(bw ? { bw } : {}), ...(t.tunnel && t.tunnel !== 'no' ? { tu: 1 as const } : {}), ...(sw ? { sw } : {}), j,
+        ...(t.name ? { n: t.name } : {}), ...(br ? { br } : {}), ...(bw ? { bw } : {}), ...(t.tunnel && t.tunnel !== 'no' && t.tunnel !== 'building_passage' ? { tu: 1 as const } : {}), ...(t.tunnel === 'building_passage' || (t.covered === 'yes' && !t.tunnel) ? { bp: 1 as const } : {}), ...(sw ? { sw } : {}), j,
       });
     }
   }

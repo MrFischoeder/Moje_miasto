@@ -45,8 +45,12 @@ export class Interiors {
   addTile(t: TileData): void {
     const k = tileKey(t.x, t.y); if (this.byTile.has(k)) return; const list: Cand[] = [];
     const covered = partsCover(t); // budynek zastąpiony częściami (inna wysokość): bez wnętrza, żeby nie wystawało ponad dach
+    // budynek z bramą przejazdową (droga bp przez obrys): na razie bez wnętrza (plan nie omija przejazdu)
+    const passPts: number[] = []; for (const r of t.r) if (r.bp) for (let i = 0; i + 3 < r.p.length; i += 2) for (const q of [.25, .5, .75]) passPts.push(r.p[i] + (r.p[i + 2] - r.p[i]) * q, r.p[i + 1] + (r.p[i + 3] - r.p[i + 1]) * q);
+    const inOutline = (o: number[], x: number, z: number) => { let s = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
+    const hasPassage = (o: number[]) => { for (let i = 0; i < passPts.length; i += 2) if (inOutline(o, passPts[i], passPts[i + 1])) return true; return false; };
     for (const b of t.b) {
-      if (b.part || b.mh >= 2 || covered(b.o) || !hasInterior(b, t)) continue;
+      if (b.part || b.mh >= 2 || covered(b.o) || !hasInterior(b, t) || hasPassage(b.o)) continue;
       let a = Infinity, b2 = -Infinity, c = Infinity, d = -Infinity;
       for (let i = 0; i < b.o.length; i += 2) { a = Math.min(a, b.o[i]); b2 = Math.max(b2, b.o[i]); c = Math.min(c, b.o[i + 1]); d = Math.max(d, b.o[i + 1]); }
       const cand: Cand = { b, t, a, b2, c, d }; list.push(cand);

@@ -94,9 +94,11 @@ export class World implements Surface {
     };
     for (const r of t.r) if (r.br) deck(toXZ(r.p), r.w / 2 + (r.sw ? 2.5 : .6), r.bw);
     for (const l of t.l) if (l.br) deck(toXZ(l.p), 2.4, l.bw);
+    this.addPassages(t, k);
     this.interiors.addTile(t);
   }
   removeTile(k: string): void {
+    for (const [key, l] of this.passages) { const f = l.filter(q => q.k !== k); if (f.length) this.passages.set(key, f); else this.passages.delete(key); }
     if (!this.tiles.delete(k)) return;
     this.terrain?.removeFine(k);
     this.buildings.removeTile(k); this.water.removeTile(k); this.decks.removeTile(k); this.interiors.removeTile(k);
@@ -104,10 +106,24 @@ export class World implements Surface {
 
   // ---------- zapytania fizyki ----------
   /** Punkt zablokowany: budynek albo woda poza mostem (y: wysokość sprawdzającego, do wyboru poziomu). */
+  // ---------- bramy przejazdowe ----------
+  private passages = new Map<string, { a: XZ; b: XZ; hw: number; k: string }[]>();
+  /** Punkt w bramie przejazdowej (droga przez budynek): przejście mimo obrysu budynku. */
+  inPassage(x: number, z: number): boolean {
+    const l = this.passages.get(Math.floor(x / 16) + ',' + Math.floor(z / 16)); if (!l) return false;
+    for (const s of l) { const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - s.a[0]) * dx + (z - s.a[1]) * dz) / L2)); if (Math.hypot(s.a[0] + dx * u - x, s.a[1] + dz * u - z) < s.hw) return true; }
+    return false;
+  }
+  private addPassages(t: TileData, k: string): void {
+    for (const r of t.r) if (r.bp) { const p = toXZ(r.p), hw = r.w / 2 + (r.sw ? 1.6 : .4);
+      for (let i = 0; i + 1 < p.length; i++) { const a = p[i], b = p[i + 1], s = { a, b, hw, k };
+        for (let gx = Math.floor((Math.min(a[0], b[0]) - hw) / 16); gx <= Math.floor((Math.max(a[0], b[0]) + hw) / 16); gx++) for (let gz = Math.floor((Math.min(a[1], b[1]) - hw) / 16); gz <= Math.floor((Math.max(a[1], b[1]) + hw) / 16); gz++) {
+          const key = gx + ',' + gz; let l = this.passages.get(key); if (!l) this.passages.set(key, l = []); l.push(s); } } }
+  }
   /** Punkt w obrysie budynku (bez wody). */
   inBuilding(x: number, z: number): boolean { return this.buildings.hit(x, z); }
   blocked(x: number, z: number, y?: number): boolean {
-    if (this.buildings.hit(x, z)) return true;
+    if (this.buildings.hit(x, z) && !this.inPassage(x, z)) return true;
     if (!this.water.hit(x, z)) return false;
     return !this.decks.containing(x, z).some(d => y == null || Math.abs(d.h - y) < 3);
   }
@@ -119,6 +135,7 @@ export class World implements Surface {
   }
   /** Podłoże dla pieszego (region podziemny albo powierzchnia). */
   support(x: number, z: number, y: number): Support | null {
+    if (this.inPassage(x, z)) { const g = this.surfaceAt(x, z, y); if (Math.abs(y - g) < 1.2) return { h: g, r: null }; } // brama: po gruncie
     const s = this.regions.support(x, z, y, this);
     if (s && s.r && s.r.info.b != null && this.interiors.blocked(x, z, s.h)) return null; // mebel
     return s;

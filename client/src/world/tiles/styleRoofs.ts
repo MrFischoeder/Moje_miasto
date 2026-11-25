@@ -71,7 +71,7 @@ function insetRing(r: XZ[], d: number, hole: boolean): XZ[] {
     const n1 = [-e1[1] / l1 * sg, e1[0] / l1 * sg], n2 = [-e2[1] / l2 * sg, e2[0] / l2 * sg];
     let mx = n1[0] + n2[0], mz = n1[1] + n2[1]; const ml = Math.hypot(mx, mz);
     if (ml < 1e-3) { mx = n1[0]; mz = n1[1]; } else { mx /= ml; mz /= ml; }
-    const cos = Math.max(.4, mx * n1[0] + mz * n1[1]);
+    const cos = Math.max(.6, mx * n1[0] + mz * n1[1]); // ostre narożniki: przycięcie (bez długich szpikulców)
     out.push([q[0] + mx * d / cos, q[1] + mz * d / cos]);
   }
   return out;
@@ -137,7 +137,13 @@ export function styledRoof(s: S, fillFlat: (y: number, col: RGB) => void, q: Sty
       const rh = st === 'dom' ? Math.min(f.D * .48, 5.5) : st === 'pow' ? Math.min(f.D * .36, 4.5) : Math.min(f.D * .45, 6.5);
       addRoof(s, outer, top, rh, shape, false, col, q.wall);
       ridgeDetails(s, f, top, rh, shape, st, col, q.wall, chim, seed);
-    } else insetRoof(s, outer, holes, top, st === 'kam' ? Math.min(5.5, f.D * .3) : 4, (st === 'kam' ? 5.2 : 3.6), col, chim, seed);
+    } else {
+      // szerokość połaci wg grubości skrzydeł bryły (2·pole/obwód), żeby połacie z przeciwnych stron się nie przecinały (dziury)
+      let A = Math.abs(area2(outer)) / 2, P = 0; for (const h of holes) A -= Math.abs(area2(h)) / 2;
+      for (const r of [outer, ...holes]) for (let i = 0; i < r.length; i++) { const q = r[(i + 1) % r.length]; P += Math.hypot(q[0] - r[i][0], q[1] - r[i][1]); }
+      const dMax = st === 'kam' ? 5.5 : 4, d = Math.max(1.2, Math.min(dMax, .42 * 2 * A / Math.max(1, P)));
+      insetRoof(s, outer, holes, top, d, (st === 'kam' ? 5.2 : 3.6) * d / dMax, col, chim, seed);
+    }
     return top;
   }
   // dach płaski: pokrycie, attyka, urządzenia

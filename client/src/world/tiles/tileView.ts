@@ -10,7 +10,7 @@ import { isVehicleRoad } from '@miasto/shared/tiles/build';
 import type { AreaKind, TileBuilding, TileData, TileRoad } from '@miasto/shared/tiles/types';
 import { MAX_SEG } from '../geometry';
 import { classify, type BuildingClass } from '@miasto/shared/interiors/facade';
-import { TileWindows, WindowMaterials, wallWindows } from './physWindows';
+import { TileWindows, WIN_STRIDE, WindowMaterials, wallWindows } from './physWindows';
 import { addRoof, defaultRoofH } from './roofs';
 import { balconies, styledRoof, WALL_COL } from './styleRoofs';
 import { styleOf, type BStyle } from '@miasto/shared/world/style';
@@ -94,6 +94,8 @@ function churchFacade(fc: BuildingClass, b: TileBuilding): BuildingClass {
   if (tower) { const lh = Math.min(14, Math.max(8, H / 4)), sp = Math.max(1, Math.min(3.2, med - .65)); return { ...fc, levels: Math.max(1, Math.floor(b.h / lh)), levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.1, sp * .6), wh: Math.min(4, lh * .35), sill: lh * .5 }; }
   const lh = Math.max(6, Math.min(22, H * .85)), sp = Math.max(2, Math.min(4.8, med - .65)); return { ...fc, levels: 1, levelH: lh, raise: 0, spacing: sp, ww: Math.min(1.8, sp * .45), wh: lh * .62, sill: lh * .2 };
 }
+/** wysokość bramy przejazdowej [m] */
+const PASS_H = 3.8;
 /** balustrady balkonów bloków */
 const BALC: RGB[] = [[.92, .92, .9], [.7, .72, .74], [.86, .62, .42], [.55, .7, .82], [.9, .84, .6], [.62, .78, .62]];
 /** styl budynku bez danych z potoku kafli (np. starsze kafle): tylko cechy samego budynku */
@@ -308,6 +310,22 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   // ściany części budynków (building:part): obrys pokrywający się z nimi nie dostaje własnych okien
   const partEdges: [number, number, number, number][] = [];
   for (const q of t.b) if (q.part) for (let i = 0; i < q.o.length; i += 2) { const j = (i + 2) % q.o.length; partEdges.push([q.o[i], q.o[i + 1], q.o[j], q.o[j + 1]]); }
+  // bramy przejazdowe (drogi bp): odcinki osi z półszerokością; cięcia ścian i sień przejazdu
+  const passSegs: { a: XZ; b: XZ; hw: number }[] = [];
+  for (const r of t.r) if (r.bp) { const p = toXZ(r.p), hw = r.w / 2 + (r.sw ? 1.6 : .4); for (let i = 0; i + 1 < p.length; i++) passSegs.push({ a: p[i], b: p[i + 1], hw }); }
+  /** przedziały [t0, t1] (ułamek długości ściany a→c), w których ścianę przecina brama */
+  const passCuts = (a: XZ, c: XZ, m: number): [number, number][] => {
+    if (!passSegs.length) return [];
+    const out: [number, number][] = [], dx = c[0] - a[0], dz = c[1] - a[1];
+    for (const s of passSegs) {
+      const ex = s.b[0] - s.a[0], ez = s.b[1] - s.a[1], den = dx * ez - dz * ex; if (Math.abs(den) < 1e-9) continue;
+      const tw = ((s.a[0] - a[0]) * ez - (s.a[1] - a[1]) * ex) / den, ts = ((s.a[0] - a[0]) * dz - (s.a[1] - a[1]) * dx) / den;
+      if (tw < 0 || tw > 1 || ts < -.05 || ts > 1.05) continue;
+      const sin = Math.abs(den) / (m * Math.hypot(ex, ez)), half = Math.min(m * .45, s.hw / Math.max(.35, sin)) / m;
+      out.push([Math.max(0, tw - half), Math.min(1, tw + half)]);
+    }
+    return out.sort((p, q) => p[0] - q[0]);
+  };
   // ściany wspólne z sąsiednim budynkiem (ogniowe): bez okien (inaczej okna wystają przez ścianę sąsiada)
   const EG = 8, edgeGrid = new Map<string, { id: number; e: [number, number, number, number] }[]>();
   for (const q of t.b) for (let i = 0; i < q.o.length; i += 2) {
@@ -378,7 +396,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       const fi = frontEdge(outer, roadPts, { c: stC!, inner: 58, outer: 145 }), a = outer[fi], c = outer[(fi + 1) % outer.length], fw = Math.hypot(c[0] - a[0], c[1] - a[1]);
       const ccw0 = area2(outer) > 0, dx = (c[0] - a[0]) / fw, dz = (c[1] - a[1]) / fw, n: [number, number] = ccw0 ? [dz, -dx] : [-dz, dx];
       const fr = obb(outer), across = !!fr && Math.abs(dx * fr.ux + dz * fr.uz) > .7;
-      const rh = Math.max(3.5, Math.min(9, fw * .55, (h - mh) * .45)); wallTop = h - rh * .35; // część dachu ponad wysokością z OSM
+      const rh = Math.max(3.5, Math.min(9, fw * .55, (h - mh) * .45)); wallTop = fc.typ ? h : h - rh * .35; // z wnętrzem: dach ponad wszystkimi piętrami (okna ostatniego piętra całe)
       const roofK: RGB = b.rc ? hex(b.rc) : kc.roof;
       addRoof(B, outer, wallTop, rh, 'gabled', across, roofK, col);
       const lvl = Math.max(2, Math.min(7, b.lv ?? Math.round((wallTop - mh) / 3.6))), lh = (wallTop - mh - .4) / lvl;
@@ -402,6 +420,8 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       let rh = b.rh ?? defaultRoofH(rs!, outer, b.h - b.mh); rh = Math.min(rh, Math.max(.5, h - mh - .5)); wallTop = h - rh;
       addRoof(B, outer, wallTop, rh, rs!, b.ro === 'across', roof, col);
     } else fillPoly(B, outer, holes, h, roof);
+    // okna tylko na kondygnacjach mieszczących się pod okapem (bez okien przeciętych dachem)
+    if (kfc.levelH > 0) { const fit = Math.floor((wallTop - base - kfc.raise - kfc.sill - kfc.wh + .02) / kfc.levelH) + 1; if (fit < kfc.levels) kfc = { ...kfc, levels: Math.max(0, fit) }; }
     facPad();
     const matId = st === 'blok' && !mat ? 3 : mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
     const balc: [XZ, XZ, number, number, number][] = [];
@@ -413,12 +433,27 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         const nrm = ccw ? [dz / m, 0, -dx / m] : [-dz / m, 0, dx / m];
         const n0 = B.P.length / 3;
         // kolejność wierzchołków zgodna z normalną na zewnątrz (obrysy bywają w obu kierunkach)
-        if (ccw) B.quad([c[0], wallBot, c[1]], [a[0], wallBot, a[1]], [a[0], wallTop, a[1]], [c[0], wallTop, c[1]], col, nrm);
-        else B.quad([a[0], wallBot, a[1]], [c[0], wallBot, c[1]], [c[0], wallTop, c[1]], [a[0], wallTop, a[1]], col, nrm);
+        const piece = (t0: number, t1: number, y0: number, y1: number) => {
+          const p0: XZ = [a[0] + dx * t0, a[1] + dz * t0], p1: XZ = [a[0] + dx * t1, a[1] + dz * t1];
+          if (ccw) B.quad([p1[0], y0, p1[1]], [p0[0], y0, p0[1]], [p0[0], y1, p0[1]], [p1[0], y1, p1[1]], col, nrm);
+          else B.quad([p0[0], y0, p0[1]], [p1[0], y0, p1[1]], [p1[0], y1, p1[1]], [p0[0], y1, p0[1]], col, nrm);
+        };
+        // bramy przejazdowe: otwór w ścianie, nad nim nadproże (wyższe piętra z oknami)
+        const cuts = b.mh < .5 ? passCuts(a, c, m) : [];
+        // wysokość otworu: grunt w osi bramy + PASS_H (to samo co sklepienie sieni)
+        const cutTop = (c0: number, c1: number) => { const tm = (c0 + c1) / 2, x = a[0] + dx * tm, z = a[1] + dz * tm; return Math.min(wallTop, (g ? g(x, z) : 0) + PASS_H); };
+        const passTop = cuts.length ? Math.max(...cuts.map(([c0, c1]) => cutTop(c0, c1))) : 0;
+        if (!cuts.length) piece(0, 1, wallBot, wallTop);
+        else { let t = 0; for (const [c0, c1] of cuts) { if (c0 > t) piece(t, c0, wallBot, wallTop); piece(c0, c1, cutTop(c0, c1), wallTop); t = c1; } if (t < 1) piece(t, 1, wallBot, wallTop); }
         // ściana zakryta: obrys na ścianie części budynku albo wewnątrz własnego modelu landmarku – bez własnych okien
         const hidden = (!b.part && hasParts && onPartWall(a, c)) || insideModel((a[0] + c[0]) / 2, (a[1] + c[1]) / 2) || sharedWall(a, c, b.id);
         const sp = hidden ? 0 : kfc.spacing;
+        const w0 = WIN.length;
         if (!isChurch && !hidden) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
+        if (cuts.length) for (let q = WIN.length - WIN_STRIDE; q >= w0; q -= WIN_STRIDE) { // okna fizyczne w otworze bramy: usunięte
+          const tq = ((WIN[q] - a[0]) * dx + (WIN[q + 2] - a[1]) * dz) / (m * m), ylo = WIN[q + 1] - WIN[q + 5] / 2;
+          if (ylo < passTop + .05 && cuts.some(([c0, c1]) => tq > c0 - .08 && tq < c1 + .08)) WIN.splice(q, WIN_STRIDE);
+        }
         if (st === 'blok' && !isHole && stLevels && stLevels.lv >= 4 && nrm[2] > -.25) balc.push([a, c, nrm[0], nrm[2], m]);
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
@@ -431,6 +466,29 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       for (const [a, c, nx, nz, m] of balc) balconies(B, a, c, nx, nz, base, kfc.raise, kfc.levelH, Math.min(kfc.levels, stLevels!.lv), windowSlots(m, kfc), bc, fc.seed);
     }
     if (gable && kc) { facPad(); buildGable(makeSink(BSK, base, kfc.seed), gable.a, gable.c, gable.n, gable.y0, gable.rh, kc.style, kc.wall, kfc.seed); facPad(); }
+  }
+
+  // sień bramy przejazdowej: ściany boczne i sklepienie na odcinkach drogi bp wewnątrz budynków
+  if (passSegs.length) {
+    facPad();
+    const inB = (x: number, z: number) => t.b.some(q => !q.part && q.mh < .5 && insideFlat(q.o, x, z));
+    const PC: RGB = [.62, .6, .56], CC: RGB = [.55, .53, .5];
+    for (const s of passSegs) {
+      const L = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]); if (L < .2) continue;
+      const ux = (s.b[0] - s.a[0]) / L, uz = (s.b[1] - s.a[1]) / L, nx = -uz * s.hw, nz = ux * s.hw, n = Math.max(1, Math.ceil(L / 1.5));
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n * L, t1 = (i + 1) / n * L, mx = s.a[0] + ux * (t0 + t1) / 2, mz = s.a[1] + uz * (t0 + t1) / 2; if (!inB(mx, mz)) continue;
+        const P0: XZ = [s.a[0] + ux * t0, s.a[1] + uz * t0], P1: XZ = [s.a[0] + ux * t1, s.a[1] + uz * t1];
+        const gy = (x: number, z: number) => g ? g(x, z) : 0, top = (x: number, z: number) => gy(x, z) + PASS_H;
+        for (const sd of [-1, 1]) {
+          const A: XZ = [P0[0] + nx * sd, P0[1] + nz * sd], C2: XZ = [P1[0] + nx * sd, P1[1] + nz * sd];
+          B.quad([A[0], gy(A[0], A[1]) - .3, A[1]], [C2[0], gy(C2[0], C2[1]) - .3, C2[1]], [C2[0], top(C2[0], C2[1]), C2[1]], [A[0], top(A[0], A[1]), A[1]], PC, [-nx * sd / s.hw, 0, -nz * sd / s.hw]);
+        }
+        const tA: XZ = [P0[0] - nx, P0[1] - nz], tB: XZ = [P1[0] - nx, P1[1] - nz], tC: XZ = [P1[0] + nx, P1[1] + nz], tD: XZ = [P0[0] + nx, P0[1] + nz];
+        B.quad([tA[0], top(tA[0], tA[1]), tA[1]], [tB[0], top(tB[0], tB[1]), tB[1]], [tC[0], top(tC[0], tC[1]), tC[1]], [tD[0], top(tD[0], tD[1]), tD[1]], CC, [0, -1, 0]);
+      }
+    }
+    facPad();
   }
 
   for (const m of models) {

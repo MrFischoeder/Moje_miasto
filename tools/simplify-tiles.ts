@@ -146,7 +146,7 @@ function simplifyTile(t: TileData): TileData {
     stats.r0++; const p = ring(r.p), L = len(p);
     // ślepa końcówka: jeden z końców nie łączy się z inną drogą (dojścia do drzwi, krótkie wjazdy)
     const ends = [r.j[1], r.j[r.j.length - 1]], stub = r.j[0] !== 0 || r.j[r.j.length - 2] !== p.length - 1 || ends.some(id => (deg.get(id) ?? 0) < 2);
-    if (r.k === 'track' || (!r.br && !r.tu && stub && ((['footway', 'path', 'cycleway', 'steps'].includes(r.k) && L < 40) || (r.k === 'service' && L < 60)))) continue;
+    if (r.k === 'track' || (!r.br && !r.tu && !r.bp && stub && ((['footway', 'path', 'cycleway', 'steps'].includes(r.k) && L < 40) || (r.k === 'service' && L < 60)))) continue;
     const jv = new Set<number>(); for (let i = 0; i < r.j.length; i += 2) jv.add(r.j[i]);
     const cut = [0, ...[...jv].filter(v => v > 0 && v < p.length - 1).sort((a, b) => a - b), p.length - 1];
     const np: XZ[] = [], map = new Map<number, number>();
