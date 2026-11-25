@@ -388,7 +388,10 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     const st: BStyle | undefined = !pl || b.part || isChurch || kam ? undefined : b.st ?? styleLocal(b, outer, holes, stC);
     const stPal = st && WALL_COL[st];
     const wall0 = b.bc ? hex(b.bc) : mat && MAT_COL[mat] ? MAT_COL[mat][Math.floor(fc.seed * 9973) % MAT_COL[mat].length] : stPal ? stPal[Math.floor(fc.seed * 7919) % stPal.length] : base0;
-    const col: RGB = kc && !b.bc ? kc.wall : [wall0[0] * j, wall0[1] * j, wall0[2] * j]; // kamienica: kolor z OSM albo pastel
+    // hale, magazyny, fabryki: ściany z blachy falistej, bez okien, z bramami dla ciężarówek i drzwiami (windows.ts, materiał 4)
+    const indus = !isChurch && !b.part && (st === 'przem' || ['industrial', 'warehouse', 'factory', 'manufacture', 'hangar'].includes(b.t)) && !(b.bm === 'brick');
+    const METAL: RGB[] = [[.7, .72, .74], [.55, .62, .68], [.76, .74, .68], [.6, .65, .6], [.66, .58, .52]];
+    const col: RGB = indus && !b.bc ? METAL[Math.floor(fc.seed * 997) % METAL.length] : kc && !b.bc ? kc.wall : [wall0[0] * j, wall0[1] * j, wall0[2] * j]; // kamienica: kolor z OSM albo pastel
     // wieża kościoła bez opisanego dachu: hełm ostrosłupowy
     const rs = b.rs ?? (isChurch && isTower(b) ? 'pyramidal' : undefined);
     const shaped = !!rs && !holes.length, tower = rs === 'pyramidal' || rs === 'cone' || rs === 'onion' || rs === 'dome' || rs === 'round';
@@ -428,7 +431,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     // okna tylko na kondygnacjach mieszczących się pod okapem (bez okien przeciętych dachem)
     if (kfc.levelH > 0) { const fit = Math.floor((wallTop - base - kfc.raise - kfc.sill - kfc.wh + .02) / kfc.levelH) + 1; if (fit < kfc.levels) kfc = { ...kfc, levels: Math.max(0, fit) }; }
     facPad();
-    const matId = st === 'blok' && !mat ? 3 : mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
+    const matId = indus ? 4 : st === 'blok' && !mat ? 3 : mat === 'brick' || (!mat && !b.bc && b.hist && fc.typ === null && b.t !== 'house') ? 1 : mat === 'stone' ? 2 : 0;
     const balc: [XZ, XZ, number, number, number][] = [];
     const hasParts = !b.part && partEdges.length > 0 && partEdges.some(e => insideXZ(outer, (e[0] + e[2]) / 2, (e[1] + e[3]) / 2));
     for (const [ring, isHole] of [[outer, false], ...holes.map(r => [r, true])] as [XZ[], boolean][]) {
@@ -452,9 +455,9 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         else { let t = 0; for (const [c0, c1] of cuts) { if (c0 > t) piece(t, c0, wallBot, wallTop); piece(c0, c1, cutTop(c0, c1), wallTop); t = c1; } if (t < 1) piece(t, 1, wallBot, wallTop); }
         // ściana zakryta: obrys na ścianie części budynku albo wewnątrz własnego modelu landmarku – bez własnych okien
         const hidden = (!b.part && hasParts && onPartWall(a, c)) || insideModel((a[0] + c[0]) / 2, (a[1] + c[1]) / 2) || sharedWall(a, c, b.id);
-        const sp = hidden ? 0 : kfc.spacing;
+        const sp = hidden || indus ? 0 : kfc.spacing;
         const w0 = WIN.length;
-        if (!isChurch && !hidden) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
+        if (!isChurch && !hidden && !indus) wallWindows(WIN, a, c, nrm, base, mh, wallTop, kfc.levelH, kfc.spacing, kfc.ww, kfc.wh, kfc.raise, kfc.sill, kfc.levels, kfc.seed);
         if (cuts.length) for (let q = WIN.length - WIN_STRIDE; q >= w0; q -= WIN_STRIDE) { // okna fizyczne w otworze bramy: usunięte
           const tq = ((WIN[q] - a[0]) * dx + (WIN[q + 2] - a[1]) * dz) / (m * m), ylo = WIN[q + 1] - WIN[q + 5] / 2, hw = (kfc.ww / 2 + .3) / m;
           if (ylo < passTop + .2 && cuts.some(([c0, c1]) => tq > c0 - hw && tq < c1 + hw)) WIN.splice(q, WIN_STRIDE);
@@ -464,7 +467,7 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
         const cut = cuts[0], cutD = cut ? [cut[0] * m, cut[1] * m, cutTop(cut[0], cut[1]) - base, 0] : [0, 0, 0, 0];
         for (let k = n0; k < B.P.length / 3; k++) {
           const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2]; FD.push(...cutD);
-          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(sp, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 4 : 0));
+          FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / m, py - base, m, kfc.levelH); FB.push(sp, kfc.ww, kfc.wh, kfc.raise); FC.push(kfc.sill, kfc.levels, kfc.seed, matId + (isChurch ? 8 : 0));
         }
       }
     }

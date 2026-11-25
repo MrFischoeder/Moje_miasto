@@ -49,8 +49,30 @@ if (portal > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.4, 0.37)
 // cokół: część ściany poniżej poziomu parteru (budynek na stoku) ciemniejsza, bez okien
 if (vFacA.z > 0.5 && vFacA.y < -0.02) diffuseColor.rgb *= 0.72;
 // faktura muru: cegła (1) albo ciosy kamienne (2); spoiny wygaszane z odległością
-float matW = mod(vFacC.w, 4.0), arch = step(3.5, vFacC.w);
-if (matW > 2.5 && vFacA.z > 0.5 && vFacB.x > 0.5) {
+float matW = mod(vFacC.w, 8.0), arch = step(7.5, vFacC.w); // materiał: 1 cegła, 2 kamień, 3 wielka płyta, 4 blacha (hala); +8 łuki okien
+if (matW > 3.5 && vFacA.z > 0.5) {
+  // blacha falista (hale, magazyny): pionowe przetłoczenia co 0,3 m, poziome łączenia arkuszy co 3 m
+  float L = vFacA.z, x = vFacA.x, y = vFacA.y, fw = max(fwidth(x), 1e-4), far = 1.0 - smoothstep(0.03, 0.12, fw);
+  float rib = 0.5 + 0.5 * sin(x / 0.3 * 6.2832);
+  diffuseColor.rgb *= mix(1.0, 0.86 + 0.14 * rib, far);
+  float seam = 1.0 - smoothstep(0.0, 0.04 + fwidth(y), abs(fract(y / 3.0 + 0.5) - 0.5) * 3.0);
+  diffuseColor.rgb *= 1.0 - seam * 0.18 * far;
+  diffuseColor.rgb *= 0.9 + 0.1 * smoothstep(0.0, 0.6, y);                    // cokół: ciemniej przy ziemi
+  // bramy dla ciężarówek (rolowane, co ok. 22 m) i drzwi dla ludzi obok każdej bramy
+  float nG = floor(L / 22.0);
+  if (L > 14.0 && y < 6.0) {
+    float sp = L / max(1.0, nG), ci = floor(x / sp), cx = (ci + 0.5) * sp, gw = min(4.6, sp * 0.4), gh = 4.4;
+    float hx = abs(x - cx);
+    if (hx < gw * 0.5 && y < gh) {                                              // brama rolowana: listwy poziome, rama
+      float sl = 0.5 + 0.5 * sin(y / 0.12 * 6.2832);
+      diffuseColor.rgb = mix(vec3(0.46, 0.48, 0.5), vec3(0.56, 0.58, 0.6), sl * far);
+      if (hx > gw * 0.5 - 0.12 || y > gh - 0.18) diffuseColor.rgb = vec3(0.86, 0.62, 0.12); // żółta rama (ostrzegawcza)
+    } else if (abs(x - (cx + gw * 0.5 + 1.6)) < 0.5 && y < 2.15) {           // drzwi dla ludzi
+      diffuseColor.rgb = vec3(0.22, 0.32, 0.42);
+      if (abs(x - (cx + gw * 0.5 + 1.6)) > 0.42 || y > 2.07) diffuseColor.rgb = vec3(0.15, 0.16, 0.18);
+    }
+  } else if (L > 5.0 && y < 2.15 && abs(x - L * 0.5) < 0.5) diffuseColor.rgb = vec3(0.22, 0.32, 0.42); // krótka ściana: same drzwi
+} else if (matW > 2.5 && vFacA.z > 0.5 && vFacB.x > 0.5) {
   // wielka płyta: spoiny poziome co kondygnację i pionowe między oknami
   float spP = vFacB.x, nP = max(1.0, floor((vFacA.z - 0.6) / spP)), offP = (vFacA.z - nP * spP) * 0.5;
   float fu = fract((vFacA.x - offP) / spP), fv = fract((vFacA.y - vFacB.w) / vFacA.w);

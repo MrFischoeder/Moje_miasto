@@ -60,7 +60,7 @@ export function makeSink(B: TriSink & FacadeArrays, base: number, seed: number):
       B.tri([a[0], Y0, a[1]], [c[0], Y0, c[1]], [c[0], Y1, c[1]], col, [nx, 0, nz]); B.tri([a[0], Y0, a[1]], [c[0], Y1, c[1]], [a[0], Y1, a[1]], col, [nx, 0, nz]);
       for (let k = n0; k < B.P.length / 3; k++) {
         const px = B.P[k * 3], py = B.P[k * 3 + 1], pz = B.P[k * 3 + 2];
-        if (fac) { B.FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / L, py - base, L, fac.levelH); B.FB.push(fac.spacing, fac.ww, fac.wh, fac.raise); B.FC.push(fac.sill, fac.levels, seed, fac.mat + (fac.arch ? 4 : 0)); }
+        if (fac) { B.FA.push(((px - a[0]) * dx + (pz - a[1]) * dz) / L, py - base, L, fac.levelH); B.FB.push(fac.spacing, fac.ww, fac.wh, fac.raise); B.FC.push(fac.sill, fac.levels, seed, fac.mat + (fac.arch ? 8 : 0)); }
         else { B.FA.push(0, 0, 0, 0); B.FB.push(0, 0, 0, 0); B.FC.push(0, 0, 0, 0); }
       }
     },
