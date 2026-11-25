@@ -546,6 +546,10 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
   for (const q of t.r) if (q.br) { const pp = toXZ(q.p); for (let i = 0; i + 1 < pp.length; i++) brSegs.push({ id: q.id, a: pp[i], b: pp[i + 1], hw: q.w / 2 + (q.sw ? 2.5 : 0) + .3 }); }
   for (const q of t.l) if (q.br) { const pp = toXZ(q.p); for (let i = 0; i + 1 < pp.length; i++) brSegs.push({ id: q.id, a: pp[i], b: pp[i + 1], hw: 2.2 }); }
   const otherBridge = (x: number, z: number, self: number) => brSegs.some(sg => sg.id !== self && (() => { const dx = sg.b[0] - sg.a[0], dz = sg.b[1] - sg.a[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - sg.a[0]) * dx + (z - sg.a[1]) * dz) / L2)); return Math.hypot(sg.a[0] + dx * u - x, sg.a[1] + dz * u - z) < sg.hw + 1; })());
+  // jezdnie (do chodników: chodnik przerwany tam, gdzie przecina inną jezdnię — wylot ulicy, wjazd)
+  const carSegs: { id: number; a: XZ; b: XZ; hw: number }[] = [];
+  for (const q of t.r) if (isVehicleRoad(q.k) && !q.tu && !q.br) { const pp = toXZ(q.p); for (let i = 0; i + 1 < pp.length; i++) carSegs.push({ id: q.id, a: pp[i], b: pp[i + 1], hw: q.w / 2 + .2 }); }
+  const onOtherRoad = (x: number, z: number, self: number) => carSegs.some(sg => { if (sg.id === self) return false; const dx = sg.b[0] - sg.a[0], dz = sg.b[1] - sg.a[1], L2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - sg.a[0]) * dx + (z - sg.a[1]) * dz) / L2)); return Math.hypot(sg.a[0] + dx * u - x, sg.a[1] + dz * u - z) < sg.hw; });
   const drawRoad = (r: TileRoad) => {
     const p = densify(toXZ(r.p), SEG), n = offsets(p), hw = r.w / 2, veh = isVehicleRoad(r.k), ys = r.br ? deckYs(p, r.bw) : gys(p);
     for (let i = 0; i < r.j.length; i += 2) roadW.set(r.j[i + 1], Math.max(roadW.get(r.j[i + 1]) || 0, r.w));
@@ -573,8 +577,18 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
     if (r.sw) for (const side of [-1, 1]) {
       if (!((side < 0 && r.sw & 1) || (side > 0 && r.sw & 2))) continue;
       // chodnik podniesiony o krawężnik: nawierzchnia, ściana krawężnika od jezdni, zewnętrzna krawędź
-      const e0 = offMap(H, v => side * v), e1 = offMap(H, v => side * (v + 2.5));
-      strip(RB, p, n, e0, e1, ys, PAL.sidewalk, CURB); wall(RB, p, n, e0, ys, 0, CURB, PAL.curb); wall(RB, p, n, e1, ys, 0, CURB, PAL.sidewalk);
+      const e0 = offMap(H, v => side * v), e1 = offMap(H, v => side * (v + 2.5)), at = (o: Off, i: number) => typeof o === 'number' ? o : o[i];
+      // odcinki chodnika poza innymi jezdniami (przerwa na wylocie ulicy)
+      const ok = p.map((q, i) => { const m = (at(e0, i) + at(e1, i)) / 2; return !onOtherRoad(q[0] + n[i][0] * m, q[1] + n[i][1] * m, r.id); });
+      for (let i0 = 0; i0 < p.length;) {
+        if (!ok[i0]) { i0++; continue; } let i1 = i0; while (i1 + 1 < p.length && ok[i1 + 1]) i1++;
+        if (i1 > i0) {
+          const sl = (o: Off): Off => typeof o === 'number' ? o : o.slice(i0, i1 + 1), pp = p.slice(i0, i1 + 1), nn = n.slice(i0, i1 + 1), yy = typeof ys === 'number' ? ys : (ys as number[]).slice(i0, i1 + 1) as Ys;
+          const a0 = sl(e0), a1 = sl(e1);
+          strip(RB, pp, nn, a0, a1, yy, PAL.sidewalk, CURB); wall(RB, pp, nn, a0, yy, 0, CURB, PAL.curb); wall(RB, pp, nn, a1, yy, 0, CURB, PAL.sidewalk);
+        }
+        i0 = i1 + 1;
+      }
     }
     // pasy ruchu
     const ln = r.ln, lane = (k: number, d = 0): Off => offMap(H, v => -v + k * 2 * v / Math.max(1, ln) + d); // k-ta linia pasów od lewej krawędzi
