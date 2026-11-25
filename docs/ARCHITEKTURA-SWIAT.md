@@ -152,3 +152,12 @@ Poziom parteru = najwyższy punkt terenu wzdłuż ścian (próbki co ~4 m, nie t
 (ochrona przed błędami modelu terenu). Dzięki temu parter i jego okna zawsze są nad gruntem, a kondygnacje, okna,
 wnętrza i kolizje liczone są od tego samego poziomu. Po niższej stronie stoku ściany schodzą do najniższego punktu
 (cokół, ciemniejszy, bez okien). Własne modele landmarków zostają na najniższym punkcie (mają własne cokoły i schody).
+
+## Drzwi (`shared/src/interiors/plan.ts` DoorDef, `interiors.ts`, `sim.ts` door, `client/src/world/interiorView.ts`)
+
+Każdy otwór typu „drzwi” we wnętrzu (wejście z ulicy, hol, klatka–korytarz, wejścia do lokali, drzwi między pokojami)
+ma skrzydło o stałym id `budynek/piętro/nr` (deterministyczne u serwera i klientów). Przejścia otwarte (bez drzwi) zostają otwarte.
+Domyślnie ok. 85% drzwi jest zamkniętych (los z id); zamknięte skrzydło jest przeszkodą dla chodzenia.
+Klawisz E przy drzwiach (w zasięgu 1,6 m; pierwszeństwo przed pojemnikiem, gdy drzwi są bliżej niż 1 m) otwiera / zamyka.
+Stan liczy serwer: zmiany rozsyłane komunikatem `doors`, nowy gracz dostaje pełną listę przy dołączeniu.
+Zamki (zamykanie na klucz) – w przyszłości: stan drzwi jest już po stronie serwera.

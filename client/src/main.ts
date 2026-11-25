@@ -76,8 +76,9 @@ const ui: GameUI = {
   slowFrame(g) {
     const e = g.controlled(); if (!e || !g.world) return;
     const ride = g.ridePose(), clock = g.clockText();
-    const box = g.mode === 'walk' && !ride ? g.world.interiors.container(e.x, e.z, e.y) : null;
-    $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)) + (box ? ` · E: przeszukaj (${box.item.n})` : ''); info(g);
+    const I = g.world.interiors, box = g.mode === 'walk' && !ride ? I.container(e.x, e.z, e.y) : null, dr = g.mode === 'walk' && !ride ? I.nearDoor(e.x, e.z, e.y) : null;
+    const hint = dr && (dr.dist <= 1 || !box) ? ` · E: ${dr.open ? 'zamknij' : 'otwórz'} drzwi` : box ? ` · E: przeszukaj (${box.item.n})` : '';
+    $('loc').textContent = (clock ? clock + ' · ' : '') + (ride ? ride.desc : locText(g.world, g.mode, e)) + hint; info(g);
     // współrzędne do testów: szerokość/długość geograficzna, kratka mapy, układ gry
     const city = g.world.city; $('coords').textContent = `📍 ${fmtLatLon(unprojPoint(city.o, e.x, e.z))} · kratka ${cellName(gridOf(city), e.x, e.z)} · x ${Math.round(e.x)} z ${Math.round(e.z)}`;
   },

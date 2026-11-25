@@ -6,14 +6,19 @@ import { partsCover } from '../tiles/parts';
 import { DCELL, type Region, type RegionIndex } from '../world/regions';
 import { cellKey, CELL } from '../world/grid';
 import { nOf, toLocal, toWorld } from './geom';
-import { buildLevel, hasInterior, makePlan, OBST_PAD, type Item, type Level, type Plan, type PlanWorld } from './plan';
+import { buildLevel, hasInterior, makePlan, OBST_PAD, type DoorDef, type Item, type Level, type Plan, type PlanWorld } from './plan';
 
 export const R_ON = 45, R_OFF = 70;
 
 interface Cand { b: TileBuilding; t: TileData; a: number; b2: number; c: number; d: number }
-export interface LiveLevel { level: Level; regions: Region[]; obst: { item: Item; cells: string[] }[] }
+export interface LiveLevel { level: Level; regions: Region[]; obst: { item: Item; cells: string[] }[]; dcells: { d: DoorDef; cells: string[] }[] }
 export interface Live { plan: Plan; levels: Map<number, LiveLevel>; box: [number, number, number, number] }
 interface Obst { item: Item; live: Live }
+interface DoorRef { d: DoorDef; live: Live }
+/** pół-grubość zamkniętego skrzydła jako przeszkody [m] (więcej niż krok pieszego w jednym takcie) */
+const LEAF = .22;
+/** Domyślny stan drzwi (bez zapisanej zmiany): większość zamknięta, ok. 15% otwartych (stałe dla danych drzwi). */
+export function doorOpenByDefault(id: string): boolean { let h = 2166136261; for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619); return ((h >>> 0) % 1000) < 150; }
 
 export interface InteriorsHost extends PlanWorld { readonly regions: RegionIndex }
 
@@ -29,6 +34,11 @@ export class Interiors {
   private grid = new Map<string, Cand[]>();
   private byTile = new Map<string, Cand[]>();
   private obst = new Map<string, Obst[]>();
+  private dgrid = new Map<string, DoorRef[]>();
+  /** stan drzwi zmieniony przez graczy (id -> otwarte); reszta: doorOpenByDefault */
+  private doorState = new Map<string, boolean>();
+  /** rośnie przy zmianie stanu drzwi (widok skrzydeł) */
+  doorVersion = 0;
 
   constructor(private host: InteriorsHost) {}
 
@@ -133,11 +143,19 @@ export class Interiors {
       for (const ck of cells) { let l = this.obst.get(ck); if (!l) this.obst.set(ck, l = []); l.push({ item: it, live: lv }); }
       obst.push({ item: it, cells: [...cells] });
     }
-    return { level, regions, obst };
+    const dcells: LiveLevel['dcells'] = [];
+    for (const d of level.doors) {
+      const cells = new Set<string>();
+      for (const [x, y] of d.axis === 'x' ? [[d.at, d.a], [d.at, d.b]] : [[d.a, d.at], [d.b, d.at]]) { const [wx, wz] = toWorld(f, x, y); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) cells.add((Math.floor(wx / DCELL) + i) + ',' + (Math.floor(wz / DCELL) + j)); }
+      for (const ck of cells) { let l = this.dgrid.get(ck); if (!l) this.dgrid.set(ck, l = []); l.push({ d, live: lv }); }
+      dcells.push({ d, cells: [...cells] });
+    }
+    return { level, regions, obst, dcells };
   }
 
   private unlevel(lv: Live, L: LiveLevel): void {
     for (const r of L.regions) this.host.regions.removeDyn(r);
+    for (const o of L.dcells) for (const ck of o.cells) { const l = this.dgrid.get(ck); if (!l) continue; const f = l.filter(x => x.d !== o.d); if (f.length) this.dgrid.set(ck, f); else this.dgrid.delete(ck); }
     for (const o of L.obst) for (const ck of o.cells) { const l = this.obst.get(ck); if (!l) continue; const f = l.filter(x => x.item !== o.item); if (f.length) this.obst.set(ck, f); else this.obst.delete(ck); }
     void lv;
   }
@@ -147,9 +165,44 @@ export class Interiors {
     lv.levels.clear(); this.live.delete(lv.plan.id); this.version++;
   }
 
-  /** Mebel blokuje punkt (x, z) na wysokości podłogi y. */
+  // ---------- drzwi ----------
+  isOpen(id: string): boolean { return this.doorState.get(id) ?? doorOpenByDefault(id); }
+  /** Ustawia stan drzwi; true = zmiana. */
+  setDoor(id: string, open: boolean): boolean {
+    if (this.isOpen(id) === open) return false;
+    if (open === doorOpenByDefault(id)) this.doorState.delete(id); else this.doorState.set(id, open);
+    this.doorVersion++; return true;
+  }
+  /** Wszystkie drzwi w stanie domyślnym (przed pełną listą z serwera). */
+  resetDoors(): void { if (this.doorState.size) { this.doorState.clear(); this.doorVersion++; } }
+  /** Drzwi o stanie innym niż domyślny (do wysłania nowemu graczowi). */
+  doorStates(): [string, boolean][] { return [...this.doorState]; }
+  /** Wszystkie drzwi aktywnych pięter (widok). */
+  *liveDoors(): Generator<{ d: DoorDef; plan: Plan; open: boolean }> {
+    for (const lv of this.live.values()) for (const L of lv.levels.values()) for (const d of L.level.doors) yield { d, plan: lv.plan, open: this.isOpen(d.id) };
+  }
+  /** Najbliższe drzwi w zasięgu ręki (środek skrzydła, ta sama kondygnacja). */
+  nearDoor(x: number, z: number, y: number, maxD = 1.6): { d: DoorDef; plan: Plan; open: boolean; dist: number } | null {
+    let best: { d: DoorDef; plan: Plan; open: boolean; dist: number } | null = null;
+    const l = this.dgrid.get(Math.floor(x / DCELL) + ',' + Math.floor(z / DCELL)); if (!l) return null;
+    for (const { d, live } of l) {
+      if (y < d.y0 - 1 || y > d.y0 + 1.2) continue;
+      const [lx, ly] = toLocal(live.plan.frame, x, z), m = (d.a + d.b) / 2;
+      const dist = d.axis === 'x' ? Math.hypot(lx - d.at, Math.max(0, Math.abs(ly - m) - (d.b - d.a) / 2)) : Math.hypot(ly - d.at, Math.max(0, Math.abs(lx - m) - (d.b - d.a) / 2));
+      if (dist < maxD && (!best || dist < best.dist)) best = { d, plan: live.plan, open: this.isOpen(d.id), dist };
+    }
+    return best;
+  }
+
+  /** Mebel albo zamknięte drzwi blokują punkt (x, z) na wysokości podłogi y. */
   blocked(x: number, z: number, y: number): boolean {
-    const l = this.obst.get(Math.floor(x / DCELL) + ',' + Math.floor(z / DCELL)); if (!l) return false;
+    const ck = Math.floor(x / DCELL) + ',' + Math.floor(z / DCELL), dl = this.dgrid.get(ck);
+    if (dl) for (const { d, live } of dl) {
+      if (Math.abs(d.y0 - y) > 1.2 || this.isOpen(d.id)) continue;
+      const [lx, ly] = toLocal(live.plan.frame, x, z);
+      if (d.axis === 'x' ? Math.abs(lx - d.at) < LEAF && ly > d.a - .05 && ly < d.b + .05 : Math.abs(ly - d.at) < LEAF && lx > d.a - .05 && lx < d.b + .05) return true;
+    }
+    const l = this.obst.get(ck); if (!l) return false;
     for (const o of l) {
       const it = o.item; if (Math.abs(it.y - y) > .6) continue;
       const [lx, ly] = toLocal(o.live.plan.frame, x, z);

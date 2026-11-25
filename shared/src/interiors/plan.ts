@@ -19,7 +19,9 @@ export interface Box { name: string; kind: string; r: Rect; y: number; h: number
 export interface Slab { r: Rect; axis: 'x' | 'y'; ya: number; yb: number; steps: boolean }
 export interface Walk extends Omit<Slab, 'steps'> { nm: string }
 export interface Item { r: Rect; y: number; h: number; k: string; n: string; c?: string; id?: string; unit: number }
-export interface Level { k: number; boxes: Box[]; slabs: Slab[]; walks: Walk[]; items: Item[]; ms: number }
+/** Drzwi (skrzydło) w otworze: linia w układzie budynku (oś x: x = at, y od a do b; oś y: y = at, x od a do b), id stałe dla planu. */
+export interface DoorDef { id: string; axis: 'x' | 'y'; at: number; a: number; b: number; y0: number; y1: number; ext: boolean }
+export interface Level { k: number; boxes: Box[]; slabs: Slab[]; walks: Walk[]; items: Item[]; doors: DoorDef[]; ms: number }
 
 export interface Unit {
   idx: number; tpl: Template; floor0: number; nFloors: number; slot: Rect;
@@ -249,7 +251,8 @@ const doorWalk = (l: Line, y: number, nm: string, narrow = .1): Walk => l.axis =
 
 export function buildLevel(p: Plan, k: number): Level {
   const t0 = now();
-  const L: Level = { k, boxes: [], slabs: [], walks: [], items: [], ms: 0 };
+  const L: Level = { k, boxes: [], slabs: [], walks: [], items: [], doors: [], ms: 0 };
+  const door = (l: Line, y0: number, y1: number, ext = false) => L.doors.push({ id: `${p.id}/${k}/${L.doors.length}`, axis: l.axis, at: l.at, a: l.a, b: l.b, y0, y1, ext });
   const H = p.H, F = (i: number) => p.f0 + i * H, top = p.levels - 1, yl = M + flightLen(H);
   const fl = floorName(k), addr = p.label ? p.label + ' · ' : '';
 
@@ -280,7 +283,7 @@ export function buildLevel(p: Plan, k: number): Level {
     L.walks.push({ r: rect(c.x0 + .3, c.y0 + .3, c.x1 - .3, c.y1 - .3), axis: 'x', ya: F(k), yb: F(k), nm: `${addr}Korytarz · ${fl}` });
     for (const core of p.cores) {
       const at = core.r.x1 <= c.x0 + .05 ? core.r.x1 : core.r.x0, l: Line = { axis: 'x', at, a: (c.y0 + c.y1) / 2 - .6, b: (c.y0 + c.y1) / 2 + .6 };
-      addHole(L.boxes, l, F(k), F(k) + 2.1, 'door'); L.walks.push(doorWalk(l, F(k), `${addr}Korytarz · ${fl}`));
+      addHole(L.boxes, l, F(k), F(k) + 2.1, 'door'); door(l, F(k), F(k) + 2.1); L.walks.push(doorWalk(l, F(k), `${addr}Korytarz · ${fl}`));
     }
   }
   if (k === 0 && p.lobby) {
@@ -288,7 +291,7 @@ export function buildLevel(p: Plan, k: number): Level {
     L.boxes.push({ name: 'Hol wejściowy', kind: 'lobby', r: lb, y: F(0), h: H - .2, holes: [], floor: true, ceil: true, unit: -1 });
     L.walks.push({ r: inset(lb, .3), axis: 'x', ya: F(0), yb: F(0), nm });
     const cx = (lb.x0 + lb.x1) / 2, l: Line = { axis: 'y', at: lb.y1, a: cx - .8, b: cx + .8 };
-    addHole(L.boxes, l, F(0), F(0) + 2.1, 'door'); L.walks.push(doorWalk(l, F(0), nm));
+    addHole(L.boxes, l, F(0), F(0) + 2.1, 'door'); door(l, F(0), F(0) + 2.1); L.walks.push(doorWalk(l, F(0), nm));
   }
 
   // --- lokale ---
@@ -316,14 +319,14 @@ export function buildLevel(p: Plan, k: number): Level {
     for (const d of lay.doors) if (d.floor === tf) {
       const a = d.axis === 'x' ? mapT(u, d.at, d.a) : mapT(u, d.a, d.at), b = d.axis === 'x' ? mapT(u, d.at, d.b) : mapT(u, d.b, d.at);
       const l: Line = Math.abs(a[0] - b[0]) < .01 ? { axis: 'x', at: a[0], a: Math.min(a[1], b[1]), b: Math.max(a[1], b[1]) } : { axis: 'y', at: a[1], a: Math.min(a[0], b[0]), b: Math.max(a[0], b[0]) };
-      addHole(L.boxes, l, F(k), F(k) + (d.open ? 2.3 : 2.05), d.open ? 'open' : 'door', mine);
+      addHole(L.boxes, l, F(k), F(k) + (d.open ? 2.3 : 2.05), d.open ? 'open' : 'door', mine); if (!d.open) door(l, F(k), F(k) + 2.05);
       L.walks.push(doorWalk(l, F(k), roomNm(d.B), d.open ? .05 : .1));
     }
     // wejście do lokalu
     if (tf === 0 && lay.entry) {
       const a = mapT(u, lay.entry.a, 0), b = mapT(u, lay.entry.b, 0);
       const l: Line = Math.abs(a[0] - b[0]) < .01 ? { axis: 'x', at: a[0], a: Math.min(a[1], b[1]), b: Math.max(a[1], b[1]) } : { axis: 'y', at: a[1], a: Math.min(a[0], b[0]), b: Math.max(a[0], b[0]) };
-      addHole(L.boxes, l, F(k), F(k) + 2.1, 'door');
+      addHole(L.boxes, l, F(k), F(k) + 2.1, 'door'); if (!u.ext) door(l, F(k), F(k) + 2.1);
       if (!u.ext) L.walks.push(doorWalk(l, F(k), roomNm('wejście')));
     }
   }
@@ -339,7 +342,7 @@ export function buildLevel(p: Plan, k: number): Level {
   // drzwi zewnętrzne (parter)
   if (k === 0) for (const e of p.ext) {
     const l: Line = { axis: 'y', at: 0, a: e.x - e.w / 2, b: e.x + e.w / 2 };
-    addHole(L.boxes, l, e.yIn, e.yIn + 2.15, 'door');
+    addHole(L.boxes, l, e.yIn, e.yIn + 2.15, 'door'); door(l, e.yIn, e.yIn + 2.15, true);
     L.walks.push({ r: rect(e.x - e.w / 2 + .15, -e.tOut, e.x + e.w / 2 - .15, .45), axis: 'y', ya: e.g, yb: e.yIn, nm: `${addr}Wejście` });
   }
   // okna z fasady

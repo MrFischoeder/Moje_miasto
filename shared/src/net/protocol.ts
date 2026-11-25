@@ -115,6 +115,8 @@ export type ServerMsg =
   | { t: 'me'; hp: number; money: number; wanted: number; dead: boolean; cur: string }
   /** zdarzenie na środku ekranu */
   | { t: 'event'; text: string; kind: 'crime' | 'arrest' | 'death' | 'info' }
+  /** stan drzwi we wnętrzach: zmiany (albo pełna lista przy dołączeniu) [id, otwarte] */
+  | { t: 'doors'; s: [string, boolean][]; all?: boolean }
   | { t: 'stats'; tickMs: number; tickMsMax: number; entities: number; cars: number; peds: number; police: number; interiors: number }
   | { t: 'players'; list: PlayerInfo[] }
   | { t: 'chat'; from: string; color: string; text: string; sys?: boolean }

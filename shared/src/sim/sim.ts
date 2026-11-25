@@ -28,6 +28,8 @@ export class Simulation {
   tick = 0;
   readonly entities = new Map<number, Entity>();
   readonly players = new Map<number, PlayerState>();
+  /** zmiany stanu drzwi do rozesłania graczom [id, otwarte] */
+  readonly doorEvents: [string, boolean][] = [];
   private readonly inputs = new Map<number, InputCmd>();
   private nextId = 1;
 
@@ -150,7 +152,7 @@ export class Simulation {
       w.x = c.x; w.z = c.z; w.y = this.world.surfaceAt(c.x, c.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300); return;
     }
     if (c.type === 'mode') this.setMode(p, c.mode, c.v);
-    else if (c.type === 'enter') { if (!this.board(p) && !this.search(p)) this.enterNearest(p); }
+    else if (c.type === 'enter') { if (!this.board(p) && !this.door(p) && !this.search(p)) this.enterNearest(p); }
     else if (c.type === 'goStation') {
       const s = this.world.stations[c.station]; if (!s) return;
       this.exitVehicle(p, false);
@@ -234,6 +236,15 @@ export class Simulation {
       const [x, z] = this.world.freeSpot(w.x, w.z, 0, true); this.place(p, x, z);
     }
     this.world.interiors.setEnabled(on);
+  }
+
+  /** Otwiera / zamyka najbliższe drzwi w zasięgu ręki (pierwszeństwo przed pojemnikiem, gdy drzwi są bliżej niż 1 m). */
+  door(p: PlayerState): boolean {
+    if (p.vehicle != null || p.ride) return false;
+    const w = this.entity(p.walker), I = this.world.interiors, d = I.nearDoor(w.x, w.z, w.y);
+    if (!d || (d.dist > 1 && I.container(w.x, w.z, w.y))) return false;
+    if (I.setDoor(d.d.id, !d.open)) this.doorEvents.push([d.d.id, !d.open]);
+    return true;
   }
 
   /** Przeszukanie pojemnika (szafa, lodówka, kasa...) w zasięgu ręki. */

@@ -2,7 +2,7 @@
 // (przez okno widać miasto, bo ściana zewnętrzna od środka nie jest rysowana), schody, meble.
 import * as THREE from 'three';
 import type { World } from '@miasto/shared/world/world';
-import type { Box, Level, Plan, Slab } from '@miasto/shared/interiors/plan';
+import type { Box, DoorDef, Level, Plan, Slab } from '@miasto/shared/interiors/plan';
 import { toWorld } from '@miasto/shared/interiors/geom';
 import { hex, mix, type RGB } from '@miasto/shared/util/rng';
 import { GeoBuilder, type V3 } from './geometry';
@@ -30,6 +30,8 @@ export class InteriorView {
   readonly group = new THREE.Group();
   private levels = new Map<string, THREE.Object3D[]>();
   private version = -1;
+  /** skrzydła drzwi (przebudowa po zmianie stanu drzwi albo zestawu pięter) */
+  private doorObjs: THREE.Object3D[] = []; private doorKey = '';
   constructor(private world: World) { this.group.name = 'wnętrza'; }
 
   /** Przebudowa po zmianie zestawu pięter; wycięcia drzwi w ścianach budynków. */
@@ -42,6 +44,12 @@ export class InteriorView {
       for (const [key, objs] of this.levels) if (!want.has(key)) { for (const o of objs) { this.group.remove(o); dispose(o); } this.levels.delete(key); }
       for (const [key, { p, L }] of want) if (!this.levels.has(key)) { const objs = buildLevelView(p, L); for (const o of objs) this.group.add(o); this.levels.set(key, objs); }
     }
+    const dk = I.version + '/' + I.doorVersion;
+    if (dk !== this.doorKey) {
+      this.doorKey = dk;
+      for (const o of this.doorObjs) { this.group.remove(o); dispose(o); }
+      this.doorObjs = buildDoorLeaves(I.liveDoors()); for (const o of this.doorObjs) this.group.add(o);
+    }
     if (doors) {
       const ds = I.doors().map(d => ({ d, dist: Math.hypot(d.c[0] - x, d.c[1] - z) })).sort((a, b) => a.dist - b.dist).slice(0, MAX_DOORS);
       ds.forEach(({ d }, i) => { doors.uDoorA.value[i].set(d.c[0], d.c[1], d.u[0], d.u[1]); doors.uDoorB.value[i].set(d.y0, d.y1, d.w / 2, .9); });
@@ -49,7 +57,7 @@ export class InteriorView {
     }
   }
 
-  dispose(): void { for (const objs of this.levels.values()) for (const o of objs) { this.group.remove(o); dispose(o); } this.levels.clear(); }
+  dispose(): void { for (const objs of this.levels.values()) for (const o of objs) { this.group.remove(o); dispose(o); } this.levels.clear(); for (const o of this.doorObjs) { this.group.remove(o); dispose(o); } this.doorObjs = []; }
 }
 
 function dispose(o: THREE.Object3D): void {
@@ -117,6 +125,34 @@ export function buildLevelView(p: Plan, L: Level): THREE.Object3D[] {
   }
   const objs = G.build(); for (const o of objs) o.name = `wnętrze ${p.id}/${L.k}`;
   return objs;
+}
+
+/**
+ * Skrzydła drzwi: zamknięte – w płaszczyźnie otworu, otwarte – obrócone o 90° na zawiasie (początek otworu)
+ * do środka (+x / +y układu budynku; drzwi wejściowe do wnętrza budynku). Klamka po stronie przeciwnej zawiasowi.
+ */
+function buildDoorLeaves(list: Iterable<{ d: DoorDef; plan: Plan; open: boolean }>): THREE.Object3D[] {
+  const G = new GeoBuilder();
+  for (const { d, plan, open } of list) {
+    const f = plan.frame, P = (x: number, y: number, h: number): V3 => { const [wx, wz] = toWorld(f, x, y); return [wx, h, wz]; };
+    const w = d.b - d.a - .06, T = .045;
+    // układ skrzydła: zawias H, kierunek skrzydła S, grubość wzdłuż N (wszystko w układzie budynku)
+    let H: [number, number], S: [number, number], N: [number, number];
+    if (d.axis === 'x') { H = [d.at, d.a + .03]; S = [0, 1]; N = [1, 0]; } else { H = [d.a + .03, d.at + (d.ext ? -.02 : 0)]; S = [1, 0]; N = [0, 1]; }
+    if (open) { const s = S; S = N; N = [-s[0], -s[1]]; }
+    const col: RGB = d.ext ? [.36, .25, .16] : [.88, .86, .8], edge: RGB = d.ext ? [.2, .14, .09] : [.5, .48, .44];
+    const y0 = d.y0 + .01, y1 = d.y1 - .04;
+    const pt = (s: number, n: number, h: number) => P(H[0] + S[0] * s + N[0] * n, H[1] + S[1] * s + N[1] * n, h);
+    const nW = (sx: number, sy: number): V3 => { const [ax, az] = toWorld(f, 0, 0), [bx, bz] = toWorld(f, sx, sy); return [bx - ax, 0, bz - az]; };
+    for (const sg of [-1, 1]) G.quad(pt(0, sg * T, y0), pt(w, sg * T, y0), pt(w, sg * T, y1), pt(0, sg * T, y1), col, nW(N[0] * sg, N[1] * sg));
+    G.quad(pt(w, -T, y0), pt(w, T, y0), pt(w, T, y1), pt(w, -T, y1), mix(col, .8), nW(S[0], S[1]));
+    G.quad(pt(0, -T, y1), pt(w, -T, y1), pt(w, T, y1), pt(0, T, y1), mix(col, .9), [0, 1, 0]);
+    G.line(pt(0, T + .005, y0), pt(0, T + .005, y1), edge); G.line(pt(w, T + .005, y0), pt(w, T + .005, y1), edge); G.line(pt(0, T + .005, y1), pt(w, T + .005, y1), edge);
+    // klamka (obie strony)
+    const hy = d.y0 + 1.02, hs = w - .12;
+    for (const sg of [-1, 1]) G.quad(pt(hs - .07, sg * (T + .04), hy - .02), pt(hs + .05, sg * (T + .04), hy - .02), pt(hs + .05, sg * (T + .04), hy + .02), pt(hs - .07, sg * (T + .04), hy + .02), [.75, .72, .6], nW(N[0] * sg, N[1] * sg));
+  }
+  const objs = G.build(); for (const o of objs) o.name = 'drzwi'; return objs;
 }
 
 function slab(G: GeoBuilder, P: (x: number, y: number, h: number) => V3, s: Slab): void {

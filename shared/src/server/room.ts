@@ -84,6 +84,7 @@ export class Room {
 
   private welcome(c: Conn, pid: number): void {
     this.sendJson(c, { t: 'welcome', v: PROTOCOL_VERSION, you: pid, city: this.world.key, session: this.id, tick: this.sim.tick, hz: SIM_HZ, time: this.clock.now(), scale: this.clock.scale });
+    this.sendJson(c, { t: 'doors', s: this.world.interiors.doorStates(), all: true });
   }
 
   get full(): boolean { return this.clients.size >= this.opt.maxPlayers; }
@@ -235,6 +236,7 @@ export class Room {
       const p = c.player, sig = `${Math.round(p.hp)}|${p.money.toFixed(2)}|${p.wanted}|${p.dead > 0}`;
       if (sig !== c.meSig) { c.meSig = sig; this.sendJson(c.conn, { t: 'me', hp: Math.round(p.hp), money: p.money, wanted: p.wanted, dead: p.dead > 0, cur: R?.money.cur ?? 'zł' }); }
     }
+    if (this.sim.doorEvents.length) this.broadcast({ t: 'doors', s: this.sim.doorEvents.splice(0) });
     if (R) for (const e of R.events.splice(0)) { const c = this.clients.get(e.pid); if (c) this.sendJson(c.conn, { t: 'event', text: e.text, kind: e.kind }); }
   }
 
