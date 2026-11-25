@@ -32,15 +32,16 @@ vFacA = aFacA; vFacB = aFacB; vFacC = aFacC; vWPos = (modelMatrix * vec4(positio
 varying vec4 vFacA; varying vec4 vFacB; varying vec4 vFacC; varying vec3 vWPos;
 uniform float uLit; uniform vec4 uDoorA[${MAX_DOORS}]; uniform vec4 uDoorB[${MAX_DOORS}]; uniform int uDoorN;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-// wejścia: otwór w murze; wokół brama (obramienie), a w strefie bramy bez okien parteru
-float doorZone = 0.0, portal = 0.0;
+// wejścia: otwór w murze; wokół brama (obramienie); okna parteru przy wejściu znikają w całości (niżej, test środka okna)
+float portal = 0.0;
+// kierunek osi fasady (vFacA.x) względem świata: do przeliczenia środka okna na położenie względem drzwi
+float dfx = dFdx(vFacA.x), dfy = dFdy(vFacA.x); vec2 dgx = dFdx(vWPos.xz), dgy = dFdy(vWPos.xz); bool useX = abs(dfx) > abs(dfy);
 for (int i = 0; i < ${MAX_DOORS}; i++) {
   if (i >= uDoorN) break;
   vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPos.xz - a.xy;
   float al = abs(dot(d, a.zw)), ac = abs(dot(d, vec2(-a.w, a.z)));
   if (al < b.z && ac < b.w && vWPos.y > b.x && vWPos.y < b.y) discard;
   if (ac < b.w && vWPos.y > b.x - 0.2) {
-    if (al < b.z + 1.3 && vWPos.y < b.y + 1.1) doorZone = 1.0;
     if (al < b.z + 0.32 && vWPos.y < b.y + 0.36) portal = 1.0;
   }
 }
@@ -68,7 +69,7 @@ if (matW > 2.5 && vFacA.z > 0.5 && vFacB.x > 0.5) {
   diffuseColor.rgb *= mix(1.0, 0.9 + 0.2 * hb, far);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.74, 0.68) * 0.8, max(mu, mv) * 0.55 * far);
 }
-if (vFacA.z > 0.5 && vFacB.x > 0.5 && doorZone < 0.5) {
+if (vFacA.z > 0.5 && vFacB.x > 0.5) {
   float sp = vFacB.x, L = vFacA.z, n = floor((L - 0.6) / sp);
   if (n >= 1.0) {
     float off = (L - n * sp) * 0.5, lu = (vFacA.x - off) / sp, ci = floor(lu);
@@ -77,7 +78,19 @@ if (vFacA.z > 0.5 && vFacB.x > 0.5 && doorZone < 0.5) {
     // okno znika, gdy ma tylko kilka pikseli (rozmiar okna / piksel), cienka rama wcześniej (mniej migotania w oddali)
     float px = max(fwu, fwv), fade = 1.0 - smoothstep(min(vFacB.y, vFacB.z) / 12.0, min(vFacB.y, vFacB.z) / 5.0, px);
     float ffade = 1.0 - smoothstep(0.03, 0.09, px);
-    if (k >= 0.0 && k < vFacC.y) {
+    // okno w strefie wejścia (środek okna do 1,3 m od otworu drzwi, parter): bez okna, zamiast ucinania w połowie
+    bool gone = false;
+    if (uDoorN > 0) {
+      float dt = off + (ci + 0.5) * sp - vFacA.x, yC = vWPos.y + (vFacB.w + k * vFacA.w + vFacC.x + vFacB.z * 0.5 - vFacA.y);
+      for (int i = 0; i < ${MAX_DOORS}; i++) {
+        if (i >= uDoorN) break;
+        vec4 a = uDoorA[i]; vec4 b = uDoorB[i]; vec2 d = vWPos.xz - a.xy;
+        float sg = useX ? sign(dot(dgx, a.zw) * dfx) : sign(dot(dgy, a.zw) * dfy);
+        float t = dot(d, a.zw) + sg * dt, ac = abs(dot(d, vec2(-a.w, a.z)));
+        if (abs(t) < b.z + 1.3 && ac < b.w && yC > b.x - 0.2 && yC < b.y + 1.1) gone = true;
+      }
+    }
+    if (k >= 0.0 && k < vFacC.y && !gone) {
       float cover = vFacB.y * vFacB.z / (sp * vFacA.w);
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.22, 0.3), cover * 0.6 * (1.0 - fade));
       totalEmissiveRadiance += vec3(1.0, 0.8, 0.45) * 1.3 * uLit * cover * (1.0 - fade);

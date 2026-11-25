@@ -86,9 +86,9 @@ export class WindowMaterials {
         .replace('#include <begin_vertex>', `#include <begin_vertex>
 vLitW = aGlass * step(aHash, uLit);
 #ifdef USE_INSTANCING
-vWPosD = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+vWPosD = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; // środek okna: całe okno znika albo zostaje
 #else
-vWPosD = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vWPosD = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 #endif`);
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
