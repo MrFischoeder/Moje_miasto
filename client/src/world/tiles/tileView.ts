@@ -683,8 +683,9 @@ export function computeTile(t: TileData, world: World | null = null, phys: World
       }
     }
   };
-  for (const r of t.r) if (!isVehicleRoad(r.k)) drawRoad(r);
-  for (const r of t.r) if (isVehicleRoad(r.k)) drawRoad(r);
+  // drogi i przejścia w tunelu (np. pod placem Dominikańskim): pod ziemią, na powierzchni nierysowane (czarne pasy = „dziura”)
+  for (const r of t.r) if (!isVehicleRoad(r.k) && !r.tu) drawRoad(r);
+  for (const r of t.r) if (isVehicleRoad(r.k) && !r.tu) drawRoad(r);
 
   // --- tory ---
   for (const l of t.l) {
