@@ -113,6 +113,8 @@ Nabrzeża nadal wyglądają źle i są popsute, a rzeki powodują najwięcej bł
 
 Lot helikopterem jest szarpany, szczególnie na telefonie. Zoptymalizować grę jak najlepiej, a w razie potrzeby zmienić sposób wyświetlania i generowania świata (np. wczytywanie kafli, poziomy szczegółów, rozkład pracy na klatki).
 
+Trop z panelu wydajności (PC, 26.11): minimapa zajmuje 9–12 ms na klatkę, prawie tyle co całe rysowanie (10–18 ms). To pierwsze miejsce do optymalizacji.
+
 ## 19. Gładkie, ciągłe drogi i ścieżki
 
 Drogi i chodniki powinny być ładnymi, gładkimi, ciągłymi pasami. Dziś miejscami nakładają się na siebie kawałki nawierzchni (kafle) z ostrymi krawędziami i schodkami (przykład: ul. Świętego Antoniego, x -373, z 91). Do zrobienia: jednolita siatka nawierzchni na łączeniach, zaokrąglone zakręty, bez zachodzących na siebie płatów.
