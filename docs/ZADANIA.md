@@ -98,7 +98,11 @@ Usunąć z mapy rowy melioracyjne (drobne cieki, ditch/drain). Nie wnoszą wiele
 
 ## 16. Nabrzeża rzek – ważny etap
 
-Nabrzeża nadal wyglądają źle i są popsute. Trzeba je gruntownie dopracować: równe, proste brzegi (mury lub skarpy), bez poszarpanych krawędzi i dziur.
+Nabrzeża nadal wyglądają źle i są popsute, a rzeki powodują najwięcej błędów na mapie. Uprościć je maksymalnie:
+
+- tylko dwa rodzaje brzegu: **pionowy mur** (woda tuż pod nim) albo **równa skarpa** o nachyleniu najwyżej ok. 45°;
+- brzeg wyrównany na całej długości, bez poszarpanych krawędzi, dziur i „babolców”;
+- obiekty nad wodą (budynki, restauracje) stoją na właściwej wysokości (patrz punkt 22).
 
 ## 17. Wejście do sklepu przez drzwi w witrynie
 
@@ -119,3 +123,11 @@ Płoty parceli (tools/lib/plots.ts) układają się dziś w przypadkowe wieloką
 
 - zwykle działka jest prostokątem lub ma kąty proste, wyrównane do ulicy i do domu;
 - tylko niewielki odsetek działek może zachować nieregularny kształt (wielokąt, skośne boki), jak w rzeczywistości.
+
+## 21. Puste bloki, do których da się zajrzeć
+
+Bloki (np. przy ul. Pomorskiej, x -103, z -551) często renderują się tak, że brakuje części ścian albo stropów: widać przez nie niebo i pustą przestrzeń w środku. To nie jest pojedynczy przypadek. Każdy budynek ma być zamkniętą bryłą (ściany, dach, ściany przy przejazdach bramnych i przewiązkach).
+
+## 22. Restauracja między mostami zapadnięta w ziemi
+
+Restauracja nad Odrą między mostami (okolice x -80, z -547) jest wkopana w teren, widać tylko dachy. Budynki przy nabrzeżach muszą stać na poziomie terenu po obróbce brzegów (do zrobienia razem z punktem 16).
