@@ -328,6 +328,19 @@ export function thinPathMesh(tiles: Map<string, TileData>): { removed: number } 
   type E = { a: number; b: number; L: number; r: TileRoad; dead: boolean; cand: boolean };
   const adj = new Map<number, E[]>(), cands: E[] = [];
   const PATH = ['footway', 'path', 'cycleway', 'pedestrian', 'steps'];
+  // alejki dzielone na odcinki między skrzyżowaniami (każdy odcinek osobno: usunięcie środka nie zabiera całej alejki)
+  for (const t of tiles.values()) t.r = t.r.flatMap(r => {
+    if (!['footway', 'path', 'cycleway'].includes(r.k) || r.br || r.tu || r.bp) return [r];
+    const n = r.p.length / 2, js: [number, number][] = []; for (let i = 0; i < r.j.length; i += 2) js.push([r.j[i], r.j[i + 1]]); js.sort((x, y) => x[0] - y[0]);
+    const cut = [...new Set([0, ...js.map(q => q[0]).filter(v => v > 0 && v < n - 1), n - 1])].sort((a, b) => a - b);
+    if (cut.length <= 2) return [r];
+    const out: TileRoad[] = [];
+    for (let q = 0; q + 1 < cut.length; q++) {
+      const a = cut[q], b = cut[q + 1], j: number[] = []; for (const [v, id] of js) if (v >= a && v <= b) j.push(v - a, id);
+      out.push({ ...r, p: r.p.slice(a * 2, b * 2 + 2), j });
+    }
+    return out;
+  });
   for (const t of tiles.values()) for (const r of t.r) {
     if (r.tu && !PATH.includes(r.k)) continue;
     const p = ringOf(r.p), js: [number, number][] = []; for (let i = 0; i < r.j.length; i += 2) js.push([r.j[i], r.j[i + 1]]); js.sort((x, y) => x[0] - y[0]);
