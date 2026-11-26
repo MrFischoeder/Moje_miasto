@@ -48,3 +48,34 @@ Jeśli na parterze kamienicy jest sklep, a wejście do klatki jest obok lub z dr
 
 - na parterze nie tworzymy mieszkań;
 - mieszkania zaczynają się od 1. piętra.
+
+## 6. Pasy dla pieszych w poprzek jezdni
+
+Przejścia dla pieszych często generują się wzdłuż drogi zamiast w poprzek, co wygląda absurdalnie. Zebra ma zawsze przecinać jezdnię prostopadle do jej osi.
+
+## 7. Przepisy ruchu drogowego
+
+- ograniczenia prędkości;
+- zatrzymywanie się na czerwonym świetle (i kara za przejazd na czerwonym);
+- samochody NPC też przestrzegają tych zasad.
+
+## 8. Realistyczne kolizje
+
+- można zostać potrąconym przez samochód lub tramwaj;
+- samochody zderzają się ze sobą;
+- kierowcy NPC jeżdżą przez to ostrożniej.
+
+## 9. Płynna jazda samochodów w pobliżu gracza
+
+- samochody blisko gracza (w zasięgu wzroku) skręcają płynnie po łuku, bez nagłego obrotu o 90°;
+- auta daleko (kilkaset metrów, poza zasięgiem wzroku) mogą zachowywać się w uproszczony sposób.
+
+## 10. Ruch postaci i ekwipunek
+
+- skakanie i podskakiwanie;
+- podnoszenie przedmiotów;
+- plecak do przechowywania rzeczy.
+
+## 11. (Do rozważenia) Głód
+
+Tryb głodu, na razie tylko jako pomysł.
