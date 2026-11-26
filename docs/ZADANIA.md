@@ -112,3 +112,10 @@ Lot helikopterem jest szarpany, szczególnie na telefonie. Zoptymalizować grę 
 ## 19. Gładkie, ciągłe drogi i ścieżki
 
 Drogi i chodniki powinny być ładnymi, gładkimi, ciągłymi pasami. Dziś miejscami nakładają się na siebie kawałki nawierzchni (kafle) z ostrymi krawędziami i schodkami (przykład: ul. Świętego Antoniego, x -373, z 91). Do zrobienia: jednolita siatka nawierzchni na łączeniach, zaokrąglone zakręty, bez zachodzących na siebie płatów.
+
+## 20. Płoty posesji pod kątami prostymi
+
+Płoty parceli (tools/lib/plots.ts) układają się dziś w przypadkowe wielokąty, przez co działki wyglądają nienaturalnie. Zasada:
+
+- zwykle działka jest prostokątem lub ma kąty proste, wyrównane do ulicy i do domu;
+- tylko niewielki odsetek działek może zachować nieregularny kształt (wielokąt, skośne boki), jak w rzeczywistości.
