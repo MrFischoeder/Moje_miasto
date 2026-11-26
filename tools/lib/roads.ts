@@ -199,6 +199,7 @@ export function cityPavements(tiles: Map<string, TileData>): { urban: number; su
  * Zostają ścieżki przez trawę, parki, podwórka, przejścia przez jezdnię i place. Potem znikają krótkie
  * ślepe resztki (< 40 m), które zostały po usunięciu równoległych odcinków.
  */
+const pipXZ = (o: XZ[], x: number, z: number) => { let c = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
 export function pruneSideFootways(tiles: Map<string, TileData>): { removed: number; stubs: number; sides: number } {
   const C = 25, segs = new Map<string, { r: TileRoad; s: number[] }[]>();
   for (const t of tiles.values()) for (const r of t.r) if (SW_ROAD.has(r.k) && !r.tu && !r.bp && !r.br) {
@@ -223,13 +224,19 @@ export function pruneSideFootways(tiles: Map<string, TileData>): { removed: numb
   let removed = 0, stubs = 0, sides = 0;
   for (const t of tiles.values()) {
     const keep: TileRoad[] = [];
+    // utwardzone place i parkingi: cała powierzchnia jest do chodzenia, ścieżki po nich niepotrzebne
+    const paved = t.a.filter(a => a.k === 'square' || a.k === 'parking').map(a => ({ o: ringOf(a.o), i: (a.i ?? []).map(ringOf) }));
+    const onPaved = (x: number, z: number) => paved.some(a => pipXZ(a.o, x, z) && !a.i.some(h => pipXZ(h, x, z)));
     for (const r of t.r) {
       if (!['footway', 'path', 'cycleway'].includes(r.k) || r.br || r.tu || r.bp) { keep.push(r); continue; }
       const p = ringOf(r.p); let tot = 0, near = 0; const hits: { r: TileRoad; side: number }[] = [];
       for (let i = 0; i + 1 < p.length; i++) {
         const a = p[i], b = p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < .3) continue;
         const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
-        for (let s = Math.min(1.5, L / 2); s < L; s += 3) { tot++; const h = roadBeside(a[0] + ux * s, a[1] + uz * s, ux, uz); if (h) { near++; hits.push(h); } }
+        for (let s = Math.min(1.5, L / 2); s < L; s += 3) {
+          tot++; const x = a[0] + ux * s, z = a[1] + uz * s, h = roadBeside(x, z, ux, uz);
+          if (h) { near++; hits.push(h); } else if (paved.length && onPaved(x, z)) near++;
+        }
       }
       if (tot && near / tot >= .6) {
         removed++;
