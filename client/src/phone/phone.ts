@@ -75,7 +75,7 @@ export class Phone {
 
   get isOpen(): boolean { return this.open; }
   toggle(on = !this.open): void {
-    this.open = on; this.el.classList.toggle('open', on);
+    this.open = on; this.el.classList.toggle('open', on); document.body.classList.toggle('phoneOpen', on); // przyciski gry chowane pod telefonem
     if (on) { this.game.input.releasePointer(); this.tick(); this.current?.(); }
     else { this.vf.classList.remove('open'); this.camOff?.(); this.camOff = null; (document.activeElement as HTMLElement | null)?.blur?.(); }
   }

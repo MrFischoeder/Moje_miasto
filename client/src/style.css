@@ -85,3 +85,9 @@ body.dead #deadOv{display:grid}
 #ctx button .k{opacity:.6;font-size:13px;margin-left:6px}
 .touch #ctx button .k{display:none}
 @media(max-width:600px){#ctx{bottom:auto;top:46%}#ctx button{min-width:108px;min-height:60px}}
+
+/* helikopter na telefonie: góra/dół po lewej nad joystickiem (nie pod przyciskami trybów) */
+.touch #heliCtl{right:auto;left:16px;bottom:240px;flex-direction:row}
+@media(max-width:600px){.touch #heliCtl{bottom:215px;left:12px}.touch #heliCtl button{width:60px;height:60px}}
+/* otwarty telefon: przyciski gry, joystick i przyciski akcji schowane (nie zasłaniają ikon telefonu) */
+body.phoneOpen .btns, body.phoneOpen #joy, body.phoneOpen #ctx, body.phoneOpen #heliCtl{display:none !important}

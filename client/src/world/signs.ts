@@ -98,12 +98,8 @@ export class Signs {
       // witryny sklepów i lokali na parterach (szyld z nazwą zamiast unoszącej się tabliczki)
       const fronts = shopFronts(t, world), withFront = new Set(fronts.map(f => f.p.id));
       for (const f of fronts) this.list.push({ x: f.c[0], z: f.c[1], y: f.base, front: f, make: () => buildFront(f) });
-      for (const p of t.poi) {
-        if (withFront.has(p.id) || (isFrontPoi(p) && false)) continue;
-        if (p.c === 'pomnik' && (p.t === 'dwarf' || !p.n)) continue; // krasnale i bezimienne: bez tabliczek
-        const text = signText(p), sub = p.a;
-        this.list.push({ x: p.x, z: p.z, y: ground(p.x, p.z), make: () => { const sp = sprite(sub ? [text, sub] : [text], 'rgba(0,0,0,.8)', '#fff', p.c === 'shop' ? '#ffbe5a' : '#7dffb0', 4); sp.position.y = 3.4; return sp; } });
-      }
+      // tabliczki unoszące się w powietrzu (biura, pomniki, inne punkty bez witryny): usunięte – zostają szyldy nad witrynami
+      void withFront;
     }
     this.clear();
   }
