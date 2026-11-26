@@ -262,3 +262,97 @@ export function pruneSideFootways(tiles: Map<string, TileData>): { removed: numb
   }
   return { removed, stubs, sides };
 }
+
+/**
+ * Ścieżki na skróty (jak wydeptane): odcinki ścieżek między skrzyżowaniami (footway / path / cycleway / pedestrian)
+ * prostowane do linii prostej, jeśli po drodze nie ma budynku, wody ani płotu posesji; inaczej podział w najdalszym
+ * punkcie i próba dla obu połówek. Zakręty i zygzaki znikają, połączenia (węzły grafu, końce na granicy kafla) zostają.
+ */
+export function straightenPaths(tiles: Map<string, TileData>): { paths: number; before: number; after: number } {
+  const G = new BldGrid(tiles), C = 40, water = new Map<string, XZ[][]>(), fences = new Map<string, number[][]>();
+  const put = <T>(m: Map<string, T[]>, x0: number, z0: number, x1: number, z1: number, v: T) => { for (let i = Math.floor(x0 / C); i <= Math.floor(x1 / C); i++) for (let j = Math.floor(z0 / C); j <= Math.floor(z1 / C); j++) { const k = i + ',' + j; let l = m.get(k); if (!l) m.set(k, l = []); l.push(v); } };
+  for (const t of tiles.values()) {
+    for (const a of t.a) if (a.k === 'water') { const o = ringOf(a.o); let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const [x, z] of o) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } put(water, x0, z0, x1, z1, o); }
+    // jezdnie (i tory) – skrót nie może przecinać ulicy poza istniejącym przejściem (węzłem)
+    for (const r of t.r) if (!['footway', 'path', 'cycleway', 'pedestrian', 'steps'].includes(r.k) && !r.br && !r.tu) for (let i = 0; i + 3 < r.p.length; i += 2) { const s = [r.p[i], r.p[i + 1], r.p[i + 2], r.p[i + 3]]; put(fences, Math.min(s[0], s[2]), Math.min(s[1], s[3]), Math.max(s[0], s[2]), Math.max(s[1], s[3]), s); }
+    for (const l of t.l) for (let i = 0; i + 3 < l.p.length; i += 2) { const s = [l.p[i], l.p[i + 1], l.p[i + 2], l.p[i + 3]]; put(fences, Math.min(s[0], s[2]), Math.min(s[1], s[3]), Math.max(s[0], s[2]), Math.max(s[1], s[3]), s); }
+    for (const f of t.fe ?? []) for (let i = 0; i + 3 < f.s.length; i += 4) { const s = f.s.slice(i, i + 4); put(fences, Math.min(s[0], s[2]), Math.min(s[1], s[3]), Math.max(s[0], s[2]), Math.max(s[1], s[3]), s); }
+  }
+  const cross = (a: XZ, b: XZ, s: number[]) => {
+    const d1x = b[0] - a[0], d1z = b[1] - a[1], d2x = s[2] - s[0], d2z = s[3] - s[1], den = d1x * d2z - d1z * d2x; if (Math.abs(den) < 1e-9) return false;
+    const t = ((s[0] - a[0]) * d2z - (s[1] - a[1]) * d2x) / den, u = ((s[0] - a[0]) * d1z - (s[1] - a[1]) * d1x) / den; return t > .002 && t < .998 && u > -.001 && u < 1.001;
+  };
+  /** prosta a–b wolna: bez budynków (z zapasem 1.2 m), wody i płotów */
+  const clear = (a: XZ, b: XZ) => {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < .1) return true;
+    const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+    for (let s = 0; s <= L; s += 2) {
+      const x = a[0] + ux * s, z = a[1] + uz * s;
+      if (G.at(x, z) || G.at(x - uz * 1.2, z + ux * 1.2) || G.at(x + uz * 1.2, z - ux * 1.2)) return false;
+      for (const o of water.get(Math.floor(x / C) + ',' + Math.floor(z / C)) ?? []) if (pip(o, x, z)) return false;
+    }
+    const seen = new Set<number[]>();
+    for (let s = 0; s <= L + C; s += C / 2) { const x = a[0] + ux * Math.min(s, L), z = a[1] + uz * Math.min(s, L); for (const f of fences.get(Math.floor(x / C) + ',' + Math.floor(z / C)) ?? []) { if (seen.has(f)) continue; seen.add(f); if (cross(a, b, f)) return false; } }
+    return true;
+  };
+  /** najprostsza łamana z p[0] do p[n-1] przez wybrane punkty p (bez kolizji) */
+  const shortcut = (p: XZ[]): XZ[] => {
+    if (p.length <= 2) return p;
+    const a = p[0], b = p[p.length - 1], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1e-9;
+    if (L >= 1 && clear(a, b)) return [a, b]; // pętla (początek = koniec): najpierw podział
+    let k = 1, md = -1;
+    for (let i = 1; i < p.length - 1; i++) { const d = L < .5 ? Math.hypot(p[i][0] - a[0], p[i][1] - a[1]) : Math.abs((p[i][0] - a[0]) * dz - (p[i][1] - a[1]) * dx) / L; if (d > md) { md = d; k = i; } }
+    return [...shortcut(p.slice(0, k + 1)).slice(0, -1), ...shortcut(p.slice(k))];
+  };
+  let paths = 0, before = 0, after = 0;
+  for (const t of tiles.values()) for (const r of t.r) {
+    if (!['footway', 'path', 'cycleway', 'pedestrian'].includes(r.k) || r.br || r.tu || r.bp) continue;
+    const p = ringOf(r.p); if (p.length < 3) continue;
+    const jv = new Set<number>(); for (let i = 0; i < r.j.length; i += 2) jv.add(r.j[i]);
+    const cut = [0, ...[...jv].filter(v => v > 0 && v < p.length - 1).sort((a, b) => a - b), p.length - 1];
+    const np: XZ[] = [p[0]], map = new Map<number, number>([[0, 0]]);
+    for (let s = 0; s + 1 < cut.length; s++) { const seg = shortcut(p.slice(cut[s], cut[s + 1] + 1)); for (let q = 1; q < seg.length; q++) np.push(seg[q]); map.set(cut[s + 1], np.length - 1); }
+    paths++; before += p.length; after += np.length;
+    const j: number[] = []; for (let i = 0; i < r.j.length; i += 2) j.push(map.get(r.j[i]) ?? 0, r.j[i + 1]);
+    r.p = np.flatMap(([x, z]) => [Math.round(x * 10) / 10, Math.round(z * 10) / 10]); r.j = j;
+  }
+  return { paths, before, after };
+}
+
+/**
+ * Bez labiryntów alejek: krótkie odcinki ścieżek (< 30 m) między dwoma skrzyżowaniami są usuwane, jeśli z jednego
+ * końca na drugi da się dojść inną drogą niewiele dłuższą (sieć chodników i ulic) – znikają gęste kratki alejek,
+ * zostaje szkielet połączeń. Najpierw najkrótsze odcinki.
+ */
+export function thinPathMesh(tiles: Map<string, TileData>): { removed: number } {
+  type E = { a: number; b: number; L: number; r: TileRoad; dead: boolean; cand: boolean };
+  const adj = new Map<number, E[]>(), cands: E[] = [];
+  const PATH = ['footway', 'path', 'cycleway', 'pedestrian', 'steps'];
+  for (const t of tiles.values()) for (const r of t.r) {
+    if (r.tu && !PATH.includes(r.k)) continue;
+    const p = ringOf(r.p), js: [number, number][] = []; for (let i = 0; i < r.j.length; i += 2) js.push([r.j[i], r.j[i + 1]]); js.sort((x, y) => x[0] - y[0]);
+    for (let q = 0; q + 1 < js.length; q++) {
+      let L = 0; for (let i = js[q][0] + 1; i <= js[q + 1][0]; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+      const e: E = { a: js[q][1], b: js[q + 1][1], L, r, dead: false, cand: false };
+      if (e.a === e.b) continue;
+      for (const n of [e.a, e.b]) { let l = adj.get(n); if (!l) adj.set(n, l = []); l.push(e); }
+      if (PATH.includes(r.k) && r.k !== 'pedestrian' && !r.br && !r.tu && !r.bp && js.length === 2 && js[0][0] === 0 && js[1][0] === p.length - 1 && L < 30) { e.cand = true; cands.push(e); }
+    }
+  }
+  /** najkrótsza droga a→b bez krawędzi skip, przerwana po przekroczeniu limitu */
+  const reach = (a: number, b: number, skip: E, lim: number) => {
+    const dist = new Map<number, number>([[a, 0]]), open: [number, number][] = [[0, a]];
+    while (open.length) {
+      let bi = 0; for (let i = 1; i < open.length; i++) if (open[i][0] < open[bi][0]) bi = i;
+      const [d, n] = open.splice(bi, 1)[0]; if (n === b) return true; if (d > (dist.get(n) ?? Infinity)) continue;
+      for (const e of adj.get(n) ?? []) { if (e === skip || e.dead) continue; const m = e.a === n ? e.b : e.a, nd = d + e.L; if (nd > lim || nd >= (dist.get(m) ?? Infinity)) continue; dist.set(m, nd); open.push([nd, m]); }
+      if (dist.size > 4000) return false;
+    }
+    return false;
+  };
+  const gone = new Set<TileRoad>();
+  cands.sort((x, y) => x.L - y.L);
+  for (const e of cands) if (reach(e.a, e.b, e, Math.max(2.5 * e.L, e.L + 25))) { e.dead = true; gone.add(e.r); }
+  for (const t of tiles.values()) t.r = t.r.filter(r => !gone.has(r));
+  return { removed: gone.size };
+}
