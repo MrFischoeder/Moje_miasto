@@ -46,7 +46,8 @@ export interface TileRoad {
   br?: number;
   /**
    * most: końce całego ciągu mostu i położenie kawałka na nim:
-   * [xA, zA, xB, zB, s (odległość od A pierwszego wierzchołka), kierunek (1 / -1), długość ciągu]
+   * [xA, zA, xB, zB, s (odległość od A pierwszego wierzchołka), kierunek (1 / -1), długość ciągu, wysokość A, wysokość B]
+   * (wysokości końców z terenu po obróbce: tools/lib/waterBanks.ts – ten sam pomost u klienta i na serwerze)
    * (wysokość pomostu = interpolacja terenu między końcami)
    */
   bw?: number[];

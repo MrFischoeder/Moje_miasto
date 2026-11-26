@@ -161,12 +161,15 @@ export class World implements Surface {
     if (this.buildings.hit(x, z) && !this.inPassage(x, z)) return true;
     if (this.fences.size && this.onFence(x, z) && (y == null || y < this.ground(x, z) + 1.4)) return true;
     if (!this.water.hit(x, z)) return false;
-    return !this.decks.containing(x, z).some(d => y == null || Math.abs(d.h - y) < 3);
+    // nad wodą tylko pomost w zasięgu kroku (nie wyżej niż 1,2 m, nie niżej niż 3 m): inaczej ruch zablokowany, bez schodzenia na dno rzeki pod mostem
+    return !this.decks.containing(x, z).some(d => y == null || (d.h <= y + 1.2 && d.h > y - 3));
   }
   /** Wysokość powierzchni najbliższa y: grunt albo pomost mostu (nie wyżej niż 1,2 m nad y). */
   surfaceAt(x: number, z: number, y: number): number {
-    let best = this.ground(x, z);
-    for (const d of this.decks.containing(x, z)) if (d.h <= y + 1.2 && Math.abs(d.h - y) < Math.abs(best - y)) best = d.h;
+    let best = this.ground(x, z); const ds = this.decks.containing(x, z);
+    // nad wodą pomost ma pierwszeństwo przed dnem rzeki (inaczej postać schodzi po skarpie pod pomost)
+    if (ds.length && this.water.hit(x, z)) { let dk = NaN; for (const d of ds) if (d.h <= y + 1.2 && (Number.isNaN(dk) || Math.abs(d.h - y) < Math.abs(dk - y))) dk = d.h; if (!Number.isNaN(dk)) return dk; }
+    for (const d of ds) if (d.h <= y + 1.2 && Math.abs(d.h - y) < Math.abs(best - y)) best = d.h;
     return best;
   }
   /** Podłoże dla pieszego (region podziemny albo powierzchnia). */

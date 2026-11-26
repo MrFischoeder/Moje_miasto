@@ -161,11 +161,11 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
     const h = tt <= 0 ? e.hEnd : e.hEnd + (e.hApp - e.hEnd) * tt / 15; if (!(h <= best)) best = h; } return best; };
 
   // --- przetworzenie NMT ---
-  let demTiles = 0, nan = 0;
+  let demTiles = 0, nan = 0; const done = new Map<string, DemTile>(); // teren po obróbce (wysokości końców mostów)
   for (const [k, t] of dem) {
     const [tx, ty] = k.split('_').map(Number); let touched = false;
     const has = [-1, 0, 1].some(i => [-1, 0, 1].some(j => level.has((tx + i) + '_' + (ty + j))));
-    if (!has) { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(t.encode()))); continue; } // bez wody: wygładzony teren
+    if (!has) { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(t.encode()))); done.set(k, t); continue; } // bez wody: wygładzony teren
     const h = t.h.slice(), n = t.n, s = t.step, off = t.ref - coarse.ref;
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const x = t.x0 + i * s, z = t.z0 + j * s, idx = j * n + i;
@@ -185,9 +185,13 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
       else if (ne && ne.d < 4) v = Math.max(cur, wl + .15);        // brzeg naturalny: ląd przy wodzie nie niżej niż tafla (bez „dziur”)
       if (v !== cur) { h[idx] = v - off; touched = true; }
     }
-    if (touched || nan) { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(new DemTile(t.tx, t.ty, t.step, t.n, t.ref, h).encode()))); demTiles++; }
-    else writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(t.encode()))); // wygładzony teren
+    if (touched || nan) { const nt = new DemTile(t.tx, t.ty, t.step, t.n, t.ref, h); writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(nt.encode()))); done.set(k, nt); demTiles++; }
+    else { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(t.encode()))); done.set(k, t); } // wygładzony teren
   }
+  // wysokości końców mostów zapisane w danych (bw[7], bw[8]): pomost liczony tak samo u klienta i na serwerze,
+  // niezależnie od kolejności wczytywania kafli (koniec mostu bywa w sąsiednim kaflu)
+  const HF = (x: number, z: number) => { const t = done.get(Math.floor(x / TILE_SIZE) + '_' + Math.floor(z / TILE_SIZE)); if (t) { const v = t.sample(x, z); if (!Number.isNaN(v)) return v + t.ref - coarse.ref; } return coarse.coarse(x, z); };
+  for (const t of tiles.values()) for (const q of [...t.r, ...t.l]) if (q.bw && q.bw.length >= 7) { q.bw.length = 7; q.bw.push(r2(HF(q.bw[0], q.bw[1])), r2(HF(q.bw[2], q.bw[3]))); }
   // nabrzeża (mur, bruk) nie wchodzą pod most i na jego wjazd
   for (const t of tiles.values()) for (const a of t.a) if (a.qk) a.qk = a.qk.map((K, ri) => { const f = ri ? a.i![ri - 1] : a.o; return K.map((k, i) => k && nearBridge(f[2 * i], f[2 * i + 1]) ? 0 : k); });
   console.log(`nabrzeża: uzupełnione punkty bez danych NMT przy wodzie: ${nan}`);
