@@ -87,3 +87,24 @@ Usunąć przycisk „Czat” z ekranu gry. Gracze komunikują się w grze przez 
 ## 13. Nawigacja do wybranych miejsc
 
 System punktów nawigacyjnych (waypointów) albo nawigacji, która prowadzi gracza do wybranej lokacji (np. z mapy w telefonie).
+
+## 14. Chodniki na mostach
+
+Przykład: most w ciągu ul. Bolesława Krzywoustego nad Widawą. Po jezdni mostu da się chodzić, ale po zejściu na chodnik postać spada z mostu. Chodniki mostów muszą mieć pomost tak samo jak jezdnia (fizyka i wygląd).
+
+## 15. Bez rowów melioracyjnych
+
+Usunąć z mapy rowy melioracyjne (drobne cieki, ditch/drain). Nie wnoszą wiele do wyglądu, a psują teren.
+
+## 16. Nabrzeża rzek – ważny etap
+
+Nabrzeża nadal wyglądają źle i są popsute. Trzeba je gruntownie dopracować: równe, proste brzegi (mury lub skarpy), bez poszarpanych krawędzi i dziur.
+
+## 17. Wejście do sklepu przez drzwi w witrynie
+
+- W fasadzie każdego sklepu są drzwi, przez które da się wejść do środka.
+- Zakupy u kasjera tylko po wejściu do sklepu, nie sprzed witryny.
+
+## 18. Płynność gry (zwłaszcza lot helikopterem na telefonie)
+
+Lot helikopterem jest szarpany, szczególnie na telefonie. Zoptymalizować grę jak najlepiej, a w razie potrzeby zmienić sposób wyświetlania i generowania świata (np. wczytywanie kafli, poziomy szczegółów, rozkład pracy na klatki).
