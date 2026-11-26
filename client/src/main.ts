@@ -16,6 +16,7 @@ import { locText } from './ui/hud';
 import { renderMinimap } from './ui/minimap';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+let miniOn = true; // minimapa włączona (menu: Wydajność)
 const canvas = $<HTMLCanvasElement>('c'), mini = $<HTMLCanvasElement>('mini'), menu = $('menu'), stSel = $<HTMLSelectElement>('stSel');
 if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
 const SAVE_KEY = 'moje-miasto.save';
@@ -128,7 +129,7 @@ const ui: GameUI = {
     const s = g.session, me = s?.player(), others = [];
     if (s && me) for (const p of s.players.values()) if (p.id !== me.id) { const e = s.entity(p.vehicle ?? p.walker); if (e) others.push({ x: e.x, z: e.z, color: p.color }); }
     const cabT = g.session?.me.cab?.target; if (cabT) others.push({ x: cabT[0], z: cabT[1], color: '#ffcc00' }); // praca kierowcy: klient / cel kursu
-    renderMinimap(mini, w, { ...P, yaw: g.mode === 'walk' ? g.viewYaw : P.yaw, mode: g.mode, xray: g.xray, under: P.y < gr - 1, height: P.y - gr, others, transit: g.transitDots() });
+    if (miniOn) renderMinimap(mini, w, { ...P, yaw: g.mode === 'walk' ? g.viewYaw : P.yaw, mode: g.mode, xray: g.xray, under: P.y < gr - 1, height: P.y - gr, others, transit: g.transitDots() });
   },
 };
 
@@ -286,6 +287,11 @@ const applyTraffic = () => {
 carRng.oninput = showRng; pedRng.oninput = showRng; carRng.onchange = applyTraffic; pedRng.onchange = applyTraffic;
 
 // licznik wydajności (P)
+// minimapa: włączana / wyłączana w menu (wyłączona oszczędza czas klatki – rysowanie mapy na płótnie)
+const miniChk = $<HTMLInputElement>('miniChk');
+const setMini = (on: boolean, log = true) => { miniOn = on; miniChk.checked = on; mini.style.display = on ? '' : 'none'; save('mm.minimapa', on ? '1' : '0'); if (log) logEvent(`minimapa ${on ? 'włączona' : 'wyłączona'}`); };
+setMini(load('mm.minimapa', 1) === 1, false);
+miniChk.onchange = () => setMini(miniChk.checked);
 const perfChk = $<HTMLInputElement>('perfChk'), perfEl = $('perf');
 perfChk.checked = load('mm.licznik', 0) === 1; perfEl.hidden = !perfChk.checked;
 const setPerf = (on: boolean) => { perfChk.checked = on; perfEl.hidden = !on; save('mm.licznik', on ? '1' : '0'); game.perf.take(); logEvent(`licznik wydajności ${on ? 'włączony' : 'wyłączony'}`); };
