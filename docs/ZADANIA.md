@@ -165,3 +165,21 @@ Gracz nie jest zwykłym kurierem, tylko bandytą. Przykładowe zajęcia: przewo�
 ## 28. Walka i strzelanie
 
 Mechanika walki wręcz i strzelania (broń, trafienia, obrażenia, reakcja NPC i policji). Podstawa dla punktów 25–27.
+
+## 29. Wygląd fasad na podstawie zdjęć z Mapillary
+
+Mapillary to otwarta baza zdjęć ulicznych (licencja CC BY-SA, dobre pokrycie Wrocławia). Na podstawie zdjęć dobieramy parametry fasad, bez kopiowania samych zdjęć do gry:
+
+- kolor ścian, dachu i stolarki;
+- liczba pięter, rozstaw i kształt okien;
+- typ dachu, balkony, gzymsy;
+- parter: witryny, bramy.
+
+Kroki:
+
+1. Właściciel projektu zakłada darmowe konto Mapillary i przekazuje klucz API. Klucz trafia do sekretów środowiska, nigdy do repozytorium.
+2. Narzędzie w `tools/` pobiera zdjęcia dla wybranych ulic lub budynków.
+3. Parametry stylu zapisujemy dla konkretnych budynków albo dla stylu całej okolicy (np. kamienice na Nadodrzu).
+4. W grze (np. w menu „O grze”) podajemy źródło: „zdjęcia referencyjne: Mapillary, CC BY-SA”.
+
+Nie korzystamy z Google Street View: regulamin Google Maps Platform zabrania tworzenia treści na podstawie tych zdjęć.
