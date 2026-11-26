@@ -79,3 +79,11 @@ Przejścia dla pieszych często generują się wzdłuż drogi zamiast w poprzek,
 ## 11. (Do rozważenia) Głód
 
 Tryb głodu, na razie tylko jako pomysł.
+
+## 12. Czat tylko w telefonie
+
+Usunąć przycisk „Czat” z ekranu gry. Gracze komunikują się w grze przez komunikator w swoim telefonie.
+
+## 13. Nawigacja do wybranych miejsc
+
+System punktów nawigacyjnych (waypointów) albo nawigacji, która prowadzi gracza do wybranej lokacji (np. z mapy w telefonie).
