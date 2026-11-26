@@ -30,6 +30,23 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
   const dem = new Map<string, DemTile>();
   for (const f of readdirSync(orig)) if (f.endsWith('.bin.gz')) { const b = gunzipSync(readFileSync(join(orig, f))); const t = DemTile.parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); dem.set(t.tx + '_' + t.ty, t); }
   /** wysokość w układzie gry z oryginalnego NMT */
+  // LiDAR jako ogólny wzór: teren wygładzony (średnia 5×5 punktów siatki 4 m, dwa razy ≈ okno 20 m), z sąsiednimi kaflami na brzegach
+  {
+    const raw = (x: number, z: number) => { const t = dem.get(Math.floor(x / TILE_SIZE) + '_' + Math.floor(z / TILE_SIZE)); if (t) { const v = t.sample(x, z); if (!Number.isNaN(v)) return v + t.ref - coarse.ref; } return coarse.coarse(x, z); };
+    const R = 2, sm = new Map<string, Float32Array>();
+    for (const [k, t] of dem) {
+      const n = t.n, s = t.step, N = n + 2 * R, off = t.ref - coarse.ref, A = new Float32Array(N * N);
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const ii = i - R, jj = j - R; A[j * N + i] = ii >= 0 && jj >= 0 && ii < n && jj < n && !Number.isNaN(t.h[jj * n + ii]) ? t.h[jj * n + ii] + off : raw(t.x0 + ii * s, t.z0 + jj * s); }
+      const B = new Float32Array(N * N);
+      for (let pass = 0; pass < 2; pass++) {
+        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let a = 0, c = 0; for (let d = -R; d <= R; d++) { const q = i + d; if (q >= 0 && q < N) { a += A[j * N + q]; c++; } } B[j * N + i] = a / c; }
+        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let a = 0, c = 0; for (let d = -R; d <= R; d++) { const q = j + d; if (q >= 0 && q < N) { a += B[q * N + i]; c++; } } A[j * N + i] = a / c; }
+      }
+      const h = new Float32Array(n * n); for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) h[j * n + i] = A[(j + R) * N + i + R] - off;
+      sm.set(k, h);
+    }
+    for (const [k, h] of sm) { const t = dem.get(k)!; dem.set(k, new DemTile(t.tx, t.ty, t.step, t.n, t.ref, h)); }
+  }
   const H = (x: number, z: number) => { const t = dem.get(Math.floor(x / TILE_SIZE) + '_' + Math.floor(z / TILE_SIZE)); if (t) { const v = t.sample(x, z); if (!Number.isNaN(v)) return v + t.ref - coarse.ref; } return coarse.coarse(x, z); };
 
   // --- woda: wielokąty w kaflach, krawędzie brzegu (bez krawędzi cięcia kafli) ---
@@ -95,7 +112,7 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
           if (inThis(p[0] + nx * 1.5, p[1] + nz * 1.5)) { nx = -nx; nz = -nz; } // normalna w stronę lądu
           if (inWater(p[0] + nx * 3, p[1] + nz * 3)) return null;
           const hs: number[] = []; for (let d = 6; d <= 14; d += 2) hs.push(H(p[0] + nx * d, p[1] + nz * d));
-          const top = median(hs); if (top - wl < .8) return null;
+          const top = Math.max(median(hs), wl + .6); // niski brzeg: też gładki (skarpa albo mur), nie po siatce terenu
           return [top, isUrban(p[0] + nx * 8, p[1] + nz * 8)]; // miasto: mur z brukiem; poza miastem: skarpa
         });
         // wygładzenie wzdłuż brzegu (±3 wierzchołki z koroną); pojedyncze wierzchołki bez korony między nabrzeżami: uzupełnione
@@ -148,7 +165,7 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
   for (const [k, t] of dem) {
     const [tx, ty] = k.split('_').map(Number); let touched = false;
     const has = [-1, 0, 1].some(i => [-1, 0, 1].some(j => level.has((tx + i) + '_' + (ty + j))));
-    if (!has) { if (existsSync(join(orig, `${k}.bin.gz`))) writeFileSync(join(dir, `${k}.bin.gz`), readFileSync(join(orig, `${k}.bin.gz`))); continue; } // bez wody: oryginalny teren (także po wcześniejszym przetworzeniu)
+    if (!has) { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(t.encode()))); continue; } // bez wody: wygładzony teren
     const h = t.h.slice(), n = t.n, s = t.step, off = t.ref - coarse.ref;
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const x = t.x0 + i * s, z = t.z0 + j * s, idx = j * n + i;
@@ -169,7 +186,7 @@ export function bakeWaterBanks(root: string, city: string, tiles: Map<string, Ti
       if (v !== cur) { h[idx] = v - off; touched = true; }
     }
     if (touched || nan) { writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(new DemTile(t.tx, t.ty, t.step, t.n, t.ref, h).encode()))); demTiles++; }
-    else if (existsSync(join(orig, `${k}.bin.gz`))) writeFileSync(join(dir, `${k}.bin.gz`), readFileSync(join(orig, `${k}.bin.gz`)));
+    else writeFileSync(join(dir, `${k}.bin.gz`), gzipSync(Buffer.from(t.encode()))); // wygładzony teren
   }
   // nabrzeża (mur, bruk) nie wchodzą pod most i na jego wjazd
   for (const t of tiles.values()) for (const a of t.a) if (a.qk) a.qk = a.qk.map((K, ri) => { const f = ri ? a.i![ri - 1] : a.o; return K.map((k, i) => k && nearBridge(f[2 * i], f[2 * i + 1]) ? 0 : k); });
