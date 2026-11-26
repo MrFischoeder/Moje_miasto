@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Miasto i metro FPP</title>
+  <script type="module" crossorigin src="/assets/index-BQAPIkGx.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CHeis4mU.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><b id="cityName">MIASTO</b><span id="loc">—</span><span id="coords"></span><span id="info"></span><div id="stats"><span id="hpBar"><i id="hpFill"></i></span><span id="money">—</span><span id="stars"></span></div></div>
+<div id="evt" aria-live="polite"></div>
+<pre id="perf" hidden></pre>
+<div id="deadOv">NIE ŻYJESZ<small>odrodzenie przy szpitalu…</small></div>
+<canvas id="mini" width="320" height="320"></canvas>
+<div id="joy"><div id="knob"></div></div>
+<div id="ctx"><button id="actBtn" hidden></button><button id="kickBtn" class="warn" hidden>Wyważ</button></div>
+<div class="btns">
+  <button class="on" id="walkBtn" aria-label="Pieszo">Pieszo</button>
+  <button class="ghost" id="carBtn">Auto</button>
+  <button class="ghost" id="heliBtn">Heli</button>
+  <button class="ghost" id="camBtn" aria-label="Zmień kamerę">Kamera</button>
+  <button class="ghost" id="xrayBtn">Prześwietl</button>
+  <button class="ghost" id="phoneBtn">Telefon</button>
+  <button class="ghost" id="menuBtn">Menu</button>
+</div>
+<div id="heliCtl">
+  <button class="ghost" id="upB" aria-label="W górę">▲</button>
+  <button class="ghost" id="dnB" aria-label="W dół">▼</button>
+</div>
+<div id="busy">Buduję miasto…</div>
+<div id="chat" aria-live="polite"><div id="chatLog"></div><input id="chatIn" maxlength="200" placeholder="Wiadomość (Enter wysyła, Esc zamyka)" autocomplete="off"></div>
+
+<div id="menu">
+  <div class="card">
+    <button id="menuClose" class="menuClose" title="Wróć do gry (Esc / M)">✕ Wróć do gry</button>
+    <h1>Miasto nad metrem</h1>
+    <p class="small">Wersja: <b id="ver"></b> — jeśli nie widzisz nowych opcji, odśwież stronę z pominięciem pamięci (Ctrl+F5; na telefonie otwórz w przeglądarce, nie w Messengerze).</p>
+    <h2>Gdzie zaczynasz?</h2>
+    <div class="row"><select id="spSel" aria-label="Miejsce startu"></select> <button id="spBtn">Zacznij tutaj</button></div>
+    <p class="small">Najważniejsze miejsca miasta. Zmiana miejsca jest niemożliwa, gdy szuka cię policja.</p>
+    <h2>Test wydajności</h2>
+    <div class="row"><button id="intBtn"></button> <button id="perfBtn" class="ghost"></button> <button id="perfSave2" class="ghost">Zapisz dziennik (.txt)</button></div>
+    <p class="small">Wnętrza wyłączone: świat bez mieszkań, sklepów, klatek i wejść (najmniej elementów do generowania). Licznik (P) pokazuje FPS i obciążenie; dziennik (L) zapisuje pomiary i każdą zmianę ustawień. Więcej opcji (auta, piesi, modele pojazdów) w sekcji Wydajność niżej.</p>
+    <p>Prawdziwy układ stacji i połączeń metra, z losowo rozbudowanymi peronami, tunelami i zejściami. Budynki na powierzchni wczytujesz z OpenStreetMap.</p>
+    <div class="row">
+      <button id="cityWr">Wrocław</button>
+      <button class="ghost" id="cityW">Warszawa</button>
+      <button class="ghost" id="cityL">Londyn</button>
+    </div>
+    <h2>Gra wieloosobowa</h2>
+    <div class="row">
+      <input id="nick" maxlength="20" placeholder="Nick" aria-label="Nick" autocomplete="off">
+      <input id="server" placeholder="Adres serwera" aria-label="Adres serwera" autocomplete="off">
+      <button class="ghost" id="refreshBtn">Pokaż gry</button>
+    </div>
+    <div id="sessList" class="small"></div>
+    <div class="row">
+      <button class="ghost" id="newWr">Nowa gra: Wrocław</button>
+      <button class="ghost" id="newW">Nowa gra: Warszawa</button>
+      <button class="ghost" id="newL">Nowa gra: Londyn</button>
+    </div>
+    <p class="small">Przyciski Warszawa i Londyn u góry uruchamiają grę jednoosobową (bez serwera).</p>
+    <h2>Czas gry</h2>
+    <div class="row">
+      <select id="timeSel" aria-label="Godzina">
+        <option value="now">Teraz (czas lokalny miasta)</option>
+        <option value="21600">6:00 (pierwsze kursy)</option>
+        <option value="27000">7:30 (szczyt poranny)</option>
+        <option value="46800">13:00</option>
+        <option value="61200">17:00 (szczyt popołudniowy)</option>
+        <option value="84600">23:30</option>
+        <option value="7200">2:00 (nocne)</option>
+      </select>
+      <select id="speedSel" aria-label="Tempo czasu">
+        <option value="1">Tempo ×1</option><option value="10">×10</option><option value="60">×60</option><option value="300">×300</option>
+      </select>
+    </div>
+    <h2>Pojazd</h2>
+    <div class="row"><label for="vehSel">Twój pojazd (klawisz G / przycisk Auto)</label> <select id="vehSel"></select></div>
+    <h2>Wydajność</h2>
+    <div class="row"><label class="chk"><input type="checkbox" id="miniChk" checked> Minimapa (wyłączona: szybsze klatki, zwłaszcza na telefonie)</label></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="perfChk"> Licznik wydajności (klawisz P)</label></div>
+    <div class="row"><button id="perfSave">Zapisz wyniki do pliku .txt (klawisz L)</button> <span id="perfLogN"></span></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="intChk" checked> Wnętrza budynków (mieszkania, klatki schodowe, sklepy, wejścia). Wyłączone: świat bez wnętrz – test wydajności; w grze sieciowej działa na serwerze testowym dla wszystkich</label></div>
+    <div class="row">Komunikacja miejska: <select id="komSel"><option value="0">pełna (zasięg 800 m, szczegóły do 150 m)</option><option value="1">lżejsza (zasięg 500 m, szczegóły do 70 m)</option></select></div>
+    <div class="row">Pojazdy: <select id="autaSel"><option value="0">proste (szybsze)</option><option value="1">szczegółowe (więcej trójkątów)</option></select></div>
+    <div class="row slider"><label for="carRng">Auta NPC wokół gracza (w szczycie)</label><input type="range" id="carRng" min="0" max="500" step="10" value="70"><b id="carVal">70</b></div>
+    <div class="row slider"><label for="pedRng">Piesi NPC wokół gracza (w szczycie)</label><input type="range" id="pedRng" min="0" max="400" step="10" value="50"><b id="pedVal">50</b></div>
+    <p class="small">Wnętrza wyłączone: budynki bez wnętrz (nie da się wejść), mniejsze obciążenie. Liczba aut i pieszych zmienia się wg pory dnia (to wartość w szczycie); 0 = brak. Wszystko działa od razu i zapamiętuje się w przeglądarce.</p>
+    <p class="small">Komunikacja kursuje według prawdziwych rozkładów (ZTM Warszawa, Koleje Mazowieckie, WKD, PKP; TfL i autobusy Londynu). E przy stojącym pojeździe = wsiadasz, E albo 1 na przystanku = wysiadasz. Stań przed autem NPC, żeby się zatrzymało, i naciśnij E: wyrzucisz kierowcę i przejmiesz auto (inni gracze mogą się dosiąść).</p>
+    <h2>Teleport na peron</h2>
+    <div class="row">
+      <select id="stSel" aria-label="Stacja"></select>
+      <button id="goBtn">Jedź</button>
+      <button class="ghost" id="upBtn">Wyjdź na górę</button>
+    </div>
+    <h2>Budynki okolicy</h2>
+    <div class="row"><label class="file">Wczytaj plik mapy (.osm / .json)<input type="file" id="fileIn" accept=".osm,.json,.geojson,.xml,application/json,text/xml"></label></div>
+    <div id="status"></div>
+    <h2>Stan gry</h2>
+    <div class="row">
+      <button class="ghost" id="saveBtn">Zapisz</button>
+      <button class="ghost" id="loadBtn">Wczytaj</button>
+    </div>
+    <p class="small">Pieszo: kliknij w świat, mysz rozgląda się, WASD to ruch, Shift to bieg. Auto (klawisz 2 albo G): W to gaz, S to hamulec i wsteczny, A i D skręcają, spacja to hamulec ręczny, Shift to dopalacz. Helikopter (3 albo F): W i S lecą do przodu i do tyłu, A i D obracają, E lub spacja wznoszą, Q lub Ctrl opuszczają, a na dachach można lądować. E przy zaparkowanym pojeździe pozwala do niego wsiąść. V zmienia kamerę z trzecioosobowej na kokpit, 1 to powrót do chodzenia, X prześwietla grunt, M otwiera menu, a Esc uwalnia kursor. Na telefonie joystick służy do jazdy, przeciąganie po prawej obraca kamerę, a w helikopterze strzałki ▲▼ zmieniają wysokość. Na telefonie lewy joystick służy do chodzenia, a przeciąganie po prawej do rozglądania się. Zejścia na perony to oświetlone pawilony na ulicy.</p>
+    <details>
+      <summary>Jak pobrać budynki Warszawy lub Londynu</summary>
+      <ol>
+        <li><b>Mały kawałek:</b> <a href="https://www.openstreetmap.org/export" target="_blank" rel="noopener">openstreetmap.org/export</a>, przybliż kilka ulic wokół stacji, „Eksportuj”, zapisz <code>map.osm</code>.</li>
+        <li><b>Cała dzielnica:</b> <a href="https://overpass-turbo.eu" target="_blank" rel="noopener">overpass-turbo.eu</a>, wklej zapytanie, „Uruchom”, potem „Eksport” → „surowe dane OSM” (JSON).</li>
+        <li>Wczytaj plik tutaj. Program sam rozpozna miasto, a jeśli w pliku są stacje i wejścia do metra, przesunie je na prawdziwe miejsca.</li>
+      </ol>
+      <pre id="q">[out:json][timeout:120];
+(
+  way["building"]({{bbox}});
+  way["building:part"]({{bbox}});
+  way["highway"]({{bbox}});
+  node["railway"="subway_entrance"]({{bbox}});
+  node["railway"="station"]["station"="subway"]({{bbox}});
+  node["public_transport"="station"]["subway"="yes"]({{bbox}});
+);
+out geom;</pre>
+      <button class="ghost" id="copyBtn">Kopiuj zapytanie</button>
+      <p class="small" id="note" style="margin-top:12px"></p>
+      <p class="small">Dane map: © współtwórcy OpenStreetMap (licencja ODbL). Teren: Copernicus WorldDEM-30 © DLR e.V. 2010–2014 i © Airbus Defence and Space GmbH 2014–2018, udostępniony w ramach programu Copernicus przez Unię Europejską i ESA.</p>
+      <p class="small">Podziemia są generowane: każda stacja ma swoje ziarno losowości (nazwa), więc wygląda za każdym razem tak samo. Głębokość, typ peronu (wyspowy lub boczny), filary, korytarze techniczne, lokale i zejścia są losowane. Wszystkie odcinki biegną pod ziemią, także te, które w rzeczywistości są naziemne.</p>
+    </details>
+  </div>
+</div>
+
+</body>
+</html>
