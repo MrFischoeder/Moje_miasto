@@ -192,3 +192,66 @@ export function cityPavements(tiles: Map<string, TileData>): { urban: number; su
   }
   return { urban, suburban, added };
 }
+
+/**
+ * Jeden chodnik wzdłuż ulicy: osobne ścieżki (footway / path / cycleway) biegnące równolegle tuż obok jezdni
+ * (OSM rysuje chodniki jako osobne linie) są usuwane, a ulica dostaje własny chodnik po tej stronie (sw).
+ * Zostają ścieżki przez trawę, parki, podwórka, przejścia przez jezdnię i place. Potem znikają krótkie
+ * ślepe resztki (< 40 m), które zostały po usunięciu równoległych odcinków.
+ */
+export function pruneSideFootways(tiles: Map<string, TileData>): { removed: number; stubs: number; sides: number } {
+  const C = 25, segs = new Map<string, { r: TileRoad; s: number[] }[]>();
+  for (const t of tiles.values()) for (const r of t.r) if (SW_ROAD.has(r.k) && !r.tu && !r.bp && !r.br) {
+    const p = r.p; for (let i = 0; i + 3 < p.length; i += 2) {
+      const s = [p[i], p[i + 1], p[i + 2], p[i + 3]], L = Math.hypot(s[2] - s[0], s[3] - s[1]); if (L < .5) continue;
+      const x0 = Math.floor(Math.min(s[0], s[2]) / C), x1 = Math.floor(Math.max(s[0], s[2]) / C), z0 = Math.floor(Math.min(s[1], s[3]) / C), z1 = Math.floor(Math.max(s[1], s[3]) / C);
+      for (let a = x0; a <= x1; a++) for (let b = z0; b <= z1; b++) { const k = a + ',' + b; let l = segs.get(k); if (!l) segs.set(k, l = []); l.push({ r, s }); }
+    }
+  }
+  /** ulica równoległa obok punktu (strona: 1 = lewa (-normalna w rysowaniu), 2 = prawa) */
+  const roadBeside = (x: number, z: number, ux: number, uz: number): { r: TileRoad; side: number } | null => {
+    const cx = Math.floor(x / C), cz = Math.floor(z / C);
+    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) for (const { r, s } of segs.get(a + ',' + b) ?? []) {
+      const sx = s[2] - s[0], sz = s[3] - s[1], L = Math.hypot(sx, sz);
+      if (Math.abs((sx * ux + sz * uz) / L) < .85) continue;
+      const t = ((x - s[0]) * sx + (z - s[1]) * sz) / (L * L); if (t < -.05 || t > 1.05) continue;
+      const px = x - (s[0] + sx * t), pz = z - (s[1] + sz * t), nx = -sz / L, nz = sx / L, d = px * nx + pz * nz;
+      if (Math.abs(d) >= r.w / 2 - .5 && Math.abs(d) <= r.w / 2 + 9) return { r, side: d < 0 ? 1 : 2 };
+    }
+    return null;
+  };
+  let removed = 0, stubs = 0, sides = 0;
+  for (const t of tiles.values()) {
+    const keep: TileRoad[] = [];
+    for (const r of t.r) {
+      if (!['footway', 'path', 'cycleway'].includes(r.k) || r.br || r.tu || r.bp) { keep.push(r); continue; }
+      const p = ringOf(r.p); let tot = 0, near = 0; const hits: { r: TileRoad; side: number }[] = [];
+      for (let i = 0; i + 1 < p.length; i++) {
+        const a = p[i], b = p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < .3) continue;
+        const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+        for (let s = Math.min(1.5, L / 2); s < L; s += 3) { tot++; const h = roadBeside(a[0] + ux * s, a[1] + uz * s, ux, uz); if (h) { near++; hits.push(h); } }
+      }
+      if (tot && near / tot >= .6) {
+        removed++;
+        for (const h of hits) { const o = h.r.sw ?? 0; if (!(o & h.side)) { h.r.sw = o | h.side; sides++; } }
+      } else keep.push(r);
+    }
+    t.r = keep;
+  }
+  // ślepe resztki ścieżek po usunięciu (kilka przebiegów: łańcuchy krótkich odcinków)
+  for (let pass = 0; pass < 3; pass++) {
+    const deg = new Map<number, number>();
+    for (const t of tiles.values()) for (const r of t.r) for (let i = 1; i < r.j.length; i += 2) deg.set(r.j[i], (deg.get(r.j[i]) ?? 0) + 1);
+    let n = 0;
+    for (const t of tiles.values()) t.r = t.r.filter(r => {
+      if (!['footway', 'path', 'cycleway', 'steps'].includes(r.k) || r.br || r.tu || r.bp) return true;
+      const p = ringOf(r.p); let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+      if (L >= 40) return true;
+      const last = p.length - 1, endIds = [0, last].map(v => { for (let i = 0; i < r.j.length; i += 2) if (r.j[i] === v) return r.j[i + 1]; return -1; });
+      const dead = endIds.some(id => id < 0 || (deg.get(id) ?? 0) < 2);
+      if (dead) { n++; return false; } return true;
+    });
+    stubs += n; if (!n) break;
+  }
+  return { removed, stubs, sides };
+}
