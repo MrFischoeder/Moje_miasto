@@ -8,6 +8,7 @@ import { gunzipSync } from 'node:zlib';
 import pc from 'polygon-clipping';
 import type { Flat, TileBuilding, TileData, TileIndex, TileRoad } from '../shared/src/tiles/types';
 import { writeTiles } from './lib/common';
+import { closeDeadEnds } from './lib/deadEnds';
 import { cityPavements, pruneSideFootways, straightenPaths, thinPathMesh, inferPassages, normalizeRoads } from './lib/roads';
 import { makePlots } from './lib/plots';
 import { buildIntersections } from './lib/intersections';
@@ -196,6 +197,7 @@ const pv = cityPavements(tiles); console.log(`chodniki: ulice miejskie ${pv.urba
 const pf = pruneSideFootways(tiles); console.log(`jeden chodnik wzdłuż ulic: usunięte równoległe ścieżki ${pf.removed} (chodnik ulicy dodany po ${pf.sides} stronach), ślepe resztki ${pf.stubs}`);
 const tm = thinPathMesh(tiles); console.log(`labirynty alejek: usunięte zbędne krótkie odcinki ${tm.removed}`);
 const sp = straightenPaths(tiles); console.log(`ścieżki na skróty: ${sp.paths} ścieżek, wierzchołki ${sp.before} → ${sp.after}`);
+const de = closeDeadEnds(tiles); console.log(`ślepe końce – ścieżki: do drzwi ${de.pathDoor}, do ściany ${de.pathWall} (w tym budynki bez drzwi ${de.pathNoDoor}), połączone ${de.pathJoin}, usunięte ${de.pathRemoved}, bez zmian ${de.pathLeft}; drogi: dojazd do budynku/parkingu ${de.vehOk}, połączone ${de.vehJoin}, usunięte ${de.vehRemoved}, bez zmian ${de.vehLeft}`);
 const wb = bakeWaterBanks(ROOT, city, tiles); if (wb) console.log(`woda i nabrzeża: poziom wody w ${wb.tiles} kaflach, wierzchołki nabrzeży ${wb.quayVerts}, przetworzone kafle terenu ${wb.demTiles}`);
 const ix = writeTiles(city, tiles, dst, idx.source + ' · uproszczone (tools/simplify-tiles.ts)');
 const kb = (a: number) => (a / 1024 / 1024).toFixed(1) + ' MB';

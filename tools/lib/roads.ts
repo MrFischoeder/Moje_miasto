@@ -48,12 +48,12 @@ export function normalizeRoads(tiles: Map<string, TileData>): { roads: number; a
 
 // ---------------------------------------------------------------------------------------------------------------
 // Wspólne: siatka budynków całej mapy (obrysy z dziedzińcami) do zapytań punkt-w-budynku.
-type XZ = [number, number];
-interface Bld { o: XZ[]; holes: XZ[][]; x0: number; z0: number; x1: number; z1: number; tile: string; b: TileBuilding; A: number }
-const ringOf = (f: number[]): XZ[] => { const o: XZ[] = []; for (let i = 0; i < f.length; i += 2) o.push([f[i], f[i + 1]]); return o; };
-const pip = (r: XZ[], x: number, z: number) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+export type XZ = [number, number];
+export interface Bld { o: XZ[]; holes: XZ[][]; x0: number; z0: number; x1: number; z1: number; tile: string; b: TileBuilding; A: number }
+export const ringOf = (f: number[]): XZ[] => { const o: XZ[] = []; for (let i = 0; i < f.length; i += 2) o.push([f[i], f[i + 1]]); return o; };
+export const pip = (r: XZ[], x: number, z: number) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
 const areaOf = (r: XZ[]) => { let s = 0; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; s += a[0] * b[1] - b[0] * a[1]; } return Math.abs(s) / 2; };
-class BldGrid {
+export class BldGrid {
   private cells = new Map<string, Bld[]>();
   constructor(tiles: Map<string, TileData>, private C = 40) {
     for (const [k, t] of tiles) for (const b of t.b) {
@@ -66,6 +66,13 @@ class BldGrid {
   at(x: number, z: number): Bld | null {
     for (const q of this.cells.get(Math.floor(x / this.C) + ',' + Math.floor(z / this.C)) ?? []) if (x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && pip(q.o, x, z) && !q.holes.some(h => pip(h, x, z))) return q;
     return null;
+  }
+  /** budynki w promieniu r (prostokąty otaczające) */
+  around(x: number, z: number, r: number): Bld[] {
+    const out = new Set<Bld>();
+    for (let cx = Math.floor((x - r) / this.C); cx <= Math.floor((x + r) / this.C); cx++) for (let cz = Math.floor((z - r) / this.C); cz <= Math.floor((z + r) / this.C); cz++)
+      for (const q of this.cells.get(cx + ',' + cz) ?? []) if (x >= q.x0 - r && x <= q.x1 + r && z >= q.z0 - r && z <= q.z1 + r) out.add(q);
+    return [...out];
   }
   near(x: number, z: number, r: number): boolean {
     for (let cx = Math.floor((x - r) / this.C); cx <= Math.floor((x + r) / this.C); cx++) for (let cz = Math.floor((z - r) / this.C); cz <= Math.floor((z + r) / this.C); cz++)
