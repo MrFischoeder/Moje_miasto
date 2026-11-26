@@ -173,12 +173,13 @@ function simplifyTile(t: TileData): TileData {
     return { ...a, o: flat(o), ...(i.length ? { i } : {}) };
   });
   const rails = t.l.map(l => ({ ...l, p: flat(dp(ring(l.p), .7)) }));
-  const ways = (t.w ?? []).map(q => ({ ...q, p: flat(dp(ring(q.p), .8)) }));
+  // rowy melioracyjne (ditch / drain) pominięte: zbędne na mapie gry
+  const ways = (t.w ?? []).filter(q => q.k !== 'ditch').map(q => ({ ...q, p: flat(dp(ring(q.p), .8)) }));
   // krasnale: usunięte; obiekty brakujące w starszych kaflach pełnych (pręgierz) dopisane z ich współrzędnych OSM
   for (const e of EXTRA_POI[city] ?? []) { const [x, z] = projC(e.lat, e.lon); if (Math.floor(x / t.size) === t.x && Math.floor(z / t.size) === t.y && !t.poi.some(q => q.id === e.id)) t.poi.push({ id: e.id, c: 'pomnik', t: e.t, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, n: e.n }); }
   t.poi = t.poi.filter(q => !(q.c === 'pomnik' && q.t === 'dwarf'));
   const poi = t.poi.map(p => p.b != null && idMap.has(p.b) ? { ...p, b: idMap.get(p.b) } : p);
-  return { ...t, b: out, r: roads, a: areas, l: rails, poi, ...(ways.length ? { w: ways } : {}) };
+  return { ...t, b: out, r: roads, a: areas, l: rails, poi, w: ways.length ? ways : undefined };
 }
 
 const idx = JSON.parse(readFileSync(join(src, 'index.json'), 'utf8')) as TileIndex, tiles = new Map<string, TileData>();

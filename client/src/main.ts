@@ -156,7 +156,7 @@ $('carBtn').onclick = () => game.action('modeCar');
 $('heliBtn').onclick = () => game.action('modeHeli');
 $('camBtn').onclick = () => game.action('camera');
 $('menuBtn').onclick = openMenu;
-$('chatBtn').onclick = openChat;
+// przycisk czatu usunięty: gracze piszą przez komunikator w telefonie
 $('cityWr').onclick = () => { game.loadCity('wroclaw', null); closeMenu(); };
 $('cityW').onclick = () => { game.loadCity('warszawa', null); closeMenu(); };
 $('cityL').onclick = () => { game.loadCity('londyn', null); closeMenu(); };

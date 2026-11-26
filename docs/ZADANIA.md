@@ -2,7 +2,7 @@
 
 Lista zapisana na prośbę właściciela projektu (26.11.2026). **Jeszcze nie wykonywać.** Kiedy zaczniemy nowy etap pracy, najpierw przypomnieć te punkty i zapytać, od którego zacząć.
 
-## 1. Drogi i ścieżki bez ślepych końców
+## 1. Drogi i ścieżki bez ślepych końców (ZROBIONE)
 
 Jak najmniej ślepych uliczek, dróg i ścieżek prowadzących donikąd. Każda droga lub ścieżka powinna:
 
@@ -80,7 +80,7 @@ Przejścia dla pieszych często generują się wzdłuż drogi zamiast w poprzek,
 
 Tryb głodu, na razie tylko jako pomysł.
 
-## 12. Czat tylko w telefonie
+## 12. Czat tylko w telefonie (ZROBIONE)
 
 Usunąć przycisk „Czat” z ekranu gry. Gracze komunikują się w grze przez komunikator w swoim telefonie.
 
@@ -92,7 +92,7 @@ System punktów nawigacyjnych (waypointów) albo nawigacji, która prowadzi grac
 
 Przykład: most w ciągu ul. Bolesława Krzywoustego nad Widawą. Po jezdni mostu da się chodzić, ale po zejściu na chodnik postać spada z mostu. Chodniki mostów muszą mieć pomost tak samo jak jezdnia (fizyka i wygląd).
 
-## 15. Bez rowów melioracyjnych
+## 15. Bez rowów melioracyjnych (ZROBIONE)
 
 Usunąć z mapy rowy melioracyjne (drobne cieki, ditch/drain). Nie wnoszą wiele do wyglądu, a psują teren.
 
@@ -108,3 +108,7 @@ Nabrzeża nadal wyglądają źle i są popsute. Trzeba je gruntownie dopracować
 ## 18. Płynność gry (zwłaszcza lot helikopterem na telefonie)
 
 Lot helikopterem jest szarpany, szczególnie na telefonie. Zoptymalizować grę jak najlepiej, a w razie potrzeby zmienić sposób wyświetlania i generowania świata (np. wczytywanie kafli, poziomy szczegółów, rozkład pracy na klatki).
+
+## 19. Gładkie, ciągłe drogi i ścieżki
+
+Drogi i chodniki powinny być ładnymi, gładkimi, ciągłymi pasami. Dziś miejscami nakładają się na siebie kawałki nawierzchni (kafle) z ostrymi krawędziami i schodkami (przykład: ul. Świętego Antoniego, x -373, z 91). Do zrobienia: jednolita siatka nawierzchni na łączeniach, zaokrąglone zakręty, bez zachodzących na siebie płatów.
