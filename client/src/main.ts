@@ -1,4 +1,5 @@
 // Wejście klienta: łączy grę z HUD, menu, minimapą i sterowaniem dotykowym.
+import { spawnsOf } from '@miasto/shared/game/spawns';
 import '@fontsource/chakra-petch/400.css';
 import '@fontsource/chakra-petch/600.css';
 import '@fontsource/chakra-petch/700.css';
@@ -81,6 +82,7 @@ const ui: GameUI = {
     info(g);
     $('note').textContent = city.note;
     $('cityWr').className = k === 'wroclaw' ? '' : 'ghost'; $('cityW').className = k === 'warszawa' ? '' : 'ghost'; $('cityL').className = k === 'londyn' ? '' : 'ghost';
+    { const sp = spawnsOf(w.key); $('spSel').innerHTML = sp.map((q, k) => `<option value="${k}">${q.name}</option>`).join(''); }
     stSel.innerHTML = w.stations.map(s => [s.name, s.i] as [string, number]).sort((a, b) => a[0].localeCompare(b[0], 'pl'))
       .map(([n, i]) => `<option value="${i}">${n} (${[...w.stations[i].lines.keys()].map(l => city.lines[l].n).join(', ')})</option>`).join('');
     stSel.value = String(nearestIndex(g));
@@ -161,6 +163,7 @@ $('menuBtn').onclick = openMenu;
 $('cityWr').onclick = () => { game.loadCity('wroclaw', null); closeMenu(); };
 $('cityW').onclick = () => { game.loadCity('warszawa', null); closeMenu(); };
 $('cityL').onclick = () => { game.loadCity('londyn', null); closeMenu(); };
+$('spBtn').onclick = () => { game.session?.sendCommand({ type: 'spawnAt', i: +$<HTMLSelectElement>('spSel').value }); closeMenu(); };
 $('goBtn').onclick = () => { game.goStation(+stSel.value, false); closeMenu(); };
 $('upBtn').onclick = () => { game.goStation(+stSel.value, true); closeMenu(); };
 $('copyBtn').onclick = async () => {

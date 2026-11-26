@@ -149,6 +149,7 @@ export class Room {
     else if (cmd.type === 'cab') msg = this.sim.command(c.player.id, { type: 'cab', on: !!cmd.on });
     else if (cmd.type === 'taxi') msg = this.sim.command(c.player.id, cmd.cancel ? { type: 'taxi', cancel: true } : { type: 'taxi', x: Number(cmd.x), z: Number(cmd.z) });
     else if (cmd.type === 'teleport' && (this.opt.local || this.opt.dev) && Number.isFinite(cmd.x) && Number.isFinite(cmd.z)) msg = this.sim.command(c.player.id, { type: 'teleport', x: cmd.x, z: cmd.z });
+    else if (cmd.type === 'spawnAt' && Number.isInteger(cmd.i)) msg = this.sim.command(c.player.id, { type: 'spawnAt', i: cmd.i });
     else if (cmd.type === 'goStation' && Number.isInteger(cmd.station)) msg = this.sim.command(c.player.id, { type: 'goStation', station: cmd.station, street: !!cmd.street });
     if (msg) this.sendJson(c.conn, { t: 'chat', from: '', color: '#ffcc33', text: msg, sys: true });
   }

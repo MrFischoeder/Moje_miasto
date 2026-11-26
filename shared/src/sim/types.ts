@@ -113,7 +113,9 @@ export type Command =
   | { type: 'alight' }
   /** tylko gra jednoosobowa (testy): przeniesienie pieszego w punkt */
   | { type: 'teleport'; x: number; z: number }
-  | { type: 'goStation'; station: number; street: boolean };
+  | { type: 'goStation'; station: number; street: boolean }
+  /** start w jednym z miejsc startu miasta (shared/src/game/spawns.ts); tylko bez poszukiwania przez policję */
+  | { type: 'spawnAt'; i: number };
 
 export const PLAYER_COLORS = ['#7dffb0', '#ffcc33', '#66e0ff', '#ff6b9a', '#b18cff', '#ff8a3d', '#3dffea', '#e8ff5a'];
 /** Miejsca dla pasażerów w pojeździe. */

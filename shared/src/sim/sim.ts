@@ -1,5 +1,6 @@
 // Symulacja gry: stały krok, byty, gracze, polecenia. Bez three.js i DOM,
 // więc ten sam kod działa w przeglądarce i na serwerze Node.js.
+import { spawnsOf } from '../game/spawns';
 import { VEH } from './vehicles';
 import { TILE_SIZE, tileKey } from '../tiles/types';
 import type { World } from '../world/world';
@@ -193,6 +194,14 @@ export class Simulation {
       if (c.type === 'goStation') { this.leaveRide(p, null); }
       else if (c.type === 'enter' || c.type === 'alight' || c.type === 'mode') return this.alight(p);
       else return;
+    }
+    if (c.type === 'spawnAt') {
+      const sp = spawnsOf(this.world.key)[c.i]; if (!sp) return 'Nie ma takiego miejsca startu.';
+      if (p.wanted > 0) return 'Nie możesz teraz zmienić miejsca – szuka cię policja.';
+      if (p.dead) return;
+      this.exitVehicle(p, false); const w = this.entity(p.walker);
+      w.x = sp.x; w.z = sp.z; w.y = this.world.surfaceAt(sp.x, sp.z, 1e6); w.reg = -1; p.viewSeq++; p.viewYaw = w.yaw; p.viewPitch = 0; this.unstuck.set(p.id, 300);
+      return `Jesteś: ${sp.name}.`;
     }
     if (c.type === 'teleport') {
       this.exitVehicle(p, false); const w = this.entity(p.walker);
