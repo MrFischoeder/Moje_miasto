@@ -2,6 +2,21 @@
 
 Lista zapisana na prośbę właściciela projektu (26.11.2026). **Jeszcze nie wykonywać.** Kiedy zaczniemy nowy etap pracy, najpierw przypomnieć te punkty i zapytać, od którego zacząć.
 
+## 30. PRIORYTET – zacząć od tego: osobne aplikacje w telefonie i prawdziwa jazda taksówką
+
+Zgłoszone 26.11.2026. Ma być jednym z pierwszych punktów przy następnej pracy.
+
+**Mapa osobno.** Aplikacja „Mapa” pokazuje tylko mapę i gracza. Nie pokazuje wszystkiego naraz (auta z giełdy, taksówki itd.). Każda aplikacja trzyma swoje znaczniki u siebie.
+
+**Giełda samochodowa.** Lista ogłoszeń bez znaczników na mapie. Dopiero po wybraniu konkretnego ogłoszenia pokazuje się na mapie to jedno auto. Później prowadzi do niego nawigacja i GPS (punkt 13).
+
+**Taksówka jedzie naprawdę.** Dziś po zamówieniu gracz jest teleportowany. Ma być tak:
+
+- taksówka podjeżdża po gracza;
+- gracz wsiada jako pasażer;
+- taksówka jedzie ulicami (graf dróg, przepisy jak inne auta) i wysadza gracza w wybranym miejscu, także w drugiej części miasta;
+- bez teleportacji: gracz widzi całą podróż.
+
 ## 1. Drogi i ścieżki bez ślepych końców (ZROBIONE)
 
 Jak najmniej ślepych uliczek, dróg i ścieżek prowadzących donikąd. Każda droga lub ścieżka powinna:
