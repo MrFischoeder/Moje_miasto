@@ -62,7 +62,9 @@ export class GroundGrid {
     // siatka rzadsza niż teren (daleko): wierzchołek = najniższy punkt otoczenia, żeby skosy między dnem rzeki
     // a brzegiem nie przebijały płaskiej tafli wody (tools/lib/waterBanks.ts)
     const lo = g && n < DEM_CELLS ? S / 2 : 0;
-    const out: number[] = [], Y = (px: number, pz: number) => !g ? 0 : !lo ? g(px, pz) : Math.min(g(px, pz), g(px - lo, pz), g(px + lo, pz), g(px, pz - lo), g(px, pz + lo));
+    // krawędź komórki: zawsze dokładna wysokość (taka sama jak u sąsiada o innej gęstości – bez szczelin w gruncie)
+    const edge = (px: number, pz: number) => Math.abs(px - bx) < .01 || Math.abs(px - bx - TILE_SIZE) < .01 || Math.abs(pz - bz) < .01 || Math.abs(pz - bz - TILE_SIZE) < .01;
+    const out: number[] = [], Y = (px: number, pz: number) => !g ? 0 : !lo || edge(px, pz) ? g(px, pz) : Math.min(g(px, pz), g(px - lo, pz), g(px + lo, pz), g(px, pz - lo), g(px, pz + lo));
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const a = bx + i * S, b = bz + j * S;
       const hs = all.map(h => clipRing(h, a + e, b + e, a + S - e, b + S - e)).filter(h => h.length >= 3);
@@ -76,6 +78,11 @@ export class GroundGrid {
       try {
         for (const tri of THREE.ShapeUtils.triangulateShape(v(outer), hs.map(v))) for (const q of tri) out.push(pts[q][0], Y(pts[q][0], pts[q][1]), pts[q][1]);
       } catch { /* zostaw pustą */ }
+    }
+    // „fartuch” wzdłuż brzegów komórki (4 m w dół): zasłania szpary między komórkami o różnej gęstości siatki
+    if (g) for (let i = 0; i < n; i++) for (const [x0, z0, x1, z1] of [[bx + i * S, bz, bx + (i + 1) * S, bz], [bx + i * S, bz + TILE_SIZE, bx + (i + 1) * S, bz + TILE_SIZE], [bx, bz + i * S, bx, bz + (i + 1) * S], [bx + TILE_SIZE, bz + i * S, bx + TILE_SIZE, bz + (i + 1) * S]]) {
+      const y0 = Y(x0, z0), y1 = Y(x1, z1);
+      out.push(x0, y0, z0, x1, y1, z1, x1, y1 - 4, z1, x0, y0, z0, x1, y1 - 4, z1, x0, y0 - 4, z0);
     }
     // linie terenu: co drugą krawędź podkomórki (tylko w szczegółowych komórkach z terenem)
     const ln: number[] = [];
