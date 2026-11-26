@@ -133,3 +133,35 @@ Bloki (np. przy ul. Pomorskiej, x -103, z -551) często renderują się tak, że
 ## 22. Restauracja między mostami zapadnięta w ziemi
 
 Restauracja nad Odrą między mostami (okolice x -80, z -547) jest wkopana w teren, widać tylko dachy. Budynki przy nabrzeżach muszą stać na poziomie terenu po obróbce brzegów (do zrobienia razem z punktem 16).
+
+## 23. Windy i więcej dostępnych budynków
+
+- Windy w wysokich budynkach mieszkalnych (bloki, wieżowce).
+- Więcej budynków i mieszkań, do których da się wejść, i więcej bram wejściowych, żeby miasto wyglądało realniej.
+- Część bram i klatek jest zamknięta.
+
+## 24. Domofony i dialogi
+
+- Przy zamkniętej bramie domofon: wybór mieszkania i przycisk.
+- Losowo ktoś jest w domu i odbiera.
+- Opcje dialogu, np. „listonosz”, „kurier”, „mamo, to ja”. Przy udanej wymówce lokator otwiera i nie trzeba wyważać drzwi.
+
+## 25. Włamania, narzędzia i hałas
+
+- Wytrych i narzędzia ułatwiające otwarcie lub wyważenie drzwi.
+- Wyważenie drzwi nie wzywa policji automatycznie. Robi hałas o określonym zasięgu.
+- Policja jest wzywana tylko wtedy, gdy w zasięgu hałasu są świadkowie (np. gracz nie poczekał, aż przejdą).
+
+## 26. Stopniowe ściganie (kradzieże aut i potrącenia)
+
+- Kradzież samochodu nie oznacza natychmiastowego aresztowania. Po pewnym czasie auto trafia do rejestru skradzionych i policja zaczyna go szukać.
+- Potrącenie pieszego nie zawsze jest śmiertelne: pieszy sam wstaje albo przyjeżdża po niego karetka.
+- Policja reaguje z opóźnieniem, a poziom poszukiwania rośnie stopniowo.
+
+## 27. Charakter gry: kariera przestępcza
+
+Gracz nie jest zwykłym kurierem, tylko bandytą. Przykładowe zajęcia: przewożenie narkotyków i innego nielegalnego towaru, pobicia, zlecenia od półświatka. Wymaga przebudowy systemu zleceń i ich klimatu.
+
+## 28. Walka i strzelanie
+
+Mechanika walki wręcz i strzelania (broń, trafienia, obrażenia, reakcja NPC i policji). Podstawa dla punktów 25–27.
